@@ -1742,11 +1742,55 @@ def test_SRC072_passes_send_from_directory_literal(tmp_path):
     assert not any(f.rule_id == "SRC-072" for f in analyze_python(p))
 
 
-# ── Full fixture — all 72 rules ───────────────────────────────────────────────
+# ── SRC-073: exec(user_code) — arbitrary code execution ──────────────────────
 
 
-def test_vulnerable_fixture_has_all_seventy_two_rules():
+def test_SRC073_detects_exec_param(tmp_path):
+    p = _py(tmp_path, "def run(user_code: str):\n    exec(user_code)")
+    assert any(f.rule_id == "SRC-073" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC073_passes_exec_literal(tmp_path):
+    p = _py(tmp_path, "exec('x = 1')")
+    assert not any(f.rule_id == "SRC-073" for f in analyze_python(p))
+
+
+# ── SRC-074: open(user_path, "w") — write path traversal ─────────────────────
+
+
+def test_SRC074_detects_open_write_param(tmp_path):
+    p = _py(tmp_path, "def write(path: str, data: bytes):\n    open(path, 'wb')")
+    assert any(f.rule_id == "SRC-074" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC074_passes_open_read_param(tmp_path):
+    p = _py(tmp_path, "def read(path: str):\n    open(path, 'r')")
+    assert not any(f.rule_id == "SRC-074" for f in analyze_python(p))
+
+
+def test_SRC074_passes_open_write_literal(tmp_path):
+    p = _py(tmp_path, "open('/tmp/out.txt', 'w')")
+    assert not any(f.rule_id == "SRC-074" for f in analyze_python(p))
+
+
+# ── SRC-075: shlex.split(user_input) — shell tokenisation injection ───────────
+
+
+def test_SRC075_detects_shlex_split_param(tmp_path):
+    p = _py(tmp_path, "import shlex\ndef run(cmd: str):\n    return shlex.split(cmd)")
+    assert any(f.rule_id == "SRC-075" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC075_passes_shlex_split_literal(tmp_path):
+    p = _py(tmp_path, "import shlex\nshlex.split('ls -la /tmp')")
+    assert not any(f.rule_id == "SRC-075" for f in analyze_python(p))
+
+
+# ── Full fixture — all 75 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_seventy_five_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 73)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 76)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

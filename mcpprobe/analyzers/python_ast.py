@@ -177,6 +177,8 @@ _SOCKET_CONNECT_FUNCS = frozenset({"socket.create_connection", "create_connectio
 _GETOUTPUT_FUNCS = frozenset({"subprocess.getoutput", "subprocess.getstatusoutput", "getoutput", "getstatusoutput"})
 # SRC-072: send_from_directory with user-controlled directory path — directory escape
 _SEND_FROM_DIR_FUNCS = frozenset({"send_from_directory", "flask.send_from_directory"})
+# SRC-075: shlex.split with user-controlled input — pre-tokenises attacker shell input before subprocess
+_SHLEX_SPLIT_FUNCS = frozenset({"shlex.split", "split"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1432,6 +1434,52 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"send_from_directory({dir_arg.id}, ...) — user-controlled base dir allows serving any file",
                     "Hardcode the base directory. Only the filename argument should ever come from user input.",
+                )
+
+        # SRC-073: exec(user_code) — Python builtin exec() with user-controlled code
+        if fname == "exec" and node.args and self._param_names:
+            code_arg = node.args[0]
+            if self._has_param_in_expr(code_arg):
+                self._add(
+                    "SRC-073",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "exec(user_input) — arbitrary code execution via builtin exec()",
+                    "Never pass user-controlled data to exec(). Remove exec() or use a safe expression evaluator.",
+                )
+
+        # SRC-074: open(user_path, "w") — write mode with user-controlled path
+        if fname == "open" and len(node.args) >= 2 and self._param_names:
+            path_arg = node.args[0]
+            mode_arg = node.args[1]
+            if (
+                isinstance(path_arg, ast.Name)
+                and path_arg.id in self._param_names
+                and isinstance(mode_arg, ast.Constant)
+                and isinstance(mode_arg.value, str)
+                and "w" in mode_arg.value
+            ):
+                self._add(
+                    "SRC-074",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f'open({path_arg.id}, "{mode_arg.value}") — user-controlled write path, arbitrary file overwrite',
+                    "Resolve the path against a fixed base directory and validate it stays within that directory.",
+                )
+
+        # SRC-075: shlex.split(user_input) — attacker controls tokenisation before subprocess
+        if fname in _SHLEX_SPLIT_FUNCS and node.args and self._param_names:
+            inp_arg = node.args[0]
+            if isinstance(inp_arg, ast.Name) and inp_arg.id in self._param_names:
+                self._add(
+                    "SRC-075",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"shlex.split({inp_arg.id}) — user-controlled shell tokenisation enables command injection",
+                    "Never pass untrusted input to shlex.split(). Build the argument list from allowlisted values.",
                 )
 
         # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple

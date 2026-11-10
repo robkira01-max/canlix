@@ -1782,11 +1782,60 @@ def test_TS072_passes_xhr_open_literal(tmp_path):
     assert not any(f.rule_id == "TS-072" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 72 rules ───────────────────────────────────────────────
+# ── TS-073: res.render(req.xxx, ...) — user-controlled template name ─────────
 
 
-def test_vulnerable_ts_fixture_has_all_seventy_two_rules():
+def test_TS073_detects_render_req(tmp_path):
+    p = _ts(tmp_path, "res.render(req.query.view, { data: 'x' });")
+    assert any(f.rule_id == "TS-073" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS073_detects_render_body(tmp_path):
+    p = _ts(tmp_path, "res.render(req.body.template);")
+    assert any(f.rule_id == "TS-073" for f in analyze_typescript(p))
+
+
+def test_TS073_passes_render_literal(tmp_path):
+    p = _ts(tmp_path, 'res.render("index", { user: req.user });')
+    assert not any(f.rule_id == "TS-073" for f in analyze_typescript(p))
+
+
+# ── TS-074: fs.appendFile(req.xxx, ...) — write path traversal ───────────────
+
+
+def test_TS074_detects_appendFile_req(tmp_path):
+    p = _ts(tmp_path, "fs.appendFile(req.query.logFile, msg, () => {});")
+    assert any(f.rule_id == "TS-074" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS074_detects_appendFileSync_req(tmp_path):
+    p = _ts(tmp_path, "fs.appendFileSync(req.body.path, data);")
+    assert any(f.rule_id == "TS-074" for f in analyze_typescript(p))
+
+
+def test_TS074_passes_appendFile_literal(tmp_path):
+    p = _ts(tmp_path, 'fs.appendFile("/var/log/app.log", entry, () => {});')
+    assert not any(f.rule_id == "TS-074" for f in analyze_typescript(p))
+
+
+# ── TS-075: crypto.pbkdf2(req.xxx, ...) — KDF DoS ────────────────────────────
+
+
+def test_TS075_detects_pbkdf2_req(tmp_path):
+    p = _ts(tmp_path, "crypto.pbkdf2(req.query.password, salt, 100000, 64, 'sha256', cb);")
+    assert any(f.rule_id == "TS-075" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS075_passes_pbkdf2_literal(tmp_path):
+    p = _ts(tmp_path, "crypto.pbkdf2(storedHash, salt, 100000, 64, 'sha256', cb);")
+    assert not any(f.rule_id == "TS-075" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 75 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_seventy_five_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 73)}
+    expected = {f"TS-{i:03d}" for i in range(1, 76)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

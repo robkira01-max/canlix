@@ -728,6 +728,30 @@ _XHR_OPEN_REQ = re.compile(
     """,
 )
 
+# TS-073: res.render(req.xxx, ...) — user-controlled template name, SSTI / path traversal
+_RES_RENDER_REQ = re.compile(
+    r"""(?x)
+    \bres\.render\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-074: fs.appendFile(req.xxx, ...) — user-controlled append path
+_APPEND_FILE_REQ = re.compile(
+    r"""(?x)
+    \bfs\.appendFile(?:Sync)?\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-075: crypto.pbkdf2(req.xxx, ...) — user-controlled input in async KDF, DoS
+_PBKDF2_REQ = re.compile(
+    r"""(?x)
+    \bcrypto\.pbkdf2\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1515,6 +1539,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "xhr.open(method, req.xxx) — user-controlled URL in XMLHttpRequest enables SSRF",
             "Validate the URL against an allowlist of permitted hosts before calling xhr.open().",
+        )
+
+    # TS-073: res.render(req.xxx, ...) — user-controlled template name
+    if _RES_RENDER_REQ.search(raw):
+        _add(
+            "TS-073",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.render(req.xxx) — user-controlled template name enables path traversal and SSTI",
+            "Allowlist valid template names. Never let request data determine which template to render.",
+        )
+
+    # TS-074: fs.appendFile(req.xxx, ...) — user-controlled path
+    if _APPEND_FILE_REQ.search(raw):
+        _add(
+            "TS-074",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fs.appendFile path from request — user-controlled path allows writing to arbitrary files",
+            "Resolve the path against a fixed base directory and validate it stays within that directory.",
+        )
+
+    # TS-075: crypto.pbkdf2(req.xxx, ...) — user-controlled KDF input enables DoS
+    if _PBKDF2_REQ.search(raw):
+        _add(
+            "TS-075",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "crypto.pbkdf2(req.xxx) — user-controlled input in async KDF enables CPU-exhaustion DoS",
+            "Cap password length and enforce a fixed iteration count. Never let callers control KDF parameters.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

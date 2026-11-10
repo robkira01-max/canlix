@@ -449,3 +449,23 @@ def configure_logging(log_file: str) -> None:
 def serve_dir(directory: str, filename: str):
     # SRC-072: user-controlled base directory in send_from_directory
     return send_from_directory(directory, filename)
+
+
+import shlex  # noqa: E402
+
+
+def run_code(user_code: str) -> None:
+    # SRC-073: exec() with user-controlled code — arbitrary code execution
+    exec(user_code)  # noqa: S102
+
+
+def write_file(path: str, content: bytes) -> None:
+    # SRC-074: open() in write mode with user-controlled path — file overwrite
+    with open(path, "wb") as f:  # noqa: PTH123
+        f.write(content)
+
+
+def tokenise_and_run(cmd: str) -> None:
+    # SRC-075: shlex.split with user-controlled input — shell tokenisation injection
+    args = shlex.split(cmd)
+    subprocess.run(args)

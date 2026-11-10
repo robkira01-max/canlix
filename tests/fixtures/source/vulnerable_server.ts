@@ -367,3 +367,18 @@ function xhrRequest(req: any): void {
   const xhr = new XMLHttpRequest();
   xhr.open("GET", req.query.url);
 }
+
+// TS-073: res.render() with user-controlled template name — SSTI / path traversal
+function renderView(res: any, req: any): void {
+  res.render(req.query.template, { data: "safe" });
+}
+
+// TS-074: fs.appendFile() with user-controlled path — write path traversal
+function appendLog(req: any, msg: string): void {
+  fs.appendFile(req.query.logFile, msg, () => {});
+}
+
+// TS-075: crypto.pbkdf2() with user-controlled password — DoS via CPU exhaustion
+function deriveKey(req: any, salt: Buffer): void {
+  crypto.pbkdf2(req.query.password, salt, 100000, 64, "sha256", () => {});
+}
