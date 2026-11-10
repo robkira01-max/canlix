@@ -177,10 +177,10 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_six_rules():
+def test_vulnerable_ts_fixture_has_all_seven_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    assert {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006"}.issubset(rule_ids)
+    assert {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006", "TS-007"}.issubset(rule_ids)
 
 
 def test_analyze_path_picks_up_ts_files(tmp_path):
@@ -215,3 +215,36 @@ def test_ts_line_numbers_are_accurate(tmp_path):
     assert ts002
     assert ts002[0].line_number > 1
     assert "eval" in ts002[0].code_snippet
+
+
+# ── TS-007: SSRF — HTTP client with variable URL ────────────────────────────
+
+
+def test_TS007_detects_fetch_with_variable(tmp_path):
+    p = _ts(tmp_path, "const response = fetch(userUrl);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-007" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS007_detects_axios_get_with_variable(tmp_path):
+    p = _ts(tmp_path, "const data = axios.get(endpoint);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-007" for f in findings)
+
+
+def test_TS007_detects_got_with_variable(tmp_path):
+    p = _ts(tmp_path, "const res = got(remoteUrl);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-007" for f in findings)
+
+
+def test_TS007_passes_fetch_with_literal_url(tmp_path):
+    p = _ts(tmp_path, 'const res = fetch("https://api.example.com/data");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-007" for f in findings)
+
+
+def test_TS007_passes_axios_with_literal_url(tmp_path):
+    p = _ts(tmp_path, 'const res = axios.get("https://api.example.com/items");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-007" for f in findings)

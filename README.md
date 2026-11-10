@@ -207,7 +207,7 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 
 ### Source rules — `mcpprobe analyze`
 
-#### Python rules (6) — `.py` files, AST-based
+#### Python rules (7) — `.py` files, AST-based
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -217,8 +217,9 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | SRC-004 | HIGH | `os.system()` / `os.popen()` — command injection |
 | SRC-005 | MEDIUM | `pickle.loads()` — unsafe deserialization of untrusted data |
 | SRC-006 | MEDIUM | `yaml.load()` without `Loader=` — arbitrary Python execution |
+| SRC-007 | MEDIUM | HTTP client (`requests`, `httpx`, `urlopen`) with URL from function parameter — SSRF |
 
-#### TypeScript / JavaScript rules (6) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
+#### TypeScript / JavaScript rules (7) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -228,6 +229,7 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | TS-004 | HIGH | `shell: true` in `spawn()`/`exec()` options — command injection via unsanitised input |
 | TS-005 | HIGH | `exec()` with template literal — string interpolation enables command injection |
 | TS-006 | MEDIUM | `__proto__` assignment / `constructor["prototype"]` — prototype pollution |
+| TS-007 | MEDIUM | `fetch()` / `axios` / `got` with variable URL — Server-Side Request Forgery |
 
 ---
 

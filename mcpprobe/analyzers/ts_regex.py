@@ -83,6 +83,22 @@ _PROTO_POLLUTION = re.compile(
     """,
 )
 
+# ---------------------------------------------------------------------------
+# TS-007: SSRF — fetch/axios/got with non-literal URL argument
+# ---------------------------------------------------------------------------
+
+_SSRF_FETCH = re.compile(
+    r"""(?x)
+    \bfetch\s*\(\s*[A-Za-z_$]          # fetch(variable
+    | \baxios\.[a-z]+\s*\(\s*[A-Za-z_$]  # axios.get(variable
+    | \bgot\s*\(\s*[A-Za-z_$]           # got(variable
+    | \bneedle\.[a-z]+\s*\(\s*[A-Za-z_$]  # needle.get(variable
+    """,
+)
+# Negation: skip lines where the argument is a plain https?:// string (definitely safe)
+_SSRF_LITERAL_SAFE = re.compile(r"""\bfetch\s*\(\s*["'`]https?://""")
+_SSRF_AXIOS_LITERAL_SAFE = re.compile(r"""\baxios\.[a-z]+\s*\(\s*["'`]https?://""")
+
 
 def analyze_typescript(path: Path) -> list[SourceFinding]:
     """Scan a TypeScript/JavaScript file for security issues. Returns all findings."""
@@ -190,6 +206,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "Potential prototype pollution — assignment to __proto__ or constructor.prototype",
             "Validate object keys before merging. Use Object.create(null) for untrusted data maps.",
+        )
+
+    # TS-007: SSRF — HTTP client with non-literal URL
+    if _SSRF_FETCH.search(raw) and not _SSRF_LITERAL_SAFE.search(raw) and not _SSRF_AXIOS_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-007",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "HTTP request with variable URL — SSRF risk",
+            "Validate the URL against an allowlist. Never pass raw user-supplied URLs to HTTP clients.",
         )
 
     return result

@@ -35,3 +35,8 @@ export function mergeUnsafe(
 ): void {
   (obj as Record<string, unknown>).__proto__ = source;
 }
+
+// TS-007: SSRF — fetch with variable URL (MEDIUM)
+export async function fetchRemote(url: string): Promise<Response> {
+  return fetch(url);
+}

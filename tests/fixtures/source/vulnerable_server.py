@@ -4,6 +4,7 @@ import os
 import pickle
 import subprocess
 
+import requests
 import yaml
 
 # SRC-001: hardcoded GitHub token (key prefix pattern)
@@ -36,3 +37,8 @@ def deserialize(data: bytes):
 def load_yaml_config(config_str: str):
     # SRC-006: yaml.load without Loader
     return yaml.load(config_str)
+
+
+def fetch_remote_resource(url: str):
+    # SRC-007: HTTP request with URL from function parameter — SSRF risk
+    return requests.get(url)

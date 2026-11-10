@@ -162,10 +162,10 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_six_rules():
+def test_vulnerable_fixture_has_all_seven_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    assert {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006"}.issubset(rule_ids)
+    assert {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006", "SRC-007"}.issubset(rule_ids)
 
 
 def test_analyze_path_on_directory(tmp_path):
@@ -210,3 +210,46 @@ def test_syntax_error_returns_empty(tmp_path):
     p.write_text("def (broken syntax :")
     findings = analyze_python(p)
     assert findings == []
+
+
+# ── SRC-007: SSRF — HTTP client with function parameter URL ────────────────
+
+
+def test_SRC007_detects_requests_get_with_param(tmp_path):
+    p = _py(tmp_path, "import requests\ndef fetch(url):\n    return requests.get(url)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-007" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC007_detects_httpx_post_with_param(tmp_path):
+    p = _py(tmp_path, "import httpx\ndef post(endpoint):\n    return httpx.post(endpoint)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-007" for f in findings)
+
+
+def test_SRC007_detects_kwarg_url(tmp_path):
+    p = _py(
+        tmp_path,
+        "import requests\ndef call(endpoint):\n    return requests.request(method='GET', url=endpoint)",
+    )
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-007" for f in findings)
+
+
+def test_SRC007_detects_async_def(tmp_path):
+    p = _py(tmp_path, "import httpx\nasync def fetch(url):\n    return httpx.get(url)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-007" for f in findings)
+
+
+def test_SRC007_passes_literal_url(tmp_path):
+    p = _py(tmp_path, 'import requests\nrequests.get("https://example.com/api")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-007" for f in findings)
+
+
+def test_SRC007_passes_module_level_constant(tmp_path):
+    # Variable is not a function parameter — no SSRF risk tracked
+    p = _py(tmp_path, 'import requests\nURL = "https://example.com"\nrequests.get(URL)')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-007" for f in findings)

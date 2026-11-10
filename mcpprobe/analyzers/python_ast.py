@@ -27,6 +27,24 @@ _SHELL_FUNCS = {
     "subprocess.check_output",
     "subprocess.check_call",
 }
+_HTTP_CLIENT_FUNCS = {
+    "requests.get",
+    "requests.post",
+    "requests.put",
+    "requests.delete",
+    "requests.patch",
+    "requests.request",
+    "requests.head",
+    "requests.options",
+    "httpx.get",
+    "httpx.post",
+    "httpx.put",
+    "httpx.delete",
+    "httpx.patch",
+    "httpx.request",
+    "urlopen",
+    "urllib.request.urlopen",
+}
 
 
 class _Visitor(ast.NodeVisitor):
@@ -34,6 +52,7 @@ class _Visitor(ast.NodeVisitor):
         self.findings: list[SourceFinding] = []
         self.lines = lines
         self.path = path
+        self._param_names: set[str] = set()  # current function's parameter names
 
     def _snip(self, lineno: int) -> str:
         if 1 <= lineno <= len(self.lines):
@@ -62,11 +81,32 @@ class _Visitor(ast.NodeVisitor):
             )
         )
 
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        old = self._param_names
+        args = node.args
+        params: set[str] = {a.arg for a in args.args + args.posonlyargs + args.kwonlyargs}
+        if args.vararg:
+            params.add(args.vararg.arg)
+        if args.kwarg:
+            params.add(args.kwarg.arg)
+        self._param_names = params
+        self.generic_visit(node)
+        self._param_names = old
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
     def _func_name(self, node: ast.Call) -> str:
         if isinstance(node.func, ast.Name):
             return node.func.id
         if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
             return f"{node.func.value.id}.{node.func.attr}"
+        # 3-level: urllib.request.urlopen
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Attribute)
+            and isinstance(node.func.value.value, ast.Name)
+        ):
+            return f"{node.func.value.value.id}.{node.func.value.attr}.{node.func.attr}"
         return ""
 
     def visit_Constant(self, node: ast.Constant) -> None:
@@ -152,6 +192,25 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     "yaml.load() without Loader= can execute arbitrary Python objects",
                     "Replace with yaml.safe_load() or pass Loader=yaml.SafeLoader.",
+                )
+
+        if fname in _HTTP_CLIENT_FUNCS and self._param_names:
+            url_node: ast.expr | None = None
+            if node.args:
+                url_node = node.args[0]
+            else:
+                for kw in node.keywords:
+                    if kw.arg == "url":
+                        url_node = kw.value
+                        break
+            if url_node and isinstance(url_node, ast.Name) and url_node.id in self._param_names:
+                self._add(
+                    "SRC-007",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"HTTP request with URL from function parameter '{url_node.id}' — SSRF risk",
+                    "Validate the URL against an allowlist. Never pass raw user-supplied URLs to HTTP clients.",
                 )
 
         self.generic_visit(node)
