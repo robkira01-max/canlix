@@ -1105,11 +1105,65 @@ def test_TS033_passes_literal_html(tmp_path):
     assert not any(f.rule_id == "TS-033" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 33 rules ───────────────────────────────────────────────
+# ── TS-034: unsafe YAML deserialisation ──────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_thirty_three_rules():
+def test_TS034_detects_yaml_load_variable(tmp_path):
+    p = _ts(tmp_path, "const data = yaml.load(input);")
+    assert any(f.rule_id == "TS-034" for f in analyze_typescript(p))
+
+
+def test_TS034_detects_jsYaml_load(tmp_path):
+    p = _ts(tmp_path, "const cfg = jsYaml.load(raw);")
+    assert any(f.rule_id == "TS-034" for f in analyze_typescript(p))
+
+
+def test_TS034_passes_safe_load(tmp_path):
+    p = _ts(tmp_path, "const data = yaml.safeLoad(input);")
+    assert not any(f.rule_id == "TS-034" for f in analyze_typescript(p))
+
+
+# ── TS-035: hardcoded env fallback ────────────────────────────────────────────
+
+
+def test_TS035_detects_jwt_secret_fallback(tmp_path):
+    p = _ts(tmp_path, 'const SECRET = process.env.JWT_SECRET || "fallback_key_1234";')
+    assert any(f.rule_id == "TS-035" for f in analyze_typescript(p))
+
+
+def test_TS035_detects_nullish_coalescing_fallback(tmp_path):
+    p = _ts(tmp_path, 'const KEY = process.env.API_KEY ?? "hardcoded_api_key";')
+    assert any(f.rule_id == "TS-035" for f in analyze_typescript(p))
+
+
+def test_TS035_passes_nonsensitive_var(tmp_path):
+    p = _ts(tmp_path, 'const PORT = process.env.PORT || "3000";')
+    assert not any(f.rule_id == "TS-035" for f in analyze_typescript(p))
+
+
+# ── TS-036: open redirect from request data ───────────────────────────────────
+
+
+def test_TS036_detects_redirect_query(tmp_path):
+    p = _ts(tmp_path, "res.redirect(req.query.next);")
+    assert any(f.rule_id == "TS-036" for f in analyze_typescript(p))
+
+
+def test_TS036_detects_redirect_body(tmp_path):
+    p = _ts(tmp_path, "res.redirect(req.body.returnUrl);")
+    assert any(f.rule_id == "TS-036" for f in analyze_typescript(p))
+
+
+def test_TS036_passes_literal_redirect(tmp_path):
+    p = _ts(tmp_path, 'res.redirect("/dashboard");')
+    assert not any(f.rule_id == "TS-036" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 36 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_thirty_six_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 34)}
+    expected = {f"TS-{i:03d}" for i in range(1, 37)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

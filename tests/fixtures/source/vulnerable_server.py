@@ -199,3 +199,20 @@ def sign_token(payload: dict) -> str:
 def create_ssl_ctx() -> ssl.SSLContext:
     # SRC-033: deprecated TLS protocol
     return ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+
+
+def load_config_unsafe(config_str: str):
+    # SRC-034: yaml.load with unsafe FullLoader
+    return yaml.load(config_str, Loader=yaml.FullLoader)
+
+
+# SRC-035: hardcoded fallback for sensitive env var
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "default_insecure_password")
+
+
+request = None  # stub — represents Flask/FastAPI request object in real code
+
+
+def handle_login_redirect(url: str):
+    # SRC-036: open redirect from request data
+    return redirect(request.args.get("next", "/"))  # type: ignore[union-attr]

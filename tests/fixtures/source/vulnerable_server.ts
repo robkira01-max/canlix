@@ -167,3 +167,17 @@ function signToken(payload: object): string {
 function displayMessage(msg: string): void {
   document.getElementById("output")!.innerHTML = msg;
 }
+
+// TS-034: unsafe YAML deserialization
+import yaml from "js-yaml";
+function loadConfig(raw: string): unknown {
+  return yaml.load(raw);
+}
+
+// TS-035: hardcoded fallback for sensitive env var
+const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key_123";
+
+// TS-036: open redirect from request query param
+function loginRedirect(res: any, req: any): void {
+  res.redirect(req.query.next);
+}

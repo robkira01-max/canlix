@@ -1130,11 +1130,63 @@ def test_SRC033_passes_tls_client(tmp_path):
     assert not any(f.rule_id == "SRC-033" for f in analyze_python(p))
 
 
-# ── Full fixture — all 33 rules ───────────────────────────────────────────────
+# ── SRC-034: unsafe YAML loader ───────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_thirty_three_rules():
+def test_SRC034_detects_full_loader(tmp_path):
+    p = _py(tmp_path, "import yaml\nyaml.load(data, Loader=yaml.FullLoader)")
+    assert any(f.rule_id == "SRC-034" for f in analyze_python(p))
+
+
+def test_SRC034_detects_bare_loader(tmp_path):
+    p = _py(tmp_path, "import yaml\nyaml.load(data, Loader=yaml.Loader)")
+    assert any(f.rule_id == "SRC-034" for f in analyze_python(p))
+
+
+def test_SRC034_passes_safe_loader(tmp_path):
+    p = _py(tmp_path, "import yaml\nyaml.load(data, Loader=yaml.SafeLoader)")
+    assert not any(f.rule_id == "SRC-034" for f in analyze_python(p))
+
+
+# ── SRC-035: hardcoded env fallback ───────────────────────────────────────────
+
+
+def test_SRC035_detects_password_fallback(tmp_path):
+    p = _py(tmp_path, 'import os\nPWD = os.environ.get("DB_PASSWORD", "hunter2_secret")')
+    assert any(f.rule_id == "SRC-035" for f in analyze_python(p))
+
+
+def test_SRC035_passes_nonsensitive_key(tmp_path):
+    p = _py(tmp_path, 'import os\nPORT = os.environ.get("PORT", "8080")')
+    assert not any(f.rule_id == "SRC-035" for f in analyze_python(p))
+
+
+def test_SRC035_passes_empty_fallback(tmp_path):
+    p = _py(tmp_path, 'import os\nK = os.environ.get("API_KEY", "")')
+    assert not any(f.rule_id == "SRC-035" for f in analyze_python(p))
+
+
+# ── SRC-036: open redirect from request data ──────────────────────────────────
+
+
+def test_SRC036_detects_redirect_args_get(tmp_path):
+    p = _py(
+        tmp_path,
+        "from flask import redirect, request\ndef f():\n    return redirect(request.args.get('next', '/'))",
+    )
+    assert any(f.rule_id == "SRC-036" for f in analyze_python(p))
+
+
+def test_SRC036_passes_redirect_literal(tmp_path):
+    p = _py(tmp_path, "from flask import redirect\ndef f():\n    return redirect('/home')")
+    assert not any(f.rule_id == "SRC-036" for f in analyze_python(p))
+
+
+# ── Full fixture — all 36 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_thirty_six_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 34)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 37)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

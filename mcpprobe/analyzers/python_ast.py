@@ -558,6 +558,21 @@ class _Visitor(ast.NodeVisitor):
                     "yaml.load() without Loader= can execute arbitrary Python objects",
                     "Replace with yaml.safe_load() or pass Loader=yaml.SafeLoader.",
                 )
+            else:
+                # SRC-034: yaml.load() with an explicitly unsafe Loader
+                _UNSAFE_YAML_LOADERS = {"Loader", "FullLoader", "UnsafeLoader"}
+                for kw in node.keywords:
+                    if kw.arg == "Loader" and isinstance(kw.value, ast.Attribute):
+                        if kw.value.attr in _UNSAFE_YAML_LOADERS:
+                            self._add(
+                                "SRC-034",
+                                Severity.MEDIUM,
+                                Confidence.HIGH,
+                                node.lineno,
+                                f"yaml.load(Loader=yaml.{kw.value.attr}) can deserialise arbitrary Python objects",
+                                "Use yaml.safe_load() or Loader=yaml.SafeLoader. FullLoader and Loader are unsafe.",
+                            )
+                        break
 
         if fname in _HTTP_CLIENT_FUNCS and self._param_names:
             url_node: ast.expr | None = None
@@ -930,6 +945,48 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"ssl.SSLContext(ssl.{proto.attr}) uses a deprecated protocol vulnerable to known attacks",
                     "Use ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT) with minimum_version=ssl.TLSVersion.TLSv1_2.",
+                )
+
+        # SRC-035: hardcoded fallback in os.environ.get() — secret leaks into source
+        if fname == "os.environ.get" and len(node.args) >= 2:
+            key_arg, default_arg = node.args[0], node.args[1]
+            if (
+                isinstance(key_arg, ast.Constant)
+                and isinstance(key_arg.value, str)
+                and _SECRET_VARNAMES.search(key_arg.value)
+                and isinstance(default_arg, ast.Constant)
+                and isinstance(default_arg.value, str)
+                and len(default_arg.value) > 4
+            ):
+                self._add(
+                    "SRC-035",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.environ.get('{key_arg.value}', '<literal>') — hardcoded fallback exposes secret in source",
+                    "Remove the fallback or use a safe empty default. Load secrets exclusively from the environment.",
+                )
+
+        # SRC-036: open redirect — redirect() with URL taken directly from request data
+        _REQUEST_DATA_GETTERS = frozenset(
+            {
+                "request.args.get",
+                "request.form.get",
+                "request.values.get",
+                "request.json.get",
+                "request.params.get",
+            }
+        )
+        if fname in _REDIRECT_FUNCS and node.args:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Call) and self._func_name(url_arg) in _REQUEST_DATA_GETTERS:
+                self._add(
+                    "SRC-036",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "Open redirect: URL taken directly from request data — attacker can redirect to any site",
+                    "Validate the URL against an allowlist or use a safe relative path. Never trust raw request data.",
                 )
 
         self.generic_visit(node)

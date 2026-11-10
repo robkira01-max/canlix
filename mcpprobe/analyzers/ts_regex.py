@@ -458,6 +458,51 @@ _INNER_HTML_ASSIGN = re.compile(
 )
 _INNER_HTML_LITERAL_SAFE = re.compile(r"""\.(?:inner|outer)HTML\s*\+?=\s*["'`]""")
 
+# ---------------------------------------------------------------------------
+# TS-034: unsafe YAML deserialisation — js-yaml .load() without schema
+# ---------------------------------------------------------------------------
+
+_YAML_LOAD_UNSAFE = re.compile(
+    r"""(?x)
+    \byaml\.load\s*\(\s*[A-Za-z_$]      # yaml.load(variable)
+    | \bjsYaml\.load\s*\(\s*[A-Za-z_$]
+    | \bYAML\.load\s*\(\s*[A-Za-z_$]
+    """,
+)
+_YAML_LOAD_SAFE = re.compile(
+    r"""(?x)
+    \.safeLoad\s*\(              # yaml.safeLoad — legacy safe function
+    | schema\s*:\s*\w+           # schema option passed
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-035: hardcoded fallback for environment variable with a sensitive name
+# ---------------------------------------------------------------------------
+
+_ENV_SENSITIVE_FALLBACK = re.compile(
+    r"""(?x)
+    \bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)   # process.env.VAR_NAME
+    \s*(?:\?\?|\|\|)\s*                          # ?? or ||
+    ["'][^"']{4,}["']                            # non-trivial string fallback
+    """,
+)
+_ENV_SENSITIVE_VARNAME = re.compile(
+    r"(?i)(api[_-]?key|apikey|secret|password|passwd|token|auth|credential|private[_-]?key)",
+)
+
+# ---------------------------------------------------------------------------
+# TS-036: open redirect using request query / body / params directly
+# ---------------------------------------------------------------------------
+
+_REDIRECT_FROM_REQ = re.compile(
+    r"""(?x)
+    res\.redirect\s*\(\s*req\.(?:query|body|params)\b
+    | response\.redirect\s*\(\s*request\.(?:query|body|params)\b
+    | res\.redirect\s*\(\s*req\.(?:query|body|params)\.[A-Za-z_$]
+    """,
+)
+
 
 def analyze_typescript(path: Path) -> list[SourceFinding]:
     """Scan a TypeScript/JavaScript file for security issues. Returns all findings."""
@@ -843,6 +888,37 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "innerHTML/outerHTML/document.write with variable input — DOM-based XSS risk",
             "Use element.textContent instead of innerHTML. If HTML is needed, sanitise with DOMPurify.",
+        )
+
+    # TS-034: unsafe YAML deserialization — js-yaml .load() without schema
+    if _YAML_LOAD_UNSAFE.search(raw) and not _YAML_LOAD_SAFE.search(raw):
+        _add(
+            "TS-034",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "yaml.load() without schema can execute arbitrary JS — unsafe YAML deserialisation",
+            "Use yaml.safeLoad() or pass { schema: yaml.CORE_SCHEMA } to disable dangerous types.",
+        )
+
+    # TS-035: hardcoded fallback for sensitive environment variable
+    m035 = _ENV_SENSITIVE_FALLBACK.search(raw)
+    if m035 and _ENV_SENSITIVE_VARNAME.search(m035.group(1)):
+        _add(
+            "TS-035",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            f"process.env.{m035.group(1)} with hardcoded fallback — secret leaks into source code",
+            "Remove the fallback or use an empty string. Load secrets exclusively from the environment.",
+        )
+
+    # TS-036: open redirect using request query/body/params directly
+    if _REDIRECT_FROM_REQ.search(raw):
+        _add(
+            "TS-036",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "Open redirect: URL taken directly from req.query/body/params — attacker can redirect to any site",
+            "Validate the URL against an allowlist or use a safe relative path. Never trust raw request data.",
         )
 
     return result
