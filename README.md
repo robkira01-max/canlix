@@ -133,6 +133,28 @@ Connects to a live MCP server, enumerates its tools and resources, and runs pass
 
 `mcpprobe` exits `0` on clean, `1` if a finding meets or exceeds `--fail-on`, `2` on config errors.
 
+### GitHub Code Scanning (SARIF upload)
+
+```yaml
+- name: MCPProbe — scan and upload to GitHub Security tab
+  run: |
+    pip install mcpprobe
+    mcpprobe scan   --output sarif > scan.sarif
+    mcpprobe analyze ./src --output sarif > analyze.sarif
+
+- name: Upload SARIF results
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: scan.sarif
+
+- name: Upload source analysis SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: analyze.sarif
+```
+
+SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and is compatible with [VS Code SARIF Viewer](https://marketplace.visualstudio.com/items?itemName=MS-SarifVSCode.sarif-viewer) and any tool that supports SARIF 2.1.0.
+
 ---
 
 ## Complete rule reference

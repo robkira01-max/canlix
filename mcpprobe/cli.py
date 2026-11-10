@@ -34,7 +34,7 @@ def scan(
     config: Optional[Path] = typer.Option(
         None, "--config", "-c", help="Path to a JSON MCP config file (auto-detects Claude Code if omitted)."
     ),
-    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json"),
+    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json | sarif"),
     fail_on: str = typer.Option(
         "CRITICAL", "--fail-on", help="Exit with code 1 if any finding meets or exceeds this severity."
     ),
@@ -43,7 +43,7 @@ def scan(
     """Scan MCP server configurations (and detected source files) for security issues."""
     from mcpprobe.engine import scan as run_scan
     from mcpprobe.parsers import parse_all, parse_json_file
-    from mcpprobe.reporters import render_json, render_terminal
+    from mcpprobe.reporters import render_json, render_scan_sarif, render_terminal
 
     if config:
         if not config.exists():
@@ -62,6 +62,8 @@ def scan(
 
     if output == "json":
         print(render_json(result))
+    elif output == "sarif":
+        print(render_scan_sarif(result))
     else:
         render_terminal(result)
 
@@ -71,14 +73,14 @@ def scan(
 @app.command()
 def analyze(
     path: Path = typer.Argument(..., help="File or directory to analyze for security issues."),
-    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json"),
+    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json | sarif"),
     fail_on: str = typer.Option(
         "CRITICAL", "--fail-on", help="Exit with code 1 if any finding meets or exceeds this severity."
     ),
 ) -> None:
     """Analyze MCP server source code (Python/TypeScript) for security issues."""
     from mcpprobe.analyzers import analyze_path
-    from mcpprobe.reporters import render_source_json, render_source_only
+    from mcpprobe.reporters import render_analyze_sarif, render_source_json, render_source_only
 
     if not path.exists():
         rprint(f"[red]Error:[/red] Path not found: {path}")
@@ -92,6 +94,8 @@ def analyze(
         from mcpprobe.reporters.json_report import render_source_json
 
         print(render_source_json(findings, path, duration_ms))
+    elif output == "sarif":
+        print(render_analyze_sarif(findings))
     else:
         render_source_only(findings, str(path), duration_ms)
 
@@ -107,7 +111,7 @@ def probe(
     config: Optional[Path] = typer.Option(
         None, "--config", "-c", help="Path to a JSON MCP config file (auto-detects Claude Code if omitted)."
     ),
-    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json"),
+    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json | sarif"),
     active: bool = typer.Option(
         False,
         "--active",
@@ -122,7 +126,7 @@ def probe(
     from mcpprobe.models import Transport
     from mcpprobe.probes.runner import probe_server
     from mcpprobe.probes.transport import HttpMCPClient, StdioMCPClient
-    from mcpprobe.reporters import render_probe_json, render_probe_session
+    from mcpprobe.reporters import render_probe_json, render_probe_sarif, render_probe_session
 
     if target.startswith("http://") or target.startswith("https://"):
         client: HttpMCPClient | StdioMCPClient = HttpMCPClient(target, timeout=timeout)
@@ -156,6 +160,8 @@ def probe(
 
     if output == "json":
         print(render_probe_json(session))
+    elif output == "sarif":
+        print(render_probe_sarif(session))
     else:
         render_probe_session(session)
 
