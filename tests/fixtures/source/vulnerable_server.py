@@ -6,6 +6,7 @@ import pickle
 import random
 import ssl
 import subprocess
+import xml.etree.ElementTree as ET
 
 import jwt  # noqa: F401
 import requests
@@ -80,6 +81,11 @@ stored_token = "abc"
 user_token = "xyz"
 if stored_token == user_token:
     pass
+
+
+def parse_xml(xml_data: str):
+    # SRC-018: XXE — stdlib ElementTree is vulnerable to entity expansion
+    return ET.fromstring(xml_data)
 
 
 def set_session_cookie(response, session_id: str):

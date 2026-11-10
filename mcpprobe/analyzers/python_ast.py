@@ -82,6 +82,32 @@ _INSECURE_RANDOM_FUNCS = frozenset(
         "random.gauss",
     }
 )
+# SRC-018: XML parsers vulnerable to entity expansion (XXE)
+# Includes both full module paths and common import-alias forms (import ET as ET, etc.)
+_XML_PARSE_FUNCS = frozenset(
+    {
+        # Full dotted paths
+        "xml.etree.ElementTree.parse",
+        "xml.etree.ElementTree.fromstring",
+        "xml.etree.ElementTree.iterparse",
+        "xml.etree.cElementTree.parse",
+        "xml.etree.cElementTree.fromstring",
+        "minidom.parse",
+        "minidom.parseString",
+        "xml.dom.minidom.parse",
+        "xml.dom.minidom.parseString",
+        "lxml.etree.fromstring",
+        "lxml.etree.parse",
+        # Common alias forms — import xml.etree.ElementTree as ET, from lxml import etree
+        "ET.fromstring",
+        "ET.parse",
+        "ET.iterparse",
+        "ElementTree.fromstring",
+        "ElementTree.parse",
+        "etree.fromstring",
+        "etree.parse",
+    }
+)
 # Words that indicate a security-sensitive identifier (checked after splitting on '_')
 _SECURITY_WORDS = frozenset(
     {
@@ -113,6 +139,7 @@ class _Visitor(ast.NodeVisitor):
         self.path = path
         self._param_names: set[str] = set()  # current function's parameter names
         self._current_func_name: str = ""  # current function's name (for SRC-010 return check)
+        self._defusedxml_aliases: set[str] = set()  # local names that alias defusedxml (safe)
 
     def _snip(self, lineno: int) -> str:
         if 1 <= lineno <= len(self.lines):
@@ -150,6 +177,20 @@ class _Visitor(ast.NodeVisitor):
         if isinstance(node, ast.BinOp):  # + or %
             return self._has_param_in_expr(node.left) or self._has_param_in_expr(node.right)
         return False
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            if "defusedxml" in alias.name:
+                local = alias.asname if alias.asname else alias.name.rsplit(".", 1)[-1]
+                self._defusedxml_aliases.add(local)
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module and "defusedxml" in node.module:
+            for alias in node.names:
+                local = alias.asname if alias.asname else alias.name
+                self._defusedxml_aliases.add(local)
+        self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         old_params = self._param_names
@@ -388,6 +429,19 @@ class _Visitor(ast.NodeVisitor):
                     f"Open redirect: redirect() with parameter '{url_arg.id}' — attacker-controlled URL",
                     "Validate the redirect URL against an allowlist. Never redirect to a raw user-supplied value.",
                 )
+
+        # SRC-018: XXE — unsafe XML parsing (stdlib parsers are vulnerable to entity expansion)
+        # Matches both full dotted names and common import-alias forms (import ET as ET, etc.)
+        # Excludes aliases that resolve to defusedxml (the patched, safe replacement).
+        if fname in _XML_PARSE_FUNCS and fname.split(".", 1)[0] not in self._defusedxml_aliases:
+            self._add(
+                "SRC-018",
+                Severity.HIGH,
+                Confidence.HIGH,
+                node.lineno,
+                f"{fname}() is vulnerable to XXE — can read local files or trigger SSRF via entity expansion",
+                "Replace with defusedxml.ElementTree or defusedxml.minidom. Never parse untrusted XML with stdlib.",
+            )
 
         # SRC-017: insecure cookie — set_cookie() without httponly=True or secure=True
         if fname in ("response.set_cookie", "resp.set_cookie", "set_cookie"):
