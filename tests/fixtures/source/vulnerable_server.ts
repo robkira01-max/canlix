@@ -556,3 +556,18 @@ import { Client as EsClient } from "@elastic/elasticsearch";
 function connectEs(req: any): EsClient {
   return new EsClient({ node: req.query.esNode });
 }
+
+// TS-109: res.cookie(req.query.xxx, ...) — user-controlled cookie name (header injection)
+function setNamedCookie(res: any, req: any): void {
+  res.cookie(req.query.cookieName, "value", { httpOnly: true });
+}
+
+// TS-110: crypto.scrypt(req.query.xxx, ...) — DoS via user-controlled password in scrypt
+function hashPassword2(req: any, salt: Buffer): void {
+  crypto.scrypt(req.query.password, salt, 64, () => {});
+}
+
+// TS-111: new URL(req.query.xxx) — SSRF / open redirect via URL constructor
+function buildUrl(req: any): URL {
+  return new URL(req.query.target);
+}

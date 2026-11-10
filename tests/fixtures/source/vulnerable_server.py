@@ -668,3 +668,23 @@ def es_connect(hosts: str):
 def couch_connect(url: str):
     # SRC-108: couchdb.Server with user-controlled URL — SSRF via CouchDB
     return couchdb.Server(url)
+
+
+import pty  # noqa: E402
+
+import pexpect  # noqa: E402
+
+
+def run_pty(cmd: str) -> None:
+    # SRC-109: pty.spawn with user-controlled command — OS command execution via PTY
+    pty.spawn(cmd)
+
+
+def run_pexpect(cmd: str):
+    # SRC-110: pexpect.spawn with user-controlled command — OS command execution via pexpect
+    return pexpect.spawn(cmd)
+
+
+def run_in_cwd(cwd: str) -> None:
+    # SRC-111: subprocess.Popen with user-controlled cwd — directory traversal in cwd
+    subprocess.Popen(["ls"], cwd=cwd)

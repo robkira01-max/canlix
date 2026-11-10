@@ -1021,6 +1021,31 @@ _ES_CLIENT_NODE_REQ = re.compile(
     """,
 )
 
+# TS-109: res.cookie(req.xxx, ...) — user-controlled cookie name (header injection)
+_COOKIE_NAME_REQ = re.compile(
+    r"""(?x)
+    \bres\.cookie\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    \s*,
+    """,
+)
+
+# TS-110: crypto.scrypt(req.xxx, ...) — DoS via user-controlled password in scrypt
+_CRYPTO_SCRYPT_REQ = re.compile(
+    r"""(?x)
+    \bcrypto\.scrypt\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-111: new URL(req.xxx) — SSRF / open redirect via user-controlled URL constructor
+_NEW_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+URL\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2170,6 +2195,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new Client({node: req.xxx}) — user-controlled Elasticsearch node URL enables SSRF",
             "Hardcode the Elasticsearch node URL in configuration. Never allow callers to supply it.",
+        )
+
+    # TS-109: res.cookie(req.xxx, ...) — user-controlled cookie name enables header injection
+    if _COOKIE_NAME_REQ.search(raw):
+        _add(
+            "TS-109",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.cookie(req.xxx, ...) — user-controlled cookie name enables header injection",
+            "Hardcode or allowlist the cookie name. Never allow request data to become a cookie name.",
+        )
+
+    # TS-110: crypto.scrypt(req.xxx, ...) — DoS via user-controlled password in scrypt
+    if _CRYPTO_SCRYPT_REQ.search(raw):
+        _add(
+            "TS-110",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "crypto.scrypt(req.xxx, ...) — user-controlled password in scrypt can cause CPU exhaustion DoS",
+            "Enforce a maximum password length before hashing. Never pass unbounded input to scrypt.",
+        )
+
+    # TS-111: new URL(req.xxx) — SSRF / open redirect via user-controlled URL constructor
+    if _NEW_URL_REQ.search(raw):
+        _add(
+            "TS-111",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "new URL(req.xxx) — user-controlled URL parsed with the URL constructor; validate before use",
+            "Allowlist permitted origins. Never construct a URL from request data without validation.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

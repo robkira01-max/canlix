@@ -2231,11 +2231,50 @@ def test_src_108_no_fire_on_hardcoded_url(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-108" for f in analyze_python(p))
 
 
-# ── Full fixture — all 108 rules ──────────────────────────────────────────────
+# ── SRC-109: pty.spawn(user_cmd) — OS command execution via PTY ───────────────
 
 
-def test_vulnerable_fixture_has_all_one_hundred_eight_rules():
+def test_src_109_fires_on_pty_spawn_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pty\ndef run(cmd: str):\n    pty.spawn(cmd)\n")
+    assert any(f.rule_id == "SRC-109" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_109_no_fire_on_hardcoded_cmd(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pty\ndef run():\n    pty.spawn('/bin/bash')\n")
+    assert not any(f.rule_id == "SRC-109" for f in analyze_python(p))
+
+
+# ── SRC-110: pexpect.spawn(user_cmd) — OS command execution via pexpect ───────
+
+
+def test_src_110_fires_on_pexpect_spawn_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pexpect\ndef run(cmd: str):\n    pexpect.spawn(cmd)\n")
+    assert any(f.rule_id == "SRC-110" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_110_no_fire_on_hardcoded_cmd(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pexpect\ndef run():\n    pexpect.spawn('ssh root@host')\n")
+    assert not any(f.rule_id == "SRC-110" for f in analyze_python(p))
+
+
+# ── SRC-111: Popen(cwd=user_path) — user-controlled working directory ─────────
+
+
+def test_src_111_fires_on_popen_cwd_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import subprocess\ndef run(cwd: str):\n    subprocess.Popen(['ls'], cwd=cwd)\n")
+    assert any(f.rule_id == "SRC-111" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_111_no_fire_on_hardcoded_cwd(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import subprocess\ndef run():\n    subprocess.Popen(['ls'], cwd='/tmp')\n")
+    assert not any(f.rule_id == "SRC-111" for f in analyze_python(p))
+
+
+# ── Full fixture — all 111 rules ──────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_one_hundred_eleven_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 109)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 112)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -246,6 +246,12 @@ _CASSANDRA_CLUSTER_FUNCS = frozenset({"cassandra.cluster.Cluster", "Cluster"})
 _ES_CLIENT_FUNCS = frozenset({"elasticsearch.Elasticsearch", "Elasticsearch"})
 # SRC-108: couchdb.Server(user_url) — SSRF via CouchDB
 _COUCHDB_FUNCS = frozenset({"couchdb.Server", "couchdb.client.Server"})
+# SRC-109: pty.spawn(user_cmd) — OS command execution via pseudo-terminal
+_PTY_SPAWN_FUNCS = frozenset({"pty.spawn", "pty.fork"})
+# SRC-110: pexpect.spawn(user_cmd) — OS command execution via pexpect
+_PEXPECT_SPAWN_FUNCS = frozenset({"pexpect.spawn", "pexpect.run", "pexpect.runu"})
+# SRC-111: Popen(cwd=user_path) — user-controlled working directory for subprocess
+_POPEN_CWD_FUNCS = frozenset({"subprocess.Popen", "subprocess.run", "subprocess.call", "Popen"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2125,6 +2131,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"couchdb.Server({url_arg.id}) — user-controlled CouchDB URL enables SSRF",
                     "Hardcode the CouchDB server URL in configuration. Never allow callers to supply it.",
+                )
+
+        # SRC-109: pty.spawn(user_cmd) — OS command execution via pseudo-terminal
+        if fname in _PTY_SPAWN_FUNCS and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            if isinstance(cmd_arg, ast.Name) and cmd_arg.id in self._param_names:
+                self._add(
+                    "SRC-109",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pty.spawn({cmd_arg.id}) — user-controlled command executed via PTY",
+                    "Never pass user input to pty.spawn(). Use a fixed, allowlisted command.",
+                )
+
+        # SRC-110: pexpect.spawn(user_cmd) — OS command execution via pexpect
+        if fname in _PEXPECT_SPAWN_FUNCS and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            if isinstance(cmd_arg, ast.Name) and cmd_arg.id in self._param_names:
+                self._add(
+                    "SRC-110",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pexpect.spawn({cmd_arg.id}) — user-controlled command executed via pexpect",
+                    "Never pass user input to pexpect.spawn(). Use a fixed, allowlisted command.",
+                )
+
+        # SRC-111: subprocess.Popen(cwd=user_path) — user-controlled working directory
+        if fname in _POPEN_CWD_FUNCS and self._param_names:
+            cwd_kw = next((kw for kw in node.keywords if kw.arg == "cwd"), None)
+            if cwd_kw and isinstance(cwd_kw.value, ast.Name) and cwd_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-111",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Popen(cwd={cwd_kw.value.id}) — user-controlled working directory for subprocess",
+                    "Hardcode or validate the cwd path. Never allow callers to supply the working directory.",
                 )
 
         self.generic_visit(node)
