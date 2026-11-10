@@ -997,6 +997,30 @@ _PG_CONNECT_REQ = re.compile(
     """,
 )
 
+# TS-106: new WebSocket(req.xxx) — SSRF via user-controlled WebSocket URL
+_WEBSOCKET_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+WebSocket\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-107: new EventSource(req.xxx) — SSRF via user-controlled EventSource URL
+_EVENT_SOURCE_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+EventSource\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-108: new Client({node: req.xxx}) / elasticsearch — SSRF via user-controlled node URL
+_ES_CLIENT_NODE_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+(?:elasticsearch\.)?Client\s*\(\s*\{[^}]*\bnode\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2116,6 +2140,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "pg.connect(req.xxx) — user-controlled connection string enables SSRF via PostgreSQL",
             "Hardcode the database connection string. Never allow request data to set it.",
+        )
+
+    # TS-106: new WebSocket(req.xxx) — SSRF via user-controlled WebSocket URL
+    if _WEBSOCKET_REQ.search(raw):
+        _add(
+            "TS-106",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new WebSocket(req.xxx) — user-controlled URL enables SSRF via WebSocket connection",
+            "Hardcode the WebSocket server URL. Never allow request data to set the endpoint.",
+        )
+
+    # TS-107: new EventSource(req.xxx) — SSRF via user-controlled SSE URL
+    if _EVENT_SOURCE_REQ.search(raw):
+        _add(
+            "TS-107",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new EventSource(req.xxx) — user-controlled URL enables SSRF via Server-Sent Events",
+            "Hardcode the EventSource URL. Never allow request data to set the SSE endpoint.",
+        )
+
+    # TS-108: new Client({node: req.xxx}) — SSRF via user-controlled Elasticsearch node URL
+    if _ES_CLIENT_NODE_REQ.search(raw):
+        _add(
+            "TS-108",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Client({node: req.xxx}) — user-controlled Elasticsearch node URL enables SSRF",
+            "Hardcode the Elasticsearch node URL in configuration. Never allow callers to supply it.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

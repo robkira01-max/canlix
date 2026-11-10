@@ -540,3 +540,19 @@ import pg from "pg";
 async function connectPg(req: any): Promise<void> {
   await pg.connect(req.query.connStr);
 }
+
+// TS-106: new WebSocket(req.query.url) — SSRF via user-controlled WebSocket URL
+function openWebSocket(req: any): WebSocket {
+  return new WebSocket(req.query.wsUrl);
+}
+
+// TS-107: new EventSource(req.query.url) — SSRF via user-controlled SSE URL
+function openEventSource(req: any): EventSource {
+  return new EventSource(req.query.sseUrl);
+}
+
+// TS-108: new Client({node: req.query.url}) — SSRF via user-controlled Elasticsearch node
+import { Client as EsClient } from "@elastic/elasticsearch";
+function connectEs(req: any): EsClient {
+  return new EsClient({ node: req.query.esNode });
+}

@@ -240,6 +240,12 @@ _PIKA_CONN_FUNCS = frozenset({"pika.ConnectionParameters", "ConnectionParameters
 _KAZOO_CLIENT_FUNCS = frozenset({"kazoo.client.KazooClient", "KazooClient"})
 # SRC-105: etcd3.client(user_host) — SSRF via etcd
 _ETCD_CLIENT_FUNCS = frozenset({"etcd3.client", "etcd3.Etcd3Client", "Etcd3Client"})
+# SRC-106: cassandra.cluster.Cluster(user_contact_points) — SSRF via Cassandra
+_CASSANDRA_CLUSTER_FUNCS = frozenset({"cassandra.cluster.Cluster", "Cluster"})
+# SRC-107: elasticsearch.Elasticsearch(user_hosts) — SSRF via Elasticsearch
+_ES_CLIENT_FUNCS = frozenset({"elasticsearch.Elasticsearch", "Elasticsearch"})
+# SRC-108: couchdb.Server(user_url) — SSRF via CouchDB
+_COUCHDB_FUNCS = frozenset({"couchdb.Server", "couchdb.client.Server"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2080,6 +2086,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"etcd3.client({host_arg.id}) — user-controlled etcd host enables SSRF",
                     "Hardcode the etcd endpoint in configuration. Never allow callers to supply the host.",
+                )
+
+        # SRC-106: cassandra.cluster.Cluster(user_contact_points) — SSRF via Cassandra
+        if fname in _CASSANDRA_CLUSTER_FUNCS and node.args and self._param_names:
+            hosts_arg = node.args[0]
+            if isinstance(hosts_arg, ast.Name) and hosts_arg.id in self._param_names:
+                self._add(
+                    "SRC-106",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Cluster({hosts_arg.id}) — user-controlled Cassandra contact points enables SSRF",
+                    "Hardcode Cassandra contact points in configuration. Never allow callers to supply them.",
+                )
+
+        # SRC-107: elasticsearch.Elasticsearch(user_hosts) — SSRF via Elasticsearch
+        if fname in _ES_CLIENT_FUNCS and node.args and self._param_names:
+            hosts_arg = node.args[0]
+            if isinstance(hosts_arg, ast.Name) and hosts_arg.id in self._param_names:
+                self._add(
+                    "SRC-107",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Elasticsearch({hosts_arg.id}) — user-controlled ES hosts enables SSRF",
+                    "Hardcode Elasticsearch hosts in configuration. Never allow callers to supply the nodes.",
+                )
+
+        # SRC-108: couchdb.Server(user_url) — SSRF via CouchDB
+        if fname in _COUCHDB_FUNCS and node.args and self._param_names:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-108",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"couchdb.Server({url_arg.id}) — user-controlled CouchDB URL enables SSRF",
+                    "Hardcode the CouchDB server URL in configuration. Never allow callers to supply it.",
                 )
 
         self.generic_visit(node)

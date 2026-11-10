@@ -2310,11 +2310,50 @@ def test_ts_105_no_fire_on_hardcoded_conn_string(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-105" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 105 rules ──────────────────────────────────────────────
+# ── TS-106: new WebSocket(req.xxx) — SSRF via WebSocket URL ──────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_one_hundred_five_rules():
+def test_ts_106_fires_on_websocket_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return new WebSocket(req.query.wsUrl);}\n")
+    assert any(f.rule_id == "TS-106" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_106_no_fire_on_literal_url(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){return new WebSocket("wss://ws.example.com");}\n')
+    assert not any(f.rule_id == "TS-106" for f in analyze_typescript(p))
+
+
+# ── TS-107: new EventSource(req.xxx) — SSRF via SSE URL ──────────────────────
+
+
+def test_ts_107_fires_on_event_source_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return new EventSource(req.query.sseUrl);}\n")
+    assert any(f.rule_id == "TS-107" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_107_no_fire_on_literal_url(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){return new EventSource("/events");}\n')
+    assert not any(f.rule_id == "TS-107" for f in analyze_typescript(p))
+
+
+# ── TS-108: new Client({node: req.xxx}) — SSRF via Elasticsearch node URL ─────
+
+
+def test_ts_108_fires_on_es_client_node_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return new Client({node: req.query.esNode});}\n")
+    assert any(f.rule_id == "TS-108" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_108_no_fire_on_hardcoded_node(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){return new Client({node: "http://localhost:9200"});}\n')
+    assert not any(f.rule_id == "TS-108" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 108 rules ──────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_eight_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 106)}
+    expected = {f"TS-{i:03d}" for i in range(1, 109)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -2190,11 +2190,52 @@ def test_src_105_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-105" for f in analyze_python(p))
 
 
-# ── Full fixture — all 105 rules ──────────────────────────────────────────────
+# ── SRC-106: Cluster(user_contact_points) — SSRF via Cassandra ───────────────
 
 
-def test_vulnerable_fixture_has_all_one_hundred_five_rules():
+def test_src_106_fires_on_cassandra_cluster_with_param(tmp_path: Path) -> None:
+    code = "import cassandra.cluster\ndef conn(cp: str):\n    cassandra.cluster.Cluster(cp)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-106" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_106_no_fire_on_hardcoded_hosts(tmp_path: Path) -> None:
+    code = "import cassandra.cluster\ndef conn():\n    cassandra.cluster.Cluster(['10.0.0.1'])\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-106" for f in analyze_python(p))
+
+
+# ── SRC-107: Elasticsearch(user_hosts) — SSRF via Elasticsearch ──────────────
+
+
+def test_src_107_fires_on_elasticsearch_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import elasticsearch\ndef conn(hosts: str):\n    elasticsearch.Elasticsearch(hosts)\n")
+    assert any(f.rule_id == "SRC-107" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_107_no_fire_on_hardcoded_hosts(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import elasticsearch\ndef conn():\n    elasticsearch.Elasticsearch(['es.example.com'])\n")
+    assert not any(f.rule_id == "SRC-107" for f in analyze_python(p))
+
+
+# ── SRC-108: couchdb.Server(user_url) — SSRF via CouchDB ─────────────────────
+
+
+def test_src_108_fires_on_couchdb_server_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import couchdb\ndef conn(url: str):\n    couchdb.Server(url)\n")
+    assert any(f.rule_id == "SRC-108" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_108_no_fire_on_hardcoded_url(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import couchdb\ndef conn():\n    couchdb.Server('http://localhost:5984')\n")
+    assert not any(f.rule_id == "SRC-108" for f in analyze_python(p))
+
+
+# ── Full fixture — all 108 rules ──────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_one_hundred_eight_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 106)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 109)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

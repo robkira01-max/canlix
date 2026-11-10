@@ -648,3 +648,23 @@ def zk_connect(hosts: str) -> KazooClient:
 def etcd_connect(host: str):
     # SRC-105: etcd3.client with user-controlled host — SSRF via etcd
     return etcd3.client(host)
+
+
+import cassandra.cluster  # noqa: E402
+import couchdb  # noqa: E402
+import elasticsearch  # noqa: E402
+
+
+def cassandra_connect(contact_points: str):
+    # SRC-106: Cluster with user-controlled contact points — SSRF via Cassandra
+    return cassandra.cluster.Cluster(contact_points)
+
+
+def es_connect(hosts: str):
+    # SRC-107: Elasticsearch with user-controlled hosts — SSRF via Elasticsearch
+    return elasticsearch.Elasticsearch(hosts)
+
+
+def couch_connect(url: str):
+    # SRC-108: couchdb.Server with user-controlled URL — SSRF via CouchDB
+    return couchdb.Server(url)
