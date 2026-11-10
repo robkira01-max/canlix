@@ -1,7 +1,10 @@
 """Rules 9-12 : network and transport security."""
+
 from __future__ import annotations
+
 import re
-from mcpprobe.models import MCPServer, Finding, Severity, Confidence, Transport
+
+from mcpprobe.models import Confidence, Finding, MCPServer, Severity, Transport
 from mcpprobe.rules.base import rule
 
 
@@ -51,9 +54,7 @@ def NET_003_no_auth_remote(server: MCPServer) -> Finding | None:
         return None
     if not server.url or server.url.startswith("http://localhost") or server.url.startswith("http://127."):
         return None
-    has_auth = any(
-        k.lower() in ("authorization", "x-api-key", "bearer") for k in server.env
-    )
+    has_auth = any(k.lower() in ("authorization", "x-api-key", "bearer") for k in server.env)
     if not has_auth:
         return Finding(
             rule_id="NET-003",
@@ -71,9 +72,7 @@ def NET_003_no_auth_remote(server: MCPServer) -> Finding | None:
 @rule
 def NET_004_sensitive_path_in_args(server: MCPServer) -> Finding | None:
     """DB or file path in args points to sensitive data locations."""
-    sensitive = re.compile(
-        r"(?i)(password|passwd|secret|credential|private|key|token|wallet|ssh|\.env|id_rsa)"
-    )
+    sensitive = re.compile(r"(?i)(password|passwd|secret|credential|private|key|token|wallet|ssh|\.env|id_rsa)")
     broad_paths = re.compile(r"^(/home|/root|/etc|/var|~)")
     for arg in server.args:
         if sensitive.search(arg):
@@ -95,10 +94,47 @@ def NET_004_sensitive_path_in_args(server: MCPServer) -> Finding | None:
                 server_name=server.name,
                 message=f"MCP server has unrestricted access to database at '{arg}'",
                 evidence=f"args: {server.args}",
-                remediation="Ensure the database contains no sensitive data, or restrict MCP server to read-only access.",
+                remediation="Ensure the DB contains no sensitive data, or restrict MCP server to read-only access.",
                 source_file=server.source_file,
             )
     return None
 
 
-NETWORK_RULES = [NET_001_http_url, NET_002_public_url, NET_003_no_auth_remote, NET_004_sensitive_path_in_args]
+@rule
+def NET_005_tls_verification_disabled(server: MCPServer) -> Finding | None:
+    """Explicit TLS disable flags in env or args."""
+    tls_disable = re.compile(r"(?i)(no[_-]?verify|insecure|skip[_-]?tls|ssl[_-]?verify\s*=\s*(false|0|no))")
+    for key, value in server.env.items():
+        if tls_disable.search(f"{key}={value}"):
+            return Finding(
+                rule_id="NET-005",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                server_name=server.name,
+                message=f"TLS verification appears disabled via env '{key}'",
+                evidence=f"env.{key} = {value}",
+                remediation="Remove TLS bypass flags. Use a valid certificate or add your CA to the trust store.",
+                source_file=server.source_file,
+            )
+    for arg in server.args:
+        if tls_disable.search(arg):
+            return Finding(
+                rule_id="NET-005",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                server_name=server.name,
+                message=f"TLS verification appears disabled via arg '{arg}'",
+                evidence=f"args: {server.args}",
+                remediation="Remove TLS bypass flags. Use a valid certificate or add your CA to the trust store.",
+                source_file=server.source_file,
+            )
+    return None
+
+
+NETWORK_RULES = [
+    NET_001_http_url,
+    NET_002_public_url,
+    NET_003_no_auth_remote,
+    NET_004_sensitive_path_in_args,
+    NET_005_tls_verification_disabled,
+]

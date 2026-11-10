@@ -1,9 +1,12 @@
 """Rich terminal reporter."""
+
 from __future__ import annotations
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
+
 from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 from mcpprobe.models import ScanResult, Severity
 
 console = Console()
@@ -20,13 +23,15 @@ def _score_color(score: int) -> str:
 def render_terminal(result: ScanResult) -> None:
     # Header
     console.print()
-    console.print(Panel(
-        f"[bold]MCPProbe[/bold]  ·  {len(result.servers)} server(s) scanned  ·  "
-        f"{len(result.findings)} finding(s)  ·  "
-        f"[{_score_color(result.score)}]Score {result.score}/100[/{_score_color(result.score)}]  ·  "
-        f"{result.scan_duration_ms:.0f} ms",
-        border_style="blue",
-    ))
+    console.print(
+        Panel(
+            f"[bold]MCPProbe[/bold]  ·  {len(result.servers)} server(s) scanned  ·  "
+            f"{len(result.findings)} finding(s)  ·  "
+            f"[{_score_color(result.score)}]Score {result.score}/100[/{_score_color(result.score)}]  ·  "
+            f"{result.scan_duration_ms:.0f} ms",
+            border_style="blue",
+        )
+    )
 
     if not result.findings:
         console.print("[bold green]✓  No issues found.[/bold green]\n")
@@ -64,8 +69,7 @@ def render_terminal(result: ScanResult) -> None:
     console.print("\n[bold]Details & Remediations[/bold]\n")
     for f in result.findings:
         console.print(
-            f"  [{f.severity.color}][{f.rule_id}][/{f.severity.color}] "
-            f"[bold]{f.server_name}[/bold] — {f.message}"
+            f"  [{f.severity.color}][{f.rule_id}][/{f.severity.color}] [bold]{f.server_name}[/bold] — {f.message}"
         )
         console.print(f"    [dim]Evidence:[/dim] {f.evidence}")
         console.print(f"    [dim]Fix:[/dim]      {f.remediation}")

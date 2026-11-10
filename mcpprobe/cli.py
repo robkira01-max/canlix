@@ -1,7 +1,10 @@
 """MCPProbe CLI — mcpprobe scan"""
+
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional
+
 import typer
 from rich import print as rprint
 
@@ -17,17 +20,15 @@ def scan(
     config: Optional[Path] = typer.Option(
         None, "--config", "-c", help="Path to a JSON MCP config file (auto-detects Claude Code if omitted)."
     ),
-    output: str = typer.Option(
-        "terminal", "--output", "-o", help="Output format: terminal | json"
-    ),
+    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json"),
     fail_on: str = typer.Option(
-        "CRITICAL", "--fail-on", help="Exit with code 1 if any finding meets or exceeds this severity (CRITICAL|HIGH|MEDIUM|LOW)."
+        "CRITICAL", "--fail-on", help="Exit with code 1 if any finding meets or exceeds this severity."
     ),
 ) -> None:
     """Scan MCP server configurations for security issues."""
-    from mcpprobe.parsers import parse_claude, parse_json_file
     from mcpprobe.engine import scan as run_scan
-    from mcpprobe.reporters import render_terminal, render_json
+    from mcpprobe.parsers import parse_all, parse_json_file
+    from mcpprobe.reporters import render_json, render_terminal
 
     if config:
         if not config.exists():
@@ -35,7 +36,7 @@ def scan(
             raise typer.Exit(2)
         servers = parse_json_file(config)
     else:
-        servers = parse_claude()
+        servers = parse_all()
 
     if not servers:
         rprint("[yellow]No MCP servers found. Nothing to scan.[/yellow]")
@@ -63,6 +64,7 @@ def scan(
 def version() -> None:
     """Print MCPProbe version."""
     from mcpprobe import __version__
+
     rprint(f"MCPProbe v{__version__}")
 
 

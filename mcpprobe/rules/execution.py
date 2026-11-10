@@ -1,7 +1,8 @@
 """Rules 13-16 : dangerous execution patterns."""
+
 from __future__ import annotations
-import re
-from mcpprobe.models import MCPServer, Finding, Severity, Confidence
+
+from mcpprobe.models import Confidence, Finding, MCPServer, Severity
 from mcpprobe.rules.base import rule
 
 _SHELLS = {"sh", "bash", "zsh", "fish", "dash", "cmd", "powershell", "pwsh"}
@@ -85,4 +86,30 @@ def EXEC_004_unpinned_npx(server: MCPServer) -> Finding | None:
     return None
 
 
-EXECUTION_RULES = [EXEC_001_relative_command, EXEC_002_direct_shell, EXEC_003_shell_flag_in_args, EXEC_004_unpinned_npx]
+@rule
+def EXEC_005_unpinned_uvx(server: MCPServer) -> Finding | None:
+    """uvx/pipx without version pin — same supply chain risk as npx -y."""
+    cmd_name = server.command.split("/")[-1].lower()
+    if cmd_name in ("uvx", "pipx"):
+        has_version = any("@" in a or "==" in a for a in server.args if not a.startswith("-"))
+        if not has_version and server.args:
+            return Finding(
+                rule_id="EXEC-005",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.MEDIUM,
+                server_name=server.name,
+                message=f"'{cmd_name}' runs package without version pinning",
+                evidence=f"command: {server.command}, args: {server.args}",
+                remediation=f"Pin the version: e.g. '{cmd_name} package==1.2.3' to prevent supply chain attacks.",
+                source_file=server.source_file,
+            )
+    return None
+
+
+EXECUTION_RULES = [
+    EXEC_001_relative_command,
+    EXEC_002_direct_shell,
+    EXEC_003_shell_flag_in_args,
+    EXEC_004_unpinned_npx,
+    EXEC_005_unpinned_uvx,
+]

@@ -1,5 +1,7 @@
 """Parse a standalone JSON/YAML MCP config file passed via --config."""
+
 from __future__ import annotations
+
 import json
 from pathlib import Path
 

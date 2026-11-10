@@ -1,7 +1,10 @@
 """Rules 1-4 : secrets exposed in MCP configuration."""
+
 from __future__ import annotations
+
 import re
-from mcpprobe.models import MCPServer, Finding, Severity, Confidence
+
+from mcpprobe.models import Confidence, Finding, MCPServer, Severity
 from mcpprobe.rules.base import rule
 
 # Patterns that look like secrets — conservative to avoid false positives
@@ -30,7 +33,10 @@ def SEC_001_api_key_in_env(server: MCPServer) -> Finding | None:
                     server_name=server.name,
                     message=f"Potential {label} found in env variable '{key}'",
                     evidence=f"env.{key} = {value[:6]}...[REDACTED]",
-                    remediation="Store secrets in a secrets manager or environment variables set outside the config file. Never commit credentials.",
+                    remediation=(
+                        "Store secrets in a secrets manager or environment variables set outside the config file."
+                        " Never commit credentials."
+                    ),
                     source_file=server.source_file,
                 )
     return None
@@ -58,9 +64,7 @@ def SEC_002_secret_in_args(server: MCPServer) -> Finding | None:
 @rule
 def SEC_003_secret_key_name_in_env(server: MCPServer) -> Finding | None:
     """Flags env keys whose names suggest they hold secrets (even if value looks like a placeholder)."""
-    sensitive_names = re.compile(
-        r"(?i)(api_key|apikey|secret|password|passwd|token|credential|private_key|access_key)"
-    )
+    sensitive_names = re.compile(r"(?i)(api_key|apikey|secret|password|passwd|token|credential|private_key|access_key)")
     for key, value in server.env.items():
         if sensitive_names.search(key) and len(value) > 3 and value not in ("", "null", "none", "false"):
             return Finding(
@@ -70,7 +74,7 @@ def SEC_003_secret_key_name_in_env(server: MCPServer) -> Finding | None:
                 server_name=server.name,
                 message=f"Environment variable '{key}' likely contains a secret",
                 evidence=f"env key: {key}",
-                remediation="Verify this value is not stored in a tracked config file. Use .env files excluded from git.",
+                remediation="Verify this value is not in a tracked config file. Use .env files excluded from git.",
                 source_file=server.source_file,
             )
     return None
@@ -96,4 +100,9 @@ def SEC_004_secret_in_tracked_config(server: MCPServer) -> Finding | None:
     return None
 
 
-SECRETS_RULES = [SEC_001_api_key_in_env, SEC_002_secret_in_args, SEC_003_secret_key_name_in_env, SEC_004_secret_in_tracked_config]
+SECRETS_RULES = [
+    SEC_001_api_key_in_env,
+    SEC_002_secret_in_args,
+    SEC_003_secret_key_name_in_env,
+    SEC_004_secret_in_tracked_config,
+]

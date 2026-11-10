@@ -5,7 +5,9 @@ Locations checked (in order):
   .claude/settings.json       — project-level
   .claude/settings.local.json — local overrides (gitignored)
 """
+
 from __future__ import annotations
+
 import json
 from pathlib import Path
 

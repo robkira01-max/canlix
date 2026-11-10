@@ -1,6 +1,9 @@
 """JSON reporter for CI/CD pipelines."""
+
 from __future__ import annotations
+
 import json
+
 from mcpprobe.models import ScanResult
 
 

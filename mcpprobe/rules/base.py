@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from typing import Callable
-from mcpprobe.models import MCPServer, Finding
+
+from mcpprobe.models import Finding, MCPServer
 
 RuleFunc = Callable[[MCPServer], Finding | None]
 

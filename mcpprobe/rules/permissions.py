@@ -1,12 +1,13 @@
 """Rules 5-8 : excessive permissions and dangerous tool exposure."""
+
 from __future__ import annotations
+
 import re
-from mcpprobe.models import MCPServer, Finding, Severity, Confidence
+
+from mcpprobe.models import Confidence, Finding, MCPServer, Severity
 from mcpprobe.rules.base import rule
 
-_DANGEROUS_TOOLS = re.compile(
-    r"(?i)(filesystem|shell|exec|run|eval|delete|drop|admin|root|sudo|system)"
-)
+_DANGEROUS_TOOLS = re.compile(r"(?i)(filesystem|shell|exec|run|eval|delete|drop|admin|root|sudo|system)")
 # Matches top-level broad paths only — not scoped subdirectories like /home/user/project
 _BROAD_FS_PATHS = re.compile(r"^(/(?:home|root|etc|var|tmp)?$|~$)")
 
@@ -60,7 +61,7 @@ def PERM_003_home_dir_db(server: MCPServer) -> Finding | None:
                 server_name=server.name,
                 message=f"MCP server accesses a user-level database at '{arg}'",
                 evidence=f"db path: {arg}",
-                remediation="Verify the database does not contain credentials, PII, or other sensitive data accessible via MCP tools.",
+                remediation="Verify this DB has no credentials or PII accessible via MCP tools.",
                 source_file=server.source_file,
             )
     return None
@@ -72,4 +73,9 @@ def PERM_004_multiple_high_risk_servers(server: MCPServer) -> Finding | None:
     return None
 
 
-PERMISSIONS_RULES = [PERM_001_broad_filesystem_access, PERM_002_dangerous_tool_name, PERM_003_home_dir_db, PERM_004_multiple_high_risk_servers]
+PERMISSIONS_RULES = [
+    PERM_001_broad_filesystem_access,
+    PERM_002_dangerous_tool_name,
+    PERM_003_home_dir_db,
+    PERM_004_multiple_high_risk_servers,
+]

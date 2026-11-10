@@ -1,6 +1,8 @@
 """Rules 17-20 : configuration and transport hygiene."""
+
 from __future__ import annotations
-from mcpprobe.models import MCPServer, Finding, Severity, Confidence, Transport
+
+from mcpprobe.models import Confidence, Finding, MCPServer, Severity, Transport
 from mcpprobe.rules.base import rule
 
 
@@ -72,4 +74,9 @@ def CFG_004_command_with_url(server: MCPServer) -> Finding | None:
     return None
 
 
-CONFIG_RULES = [CFG_001_no_command_no_url, CFG_002_http_without_url, CFG_003_empty_server_name, CFG_004_command_with_url]
+CONFIG_RULES = [
+    CFG_001_no_command_no_url,
+    CFG_002_http_without_url,
+    CFG_003_empty_server_name,
+    CFG_004_command_with_url,
+]
