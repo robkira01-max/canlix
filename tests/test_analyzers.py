@@ -1346,11 +1346,50 @@ def test_SRC042_passes_marshal_loads_constant(tmp_path):
     assert not any(f.rule_id == "SRC-042" for f in analyze_python(p))
 
 
-# ── Full fixture — all 42 rules ───────────────────────────────────────────────
+# ── SRC-046: hashlib.new() with user-controlled algorithm ────────────────────
 
 
-def test_vulnerable_fixture_has_all_forty_five_rules():
+def test_SRC046_detects_hashlib_new_param_algo(tmp_path):
+    p = _py(tmp_path, "import hashlib\ndef h(algo: str):\n    return hashlib.new(algo, b'data')")
+    assert any(f.rule_id == "SRC-046" for f in analyze_python(p))
+
+
+def test_SRC046_passes_hashlib_new_literal_algo(tmp_path):
+    p = _py(tmp_path, "import hashlib\nhashlib.new('sha256', b'data')")
+    assert not any(f.rule_id == "SRC-046" for f in analyze_python(p))
+
+
+# ── SRC-047: importlib.import_module() with user-controlled name ──────────────
+
+
+def test_SRC047_detects_import_module_param(tmp_path):
+    p = _py(tmp_path, "import importlib\ndef load(module_name: str):\n    return importlib.import_module(module_name)")
+    assert any(f.rule_id == "SRC-047" for f in analyze_python(p))
+
+
+def test_SRC047_passes_import_module_literal(tmp_path):
+    p = _py(tmp_path, "import importlib\nimportlib.import_module('os')")
+    assert not any(f.rule_id == "SRC-047" for f in analyze_python(p))
+
+
+# ── SRC-048: extractall() without filter — zip/tar slip ──────────────────────
+
+
+def test_SRC048_detects_zipfile_extractall_no_filter(tmp_path):
+    p = _py(tmp_path, "import zipfile\nwith zipfile.ZipFile('a.zip') as z:\n    z.extractall('/tmp')")
+    assert any(f.rule_id == "SRC-048" for f in analyze_python(p))
+
+
+def test_SRC048_passes_extractall_with_filter(tmp_path):
+    p = _py(tmp_path, "import zipfile\nwith zipfile.ZipFile('a.zip') as z:\n    z.extractall('/tmp', filter='data')")
+    assert not any(f.rule_id == "SRC-048" for f in analyze_python(p))
+
+
+# ── Full fixture — all 48 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_forty_eight_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 46)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 49)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -268,3 +268,24 @@ import marshal  # noqa: E402
 def load_binary_data(data: bytes):
     # SRC-042: marshal.loads — arbitrary code execution via crafted bytes
     return marshal.loads(data)
+
+
+import hashlib  # noqa: E402
+import importlib  # noqa: E402
+import zipfile  # noqa: E402
+
+
+def hash_with_user_algo(algo: str, value: str) -> str:
+    # SRC-046: dynamic hash algorithm — attacker controls the algorithm
+    return hashlib.new(algo, value.encode()).hexdigest()
+
+
+def load_plugin(module_name: str):
+    # SRC-047: dynamic import with user-controlled name — module injection
+    return importlib.import_module(module_name)
+
+
+def extract_archive(archive_path: str, dest: str):
+    # SRC-048: extractall() without filter — zip slip path traversal
+    with zipfile.ZipFile(archive_path) as zf:
+        zf.extractall(dest)

@@ -136,6 +136,10 @@ _CRED_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z+\-.]*://[^@\s:\"']{1,64}:[^@\s\"']{4
 _MARSHAL_FUNCS = frozenset({"marshal.loads", "marshal.load"})
 # SRC-045: file serving with user-controlled path
 _SEND_FILE_FUNCS = frozenset({"send_file", "flask.send_file", "send_from_directory", "flask.send_from_directory"})
+# SRC-047: dynamic module loading with user-controlled name
+_IMPORT_MODULE_FUNCS = frozenset({"importlib.import_module", "import_module", "__import__"})
+# SRC-048: archive extraction without path filter — zip/tar slip
+_EXTRACTALL_PARENTS = frozenset({"zipfile.ZipFile", "tarfile.open", "tarfile.TarFile", "ZipFile", "TarFile"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1143,6 +1147,47 @@ class _Visitor(ast.NodeVisitor):
                     f"{fname}() deserializes untrusted bytes — a crafted payload executes arbitrary Python code",
                     "Never deserialize marshal data from untrusted sources. Use json or a schema-validated format.",
                 )
+
+        # SRC-046: hashlib.new() with user-controlled algorithm name — algorithm confusion / weak hash
+        if fname == "hashlib.new" and node.args and self._param_names:
+            algo_arg = node.args[0]
+            if isinstance(algo_arg, ast.Name) and algo_arg.id in self._param_names:
+                self._add(
+                    "SRC-046",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"hashlib.new({algo_arg.id}) — user-controlled algorithm name enables algorithm confusion",
+                    "Allowlist the hash algorithm: assert algo in {'sha256', 'sha3_256'} before calling hashlib.new().",
+                )
+
+        # SRC-047: importlib.import_module() with user-controlled name — module injection
+        if fname in _IMPORT_MODULE_FUNCS and node.args and self._param_names:
+            mod_arg = node.args[0]
+            if isinstance(mod_arg, ast.Name) and mod_arg.id in self._param_names:
+                self._add(
+                    "SRC-047",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}({mod_arg.id}) — user-controlled module name allows loading arbitrary code",
+                    "Allowlist permitted module names before calling import_module().",
+                )
+
+        # SRC-048: archive extractall() without filter — zip/tar path traversal (zip slip)
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "extractall"
+            and not any(kw.arg == "filter" for kw in node.keywords)
+        ):
+            self._add(
+                "SRC-048",
+                Severity.HIGH,
+                Confidence.MEDIUM,
+                node.lineno,
+                "extractall() without a path filter allows zip/tar slip — entries can overwrite arbitrary files",
+                "Pass filter='data' (Python 3.12+) or validate each member path against the target directory.",
+            )
 
         self.generic_visit(node)
 

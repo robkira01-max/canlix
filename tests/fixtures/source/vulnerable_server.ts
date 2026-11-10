@@ -225,3 +225,19 @@ import vm from "vm";
 function runInSandbox(code: string): unknown {
   return vm.runInNewContext(code, {});
 }
+
+// TS-046: fs.writeFile with user-controlled path from request
+function saveUpload(req: any, data: Buffer): void {
+  fs.writeFile(req.query.filename, data, () => {});
+}
+
+// TS-047: require() with a variable — dynamic module loading
+function loadPlugin(pluginName: string): unknown {
+  return require(pluginName);
+}
+
+// TS-048: child_process.fork() with user-controlled script path
+import { fork } from "child_process";
+function runScript(req: any): void {
+  fork(req.query.script);
+}

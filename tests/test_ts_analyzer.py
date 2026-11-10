@@ -1321,11 +1321,60 @@ def test_TS042_passes_vm_runInNewContext_literal(tmp_path):
     assert not any(f.rule_id == "TS-042" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 42 rules ───────────────────────────────────────────────
+# ── TS-046: fs.writeFile with user-controlled path from request ───────────────
 
 
-def test_vulnerable_ts_fixture_has_all_forty_five_rules():
+def test_TS046_detects_writeFile_req_query(tmp_path):
+    p = _ts(tmp_path, "fs.writeFile(req.query.filename, data, () => {});")
+    assert any(f.rule_id == "TS-046" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS046_detects_writeFileSync_req_params(tmp_path):
+    p = _ts(tmp_path, "fs.writeFileSync(req.params.path, content);")
+    assert any(f.rule_id == "TS-046" for f in analyze_typescript(p))
+
+
+def test_TS046_passes_writeFile_literal_path(tmp_path):
+    p = _ts(tmp_path, 'fs.writeFile("/tmp/output.txt", data, () => {});')
+    assert not any(f.rule_id == "TS-046" for f in analyze_typescript(p))
+
+
+# ── TS-047: require(variable) — dynamic module loading ───────────────────────
+
+
+def test_TS047_detects_require_variable(tmp_path):
+    p = _ts(tmp_path, "const mod = require(pluginName);")
+    assert any(f.rule_id == "TS-047" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS047_passes_require_literal(tmp_path):
+    p = _ts(tmp_path, 'const path = require("path");')
+    assert not any(f.rule_id == "TS-047" for f in analyze_typescript(p))
+
+
+# ── TS-048: child_process.fork() with user-controlled script ─────────────────
+
+
+def test_TS048_detects_fork_req_query(tmp_path):
+    p = _ts(tmp_path, "child_process.fork(req.query.script);")
+    assert any(f.rule_id == "TS-048" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_TS048_detects_fork_req_body(tmp_path):
+    p = _ts(tmp_path, "fork(req.body.scriptPath, args);")
+    assert any(f.rule_id == "TS-048" for f in analyze_typescript(p))
+
+
+def test_TS048_passes_fork_literal_path(tmp_path):
+    p = _ts(tmp_path, 'child_process.fork("./worker.js");')
+    assert not any(f.rule_id == "TS-048" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 48 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_forty_eight_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 46)}
+    expected = {f"TS-{i:03d}" for i in range(1, 49)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

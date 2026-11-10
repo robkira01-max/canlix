@@ -542,6 +542,42 @@ _SEND_FILE_FROM_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-046: fs.writeFile / fs.writeFileSync with user-controlled path from request
+# ---------------------------------------------------------------------------
+
+_WRITE_FILE_FROM_REQ = re.compile(
+    r"""(?x)
+    \bfs\.write(?:File|FileSync)\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-047: dynamic require() with a variable (non-literal) — module injection
+# ---------------------------------------------------------------------------
+
+_REQUIRE_VAR = re.compile(
+    r"""(?x)
+    \brequire\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*\s*\)  # require(variable)
+    """,
+)
+_REQUIRE_LITERAL_SAFE = re.compile(
+    r"""(?x)
+    \brequire\s*\(\s*["'`]  # require("literal") — static module name, safe
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-048: child_process.fork() with user-controlled script path
+# ---------------------------------------------------------------------------
+
+_FORK_FROM_REQ = re.compile(
+    r"""(?x)
+    \bchild_process\.fork\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    | \bfork\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-040: new Function() with dynamic argument — dynamic code execution (like eval for statements)
 # ---------------------------------------------------------------------------
 
@@ -1105,6 +1141,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.sendFile/download with request data — user-controlled path allows reading any file",
             "Validate the path against an allowlist or serve from a fixed directory using path.basename().",
+        )
+
+    # TS-046: fs.writeFile with user-controlled path from request — write to arbitrary path
+    if _WRITE_FILE_FROM_REQ.search(raw):
+        _add(
+            "TS-046",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fs.writeFile path from request — user-controlled destination allows overwriting arbitrary files",
+            "Resolve the path against a fixed base directory and validate it stays within that directory.",
+        )
+
+    # TS-047: require(variable) — dynamic module loading with non-literal argument
+    if _REQUIRE_VAR.search(raw) and not _REQUIRE_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-047",
+            Severity.HIGH,
+            Confidence.MEDIUM,
+            "require(variable) — dynamic module loading with a non-literal path enables module injection",
+            "Allowlist permitted module names and use a static require() or import statement.",
+        )
+
+    # TS-048: child_process.fork() with user-controlled script path
+    if _FORK_FROM_REQ.search(raw):
+        _add(
+            "TS-048",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "fork() script path from request — user-controlled script executes arbitrary Node.js code",
+            "Never use request data as the fork() script argument. Use a fixed, allowlisted script path.",
         )
 
     # TS-040: new Function() with dynamic argument — runtime code compilation (like eval for statements)
