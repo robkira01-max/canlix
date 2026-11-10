@@ -1870,11 +1870,53 @@ def test_SRC081_passes_rename_literal(tmp_path):
     assert not any(f.rule_id == "SRC-081" for f in analyze_python(p))
 
 
-# ── Full fixture — all 81 rules ───────────────────────────────────────────────
+# ── SRC-082: NamedTemporaryFile(dir=user_dir) — temp directory path traversal ─
 
 
-def test_vulnerable_fixture_has_all_eighty_one_rules():
+def test_SRC082_detects_namedtempfile_dir_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import tempfile\ndef make(tmp_dir: str):\n    tempfile.NamedTemporaryFile(dir=tmp_dir)",
+    )
+    assert any(f.rule_id == "SRC-082" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC082_passes_namedtempfile_no_dir(tmp_path):
+    p = _py(tmp_path, "import tempfile\ntempfile.NamedTemporaryFile(suffix='.txt')")
+    assert not any(f.rule_id == "SRC-082" for f in analyze_python(p))
+
+
+# ── SRC-083: os.symlink(user_src, ...) — symlink attack ──────────────────────
+
+
+def test_SRC083_detects_symlink_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef link(target: str, path: str):\n    os.symlink(target, path)")
+    assert any(f.rule_id == "SRC-083" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC083_passes_symlink_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.symlink('/usr/bin/python3', '/tmp/py')")
+    assert not any(f.rule_id == "SRC-083" for f in analyze_python(p))
+
+
+# ── SRC-084: os.link(user_src, ...) — hard link attack ───────────────────────
+
+
+def test_SRC084_detects_hardlink_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef hl(src: str, dst: str):\n    os.link(src, dst)")
+    assert any(f.rule_id == "SRC-084" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC084_passes_hardlink_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.link('/etc/passwd', '/tmp/p')")
+    assert not any(f.rule_id == "SRC-084" for f in analyze_python(p))
+
+
+# ── Full fixture — all 84 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_eighty_four_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 82)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 85)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

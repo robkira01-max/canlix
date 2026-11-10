@@ -502,3 +502,18 @@ def exec_program(exe: str, argv: list) -> None:
 def move_file(src: str, dst: str) -> None:
     # SRC-081: os.rename with user-controlled source path — arbitrary file replacement
     os.rename(src, dst)
+
+
+def create_named_temp(tmp_dir: str) -> None:
+    # SRC-082: NamedTemporaryFile with user-controlled dir — temp directory path traversal
+    tempfile.NamedTemporaryFile(dir=tmp_dir)
+
+
+def make_symlink(target: str, link_path: str) -> None:
+    # SRC-083: os.symlink with user-controlled target — symlink attack
+    os.symlink(target, link_path)
+
+
+def hard_link(src: str, dst: str) -> None:
+    # SRC-084: os.link with user-controlled source path — hard link attack
+    os.link(src, dst)

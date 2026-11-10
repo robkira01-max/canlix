@@ -413,3 +413,18 @@ import mongoose from "mongoose";
 async function connectDb(req: any): Promise<void> {
   await mongoose.connect(req.query.dbUri);
 }
+
+// TS-082: fs.chmod() with user-controlled path — attacker chooses target file
+function changePermissions(req: any): void {
+  fs.chmod(req.query.file, 0o644, () => {});
+}
+
+// TS-083: res.type() with user-controlled MIME type — CRLF injection
+function setMime(res: any, req: any): void {
+  res.type(req.query.format);
+}
+
+// TS-084: import() with user-controlled module specifier — arbitrary module load
+async function loadPlugin(req: any): Promise<unknown> {
+  return import(req.query.plugin);
+}

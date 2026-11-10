@@ -189,6 +189,12 @@ _CONFIGPARSER_READ_FUNCS = frozenset({"ConfigParser.read", "RawConfigParser.read
 _OS_EXEC_FUNCS = frozenset({"os.execv", "os.execvp", "os.execve", "os.execvpe", "execv", "execvp"})
 # SRC-081: os.rename(user_src, user_dst) — user-controlled file rename / replacement
 _OS_RENAME_FUNCS = frozenset({"os.rename", "os.renames", "rename", "renames"})
+# SRC-082: tempfile.NamedTemporaryFile/mkstemp with user-controlled dir — temp dir escape
+_TEMPFILE_DIR_FUNCS = frozenset({"tempfile.NamedTemporaryFile", "tempfile.mkstemp", "NamedTemporaryFile", "mkstemp"})
+# SRC-083: os.symlink with user-controlled target path — symlink attack
+_SYMLINK_FUNCS = frozenset({"os.symlink", "symlink"})
+# SRC-084: os.link with user-controlled source path — hard link attack
+_HARDLINK_FUNCS = frozenset({"os.link", "link"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1585,6 +1591,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"os.rename({src_arg.id}, ...) — user-controlled source path enables arbitrary file replacement",
                     "Resolve both paths against a fixed base directory before renaming.",
+                )
+
+        # SRC-082: tempfile.NamedTemporaryFile(dir=user_dir) — user-controlled temp directory
+        if fname in _TEMPFILE_DIR_FUNCS and self._param_names:
+            dir_kw = next((k for k in node.keywords if k.arg == "dir"), None)
+            if dir_kw and isinstance(dir_kw.value, ast.Name) and dir_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-082",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"NamedTemporaryFile(dir={dir_kw.value.id}) — user-controlled temp directory, path traversal",
+                    "Hardcode the temp directory. Never let callers choose where temporary files are created.",
+                )
+
+        # SRC-083: os.symlink(user_src, user_dst) — symlink attack
+        if fname in _SYMLINK_FUNCS and node.args and self._param_names:
+            src_arg = node.args[0]
+            if isinstance(src_arg, ast.Name) and src_arg.id in self._param_names:
+                self._add(
+                    "SRC-083",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.symlink({src_arg.id}, ...) — user-controlled symlink target enables symlink attack",
+                    "Never allow callers to specify the symlink target. Validate paths against an allowlist.",
+                )
+
+        # SRC-084: os.link(user_src, user_dst) — hard link attack
+        if fname in _HARDLINK_FUNCS and node.args and self._param_names:
+            src_arg = node.args[0]
+            if isinstance(src_arg, ast.Name) and src_arg.id in self._param_names:
+                self._add(
+                    "SRC-084",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.link({src_arg.id}, ...) — user-controlled hard link source enables file access bypass",
+                    "Never allow callers to control hard link source paths. Restrict to allowlisted locations.",
                 )
 
         # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple

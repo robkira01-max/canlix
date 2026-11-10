@@ -801,6 +801,30 @@ _MONGO_CONNECT_REQ = re.compile(
     """,
 )
 
+# TS-082: fs.chmod(req.xxx, ...) — user-controlled path in permission change
+_CHMOD_PATH_REQ = re.compile(
+    r"""(?x)
+    \bfs\.chmod(?:Sync)?\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-083: res.type(req.xxx) — user-controlled Content-Type header, MIME/CRLF injection
+_RES_TYPE_REQ = re.compile(
+    r"""(?x)
+    \bres\.type\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-084: import(req.xxx) — dynamic import with user-controlled specifier
+_DYNAMIC_IMPORT_REQ = re.compile(
+    r"""(?x)
+    \bimport\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1678,6 +1702,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "mongoose.connect/MongoClient(req.xxx) — user-controlled DB URI enables SSRF and credential theft",
             "Hardcode the DB URI in environment variables. Never let request data determine the database host.",
+        )
+
+    # TS-082: fs.chmod(req.xxx, ...) — user-controlled path in permission change
+    if _CHMOD_PATH_REQ.search(raw):
+        _add(
+            "TS-082",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "fs.chmod path from request — attacker chooses which file to change permissions on",
+            "Resolve the path against a fixed base directory and validate it stays within that directory.",
+        )
+
+    # TS-083: res.type(req.xxx) — user-controlled Content-Type header
+    if _RES_TYPE_REQ.search(raw):
+        _add(
+            "TS-083",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.type(req.xxx) — user-controlled Content-Type header enables MIME sniffing and CRLF injection",
+            "Allowlist valid MIME types. Never set the Content-Type from request data.",
+        )
+
+    # TS-084: import(req.xxx) — dynamic import with user-controlled specifier
+    if _DYNAMIC_IMPORT_REQ.search(raw):
+        _add(
+            "TS-084",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "import(req.xxx) — user-controlled dynamic import loads arbitrary modules",
+            "Allowlist module specifiers. Never let request data determine which module to import.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

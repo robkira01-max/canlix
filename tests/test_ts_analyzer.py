@@ -1939,11 +1939,65 @@ def test_TS081_passes_mongoose_literal(tmp_path):
     assert not any(f.rule_id == "TS-081" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 81 rules ───────────────────────────────────────────────
+# ── TS-082: fs.chmod(req.xxx, ...) — user-controlled path in chmod ───────────
 
 
-def test_vulnerable_ts_fixture_has_all_eighty_one_rules():
+def test_TS082_detects_chmod_path_req(tmp_path):
+    p = _ts(tmp_path, "fs.chmod(req.query.file, 0o644, () => {});")
+    assert any(f.rule_id == "TS-082" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS082_detects_chmodSync_path_req(tmp_path):
+    p = _ts(tmp_path, "fs.chmodSync(req.body.path, 0o755);")
+    assert any(f.rule_id == "TS-082" for f in analyze_typescript(p))
+
+
+def test_TS082_passes_chmod_literal(tmp_path):
+    p = _ts(tmp_path, 'fs.chmod("/tmp/out.txt", 0o600, () => {});')
+    assert not any(f.rule_id == "TS-082" for f in analyze_typescript(p))
+
+
+# ── TS-083: res.type(req.xxx) — user-controlled Content-Type ─────────────────
+
+
+def test_TS083_detects_res_type_req(tmp_path):
+    p = _ts(tmp_path, "res.type(req.query.format);")
+    assert any(f.rule_id == "TS-083" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS083_detects_res_type_body(tmp_path):
+    p = _ts(tmp_path, "res.type(req.body.mime);")
+    assert any(f.rule_id == "TS-083" for f in analyze_typescript(p))
+
+
+def test_TS083_passes_res_type_literal(tmp_path):
+    p = _ts(tmp_path, 'res.type("application/json");')
+    assert not any(f.rule_id == "TS-083" for f in analyze_typescript(p))
+
+
+# ── TS-084: import(req.xxx) — dynamic import of user-controlled module ────────
+
+
+def test_TS084_detects_dynamic_import_req(tmp_path):
+    p = _ts(tmp_path, "const mod = await import(req.query.plugin);")
+    assert any(f.rule_id == "TS-084" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS084_detects_import_params(tmp_path):
+    p = _ts(tmp_path, "import(req.params.module).then(m => m.run());")
+    assert any(f.rule_id == "TS-084" for f in analyze_typescript(p))
+
+
+def test_TS084_passes_import_literal(tmp_path):
+    p = _ts(tmp_path, 'import("./plugins/default");')
+    assert not any(f.rule_id == "TS-084" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 84 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_eighty_four_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 82)}
+    expected = {f"TS-{i:03d}" for i in range(1, 85)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
