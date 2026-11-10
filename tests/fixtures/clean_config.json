@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "safe-sqlite": {
+      "type": "stdio",
+      "command": "/usr/local/bin/mcp-server-sqlite",
+      "args": ["--db-path", "/home/user/app/data/app.db"],
+      "env": {}
+    },
+    "safe-remote": {
+      "type": "http",
+      "url": "https://api.example.com/mcp",
+      "env": {
+        "AUTHORIZATION": "Bearer token123"
+      }
+    }
+  }
+}

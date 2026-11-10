@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "bad-relative-path": {
+      "type": "stdio",
+      "command": "mcp-server-sqlite",
+      "args": ["--db-path", "/home/kali/secret.db"],
+      "env": {
+        "API_KEY": "sk-1234567890abcdef1234567890abcdef"
+      }
+    },
+    "bad-shell": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["-c", "python3 server.py"],
+      "env": {}
+    },
+    "bad-http": {
+      "type": "http",
+      "url": "http://api.example.com/mcp",
+      "env": {}
+    },
+    "bad-npx": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "some-mcp-server"],
+      "env": {
+        "PASSWORD": "mysecretpassword"
+      }
+    }
+  }
+}
