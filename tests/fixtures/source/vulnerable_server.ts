@@ -121,3 +121,19 @@ function filterItems(pattern: string, items: string[]): string[] {
 function logLogin(password: string): void {
   console.log("Login attempt", password);
 }
+
+// TS-025: security header removed
+function unsafeRoute(res: any): void {
+  res.removeHeader("x-frame-options");
+}
+
+// TS-026: mass assignment via req.body spread
+function createUser(req: any, user: any): void {
+  Object.assign(user, req.body);
+}
+
+// TS-027: path traversal — path.join with user-controlled segment
+import path from "path";
+function serveFile(baseDir: string, filename: string): string {
+  return path.join(baseDir, filename);
+}

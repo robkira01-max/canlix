@@ -341,6 +341,49 @@ _LOG_SENSITIVE_NAME = re.compile(
 )
 
 
+# ---------------------------------------------------------------------------
+# TS-025: security header explicitly removed / set to unsafe value
+# ---------------------------------------------------------------------------
+
+_SEC_HEADER_REMOVE = re.compile(
+    r"""(?x)
+    delete\s+(?:res|response|headers)\s*[\.\[]["']?
+        (?:content-security-policy|x-frame-options|x-content-type-options|
+           strict-transport-security|x-xss-protection)["']?\s*[\]\)]?  # delete res.headers["csp"]
+    | removeHeader\s*\(\s*["']
+        (?:content-security-policy|x-frame-options|x-content-type-options|
+           strict-transport-security|x-xss-protection)["']            # .removeHeader("csp")
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# TS-026: mass assignment — Object.assign(entity, req.body) or {...req.body}
+# ---------------------------------------------------------------------------
+
+_MASS_ASSIGN = re.compile(
+    r"""(?x)
+    Object\.assign\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*\s*,\s*req\.body  # Object.assign(user, req.body)
+    | \{\s*\.\.\.\s*req\.body                                           # { ...req.body }
+    | \{\s*\.\.\.\s*request\.body                                       # { ...request.body }
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-027: path traversal via path.join with variable — user-controlled segment
+# ---------------------------------------------------------------------------
+
+_PATH_JOIN_VAR = re.compile(
+    r"""(?x)
+    \bpath\.join\s*\(\s*[^)]*,\s*[A-Za-z_$][A-Za-z0-9_$.]*\s*\)   # path.join(base, variable)
+    | \bpath\.resolve\s*\(\s*[^)]*,\s*[A-Za-z_$][A-Za-z0-9_$.]*\s*\)  # path.resolve(base, variable)
+    """,
+)
+_PATH_JOIN_LITERAL_SAFE = re.compile(
+    r"""\bpath\.(?:join|resolve)\s*\(\s*["'`__][^,]+,\s*["'`]"""  # all literal args
+)
+
+
 def analyze_typescript(path: Path) -> list[SourceFinding]:
     """Scan a TypeScript/JavaScript file for security issues. Returns all findings."""
     try:
@@ -635,6 +678,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "Sensitive value passed to a logger — credentials or tokens may appear in log files",
             "Redact or mask secrets before logging. Never log raw tokens, passwords, or keys.",
+        )
+
+    # TS-025: security header explicitly removed
+    if _SEC_HEADER_REMOVE.search(raw):
+        _add(
+            "TS-025",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "Security header explicitly removed — browsers lose the corresponding protection",
+            "Never remove security headers. Set them once via middleware; do not delete them per-route.",
+        )
+
+    # TS-026: mass assignment — Object.assign or spread of req.body into an entity
+    if _MASS_ASSIGN.search(raw):
+        _add(
+            "TS-026",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Mass assignment: req.body spread or assigned into an object — attacker can overwrite any field",
+            "Explicitly pick permitted fields: const { name, email } = req.body. Use a validation schema.",
+        )
+
+    # TS-027: path.join / path.resolve with variable segment — path traversal risk
+    if _PATH_JOIN_VAR.search(raw) and not _PATH_JOIN_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-027",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "path.join/resolve with variable segment — '../' sequences can escape the intended directory",
+            "Resolve the joined path and assert it starts with the allowed base dir. Reject paths with '..'.",
         )
 
     return result

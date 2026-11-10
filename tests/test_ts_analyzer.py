@@ -907,3 +907,85 @@ def test_vulnerable_ts_fixture_has_all_twentyfour_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 25)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-025: security header removed ──────────────────────────────────────────
+
+
+def test_TS025_detects_removeHeader_xframe(tmp_path):
+    p = _ts(tmp_path, 'res.removeHeader("x-frame-options");')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-025" for f in findings)
+
+
+def test_TS025_detects_removeHeader_hsts(tmp_path):
+    p = _ts(tmp_path, 'res.removeHeader("strict-transport-security");')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-025" for f in findings)
+
+
+def test_TS025_passes_unrelated_header(tmp_path):
+    p = _ts(tmp_path, 'res.removeHeader("accept");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-025" for f in findings)
+
+
+def test_TS025_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-025" for f in findings)
+
+
+# ── TS-026: mass assignment ───────────────────────────────────────────────────
+
+
+def test_TS026_detects_Object_assign_req_body(tmp_path):
+    p = _ts(tmp_path, "Object.assign(user, req.body);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-026" for f in findings)
+
+
+def test_TS026_detects_spread_req_body(tmp_path):
+    p = _ts(tmp_path, "const updated = { ...req.body };")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-026" for f in findings)
+
+
+def test_TS026_passes_explicit_fields(tmp_path):
+    p = _ts(tmp_path, "const { name, email } = req.body;")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-026" for f in findings)
+
+
+def test_TS026_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-026" for f in findings)
+
+
+# ── TS-027: path traversal via path.join ─────────────────────────────────────
+
+
+def test_TS027_detects_path_join_variable(tmp_path):
+    p = _ts(tmp_path, "const full = path.join(baseDir, filename);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-027" for f in findings)
+
+
+def test_TS027_passes_all_literal(tmp_path):
+    p = _ts(tmp_path, 'const full = path.join("/data", "report.csv");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-027" for f in findings)
+
+
+def test_TS027_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-027" for f in findings)
+
+
+# ── Full fixture — all 27 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_twentyseven_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 28)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

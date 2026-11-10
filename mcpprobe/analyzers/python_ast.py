@@ -117,6 +117,32 @@ _CORS_MIDDLEWARE_FUNCS = frozenset(
         "app.add_middleware",
     }
 )
+# SRC-025: security-header removal — explicit deletion/override of a security header
+_SECURITY_HEADER_NAMES = frozenset(
+    {
+        "content-security-policy",
+        "x-frame-options",
+        "x-content-type-options",
+        "strict-transport-security",
+        "x-xss-protection",
+        "referrer-policy",
+        "permissions-policy",
+    }
+)
+# SRC-026: mass assignment — Model(**param) where param comes from function args
+_ORM_MODEL_NAMES = frozenset(
+    {
+        "Model",
+        "User",
+        "Item",
+        "Record",
+        "Entry",
+        "Document",
+        "Session",
+    }
+)
+# SRC-027: path.join / os.path.join with user-controlled segment
+_PATH_JOIN_FUNCS = frozenset({"os.path.join", "Path"})
 # SRC-022: server-side template injection — Template constructed from user input
 _TEMPLATE_RENDER_FUNCS = frozenset(
     {
@@ -287,6 +313,25 @@ class _Visitor(ast.NodeVisitor):
         self._current_func_name = old_func
 
     visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Delete(self, node: ast.Delete) -> None:
+        for target in node.targets:
+            # del response.headers["strict-transport-security"]
+            if (
+                isinstance(target, ast.Subscript)
+                and isinstance(target.slice, ast.Constant)
+                and isinstance(target.slice.value, str)
+                and target.slice.value.lower() in _SECURITY_HEADER_NAMES
+            ):
+                self._add(
+                    "SRC-025",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Security header '{target.slice.value}' explicitly removed — browsers lose protection",
+                    "Never delete security headers. Set them via middleware; do not remove them per-route.",
+                )
+        self.generic_visit(node)
 
     def _func_name(self, node: ast.Call) -> str:
         if isinstance(node.func, ast.Name):
@@ -724,6 +769,32 @@ class _Visitor(ast.NodeVisitor):
                             "Redact or mask secrets before logging. Never log raw tokens, passwords, or keys.",
                         )
                         break
+
+        # SRC-026: mass assignment — Model(**param) where param is a function argument
+        # In ast.Call, **expr is represented as keyword(arg=None, value=expr)
+        for kw in node.keywords:
+            if kw.arg is None and isinstance(kw.value, ast.Name) and kw.value.id in self._param_names:
+                self._add(
+                    "SRC-026",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"Mass assignment: **{kw.value.id} spreads untrusted data into a model/function call",
+                    "Enumerate permitted fields explicitly. Use a schema (Pydantic, marshmallow) to filter input.",
+                )
+                break
+
+        # SRC-027: path traversal via os.path.join/Path with user-controlled segment
+        if fname in _PATH_JOIN_FUNCS and len(node.args) >= 2:
+            if any(isinstance(a, ast.Name) and a.id in self._param_names for a in node.args[1:]):
+                self._add(
+                    "SRC-027",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"{fname}() with user-controlled segment — path traversal with '../' sequences possible",
+                    "Resolve the joined path and assert it starts with the allowed base dir. Reject paths with '..'.",
+                )
 
         self.generic_visit(node)
 

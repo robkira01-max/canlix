@@ -933,3 +933,79 @@ def test_vulnerable_fixture_has_all_twentyfour_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 25)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-025: security header removed ─────────────────────────────────────────
+
+
+def test_SRC025_detects_del_hsts(tmp_path):
+    p = _py(tmp_path, 'del response.headers["strict-transport-security"]')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-025" for f in findings)
+
+
+def test_SRC025_detects_del_csp(tmp_path):
+    p = _py(tmp_path, 'del resp.headers["content-security-policy"]')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-025" for f in findings)
+
+
+def test_SRC025_passes_unrelated_del(tmp_path):
+    p = _py(tmp_path, 'del response.headers["accept"]')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-025" for f in findings)
+
+
+def test_SRC025_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-025" for f in findings)
+
+
+# ── SRC-026: mass assignment ──────────────────────────────────────────────────
+
+
+def test_SRC026_detects_double_star_param(tmp_path):
+    p = _py(tmp_path, "def create(data: dict):\n    return Model(**data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-026" for f in findings)
+
+
+def test_SRC026_passes_local_dict(tmp_path):
+    p = _py(tmp_path, "local = {'a': 1}\nModel(**local)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-026" for f in findings)
+
+
+def test_SRC026_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-026" for f in findings)
+
+
+# ── SRC-027: path traversal via path.join ────────────────────────────────────
+
+
+def test_SRC027_detects_os_path_join_param(tmp_path):
+    p = _py(tmp_path, "def serve(base: str, name: str):\n    return os.path.join(base, name)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-027" for f in findings)
+
+
+def test_SRC027_passes_all_literal(tmp_path):
+    p = _py(tmp_path, 'os.path.join("/data", "report.csv")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-027" for f in findings)
+
+
+def test_SRC027_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-027" for f in findings)
+
+
+# ── Full fixture — all 27 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_twentyseven_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 28)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

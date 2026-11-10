@@ -148,3 +148,22 @@ import logging  # noqa: E402
 def process_login(password: str):
     # SRC-024: sensitive value logged
     logging.info(f"Login attempt with password={password}")
+
+
+def remove_csp(response):
+    # SRC-025: security header deleted
+    del response.headers["content-security-policy"]
+
+
+class User:  # noqa: D101
+    pass
+
+
+def create_user(request_data: dict):
+    # SRC-026: mass assignment via **param
+    return User(**request_data)
+
+
+def serve_file(base_dir: str, filename: str):
+    # SRC-027: path traversal via os.path.join with user-controlled segment
+    return os.path.join(base_dir, filename)
