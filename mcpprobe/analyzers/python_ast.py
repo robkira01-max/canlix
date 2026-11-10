@@ -61,6 +61,43 @@ _PATH_IO_FUNCS = {
 # SQL method suffixes — matches cursor.execute, db.execute, session.execute, etc.
 _SQL_METHODS = frozenset({".execute", ".executemany", ".executescript", ".query", ".raw"})
 
+# SRC-010: insecure PRNG — random module functions that must not be used for crypto
+_INSECURE_RANDOM_FUNCS = frozenset(
+    {
+        "random.random",
+        "random.randint",
+        "random.randrange",
+        "random.choice",
+        "random.choices",
+        "random.shuffle",
+        "random.sample",
+        "random.uniform",
+        "random.gauss",
+    }
+)
+# Words that indicate a security-sensitive identifier (checked after splitting on '_')
+_SECURITY_WORDS = frozenset(
+    {
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "nonce",
+        "salt",
+        "otp",
+        "pin",
+        "session",
+        "key",
+        "auth",
+        "credential",
+    }
+)
+
+
+def _is_security_name(name: str) -> bool:
+    """Return True if any underscore-separated part of name is security-sensitive."""
+    return bool(set(name.lower().split("_")) & _SECURITY_WORDS)
+
 
 class _Visitor(ast.NodeVisitor):
     def __init__(self, lines: list[str], path: Path) -> None:
@@ -68,6 +105,7 @@ class _Visitor(ast.NodeVisitor):
         self.lines = lines
         self.path = path
         self._param_names: set[str] = set()  # current function's parameter names
+        self._current_func_name: str = ""  # current function's name (for SRC-010 return check)
 
     def _snip(self, lineno: int) -> str:
         if 1 <= lineno <= len(self.lines):
@@ -107,7 +145,8 @@ class _Visitor(ast.NodeVisitor):
         return False
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        old = self._param_names
+        old_params = self._param_names
+        old_func = self._current_func_name
         args = node.args
         params: set[str] = {a.arg for a in args.args + args.posonlyargs + args.kwonlyargs}
         if args.vararg:
@@ -115,8 +154,10 @@ class _Visitor(ast.NodeVisitor):
         if args.kwarg:
             params.add(args.kwarg.arg)
         self._param_names = params
+        self._current_func_name = node.name
         self.generic_visit(node)
-        self._param_names = old
+        self._param_names = old_params
+        self._current_func_name = old_func
 
     visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
 
@@ -160,6 +201,39 @@ class _Visitor(ast.NodeVisitor):
                             f"Potential secret in variable '{target.id}' — value looks like a credential",
                             "Use os.environ.get() or a secrets manager instead of hardcoding.",
                         )
+
+        # SRC-010: insecure PRNG assigned to a security-sensitive variable
+        if isinstance(node.value, ast.Call) and self._func_name(node.value) in _INSECURE_RANDOM_FUNCS:
+            for target in node.targets:
+                if isinstance(target, ast.Name) and _is_security_name(target.id):
+                    self._add(
+                        "SRC-010",
+                        Severity.MEDIUM,
+                        Confidence.MEDIUM,
+                        node.lineno,
+                        f"Insecure PRNG: random.* assigned to '{target.id}' — not suitable for cryptographic use",
+                        "Use secrets.token_hex(), secrets.token_bytes(), or os.urandom() for security tokens.",
+                    )
+                    break
+
+        self.generic_visit(node)
+
+    def visit_Return(self, node: ast.Return) -> None:
+        # SRC-010: random.* returned from a security-sensitive function
+        if (
+            node.value
+            and isinstance(node.value, ast.Call)
+            and self._func_name(node.value) in _INSECURE_RANDOM_FUNCS
+            and _is_security_name(self._current_func_name)
+        ):
+            self._add(
+                "SRC-010",
+                Severity.MEDIUM,
+                Confidence.MEDIUM,
+                node.lineno,
+                f"Insecure PRNG: random.* in '{self._current_func_name}' — not suitable for cryptographic use",
+                "Use secrets.token_hex(), secrets.token_bytes(), or os.urandom() for security tokens.",
+            )
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:

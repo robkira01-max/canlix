@@ -177,10 +177,21 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_nine_rules():
+def test_vulnerable_ts_fixture_has_all_ten_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006", "TS-007", "TS-008", "TS-009"}
+    expected = {
+        "TS-001",
+        "TS-002",
+        "TS-003",
+        "TS-004",
+        "TS-005",
+        "TS-006",
+        "TS-007",
+        "TS-008",
+        "TS-009",
+        "TS-010",
+    }
     assert expected.issubset(rule_ids)
 
 
@@ -316,3 +327,59 @@ def test_TS009_passes_static_template_literal(tmp_path):
     p = _ts(tmp_path, "db.query(`SELECT * FROM users WHERE active = true`);")
     findings = analyze_typescript(p)
     assert not any(f.rule_id == "TS-009" for f in findings)
+
+
+# ── TS-010: insecure PRNG — Math.random() in security context ───────────────
+
+
+def test_TS010_detects_math_random_for_token(tmp_path):
+    p = _ts(tmp_path, "const token = Math.random().toString(36).substring(2);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-010" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS010_detects_math_random_for_secret(tmp_path):
+    p = _ts(tmp_path, "const secret = Math.random();")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_detects_math_random_for_otp(tmp_path):
+    p = _ts(tmp_path, "const otp = Math.floor(Math.random() * 1000000);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_detects_math_random_for_session_id(tmp_path):
+    p = _ts(tmp_path, "const session_id = Math.random().toString(36);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_detects_math_random_for_password(tmp_path):
+    p = _ts(tmp_path, "const password = Math.random().toString(36).slice(2, 10);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_passes_math_random_for_index(tmp_path):
+    p = _ts(tmp_path, "const index = Math.floor(Math.random() * array.length);")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_passes_math_random_for_color(tmp_path):
+    p = _ts(tmp_path, "const randomColor = Math.random();")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_passes_crypto_random_bytes_for_token(tmp_path):
+    p = _ts(tmp_path, "const token = crypto.randomBytes(32).toString('hex');")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-010" for f in findings)
+
+
+def test_TS010_fixture_fires_on_vulnerable_server(tmp_path):
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-010" for f in findings)

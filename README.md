@@ -207,7 +207,7 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 
 ### Source rules — `mcpprobe analyze`
 
-#### Python rules (9) — `.py` files, AST-based
+#### Python rules (10) — `.py` files, AST-based
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -220,8 +220,9 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | SRC-007 | MEDIUM | HTTP client (`requests`, `httpx`, `urlopen`) with URL from function parameter — SSRF |
 | SRC-008 | MEDIUM | `open()` / `Path()` / `os.remove()` with path from function parameter — path traversal |
 | SRC-009 | HIGH | `cursor.execute()` / `db.query()` with f-string or `+`/`%` interpolation — SQL injection |
+| SRC-010 | MEDIUM | `random.*` assigned to a security-sensitive variable (token, secret, password, otp…) — insecure PRNG |
 
-#### TypeScript / JavaScript rules (9) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
+#### TypeScript / JavaScript rules (10) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -234,6 +235,24 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | TS-007 | MEDIUM | `fetch()` / `axios` / `got` with variable URL — Server-Side Request Forgery |
 | TS-008 | MEDIUM | `fs.readFile/writeFile/unlink` with variable path — path traversal |
 | TS-009 | HIGH | `.query()`/`.execute()`/`knex.raw()` with template literal interpolation — SQL injection |
+| TS-010 | MEDIUM | `Math.random()` on a line assigning to `token`, `secret`, `password`, `otp`… — insecure PRNG |
+
+---
+
+### Dependency manifest rules (3) — `mcpprobe analyze`
+
+Scanned automatically when `requirements*.txt` or `package.json` files are found in the analyzed path.
+
+#### `requirements.txt`
+| Rule | Severity | Description |
+|---|---|---|
+| DEP-001 | MEDIUM | Package without exact `==` version pin — supply chain risk |
+
+#### `package.json`
+| Rule | Severity | Description |
+|---|---|---|
+| DEP-002 | HIGH | Package with `*` or `latest` version — fully unpinned, highest supply chain risk |
+| DEP-003 | MEDIUM | Package with `^`, `~`, `>=` range specifier — permits unreviewed updates |
 
 ---
 

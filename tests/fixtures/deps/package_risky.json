@@ -1,0 +1,13 @@
+{
+  "name": "mcp-server-risky",
+  "version": "1.0.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "*",
+    "axios": "latest",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "typescript": ">=5.0.0",
+    "jest": "29.7.0"
+  }
+}

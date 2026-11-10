@@ -51,3 +51,9 @@ export function readFile(filePath: string): void {
 export function getUser(userId: string): Promise<unknown> {
   return db.query(`SELECT * FROM users WHERE id = ${userId}`);
 }
+
+// TS-010: insecure PRNG for session token (MEDIUM)
+export function generateSessionToken(): string {
+  const token = Math.random().toString(36).substring(2);
+  return token;
+}

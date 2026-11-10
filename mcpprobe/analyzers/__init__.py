@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mcpprobe.analyzers.deps import analyze_package_json, analyze_requirements
 from mcpprobe.analyzers.python_ast import analyze_python
 from mcpprobe.analyzers.ts_regex import analyze_typescript
 from mcpprobe.models import SourceFinding
@@ -30,7 +31,12 @@ def _analyze_file(path: Path) -> list[SourceFinding]:
         return analyze_python(path)
     if path.suffix in _TS_SUFFIXES:
         return analyze_typescript(path)
+    if path.name == "package.json":
+        return analyze_package_json(path)
+    if path.name.endswith("requirements.txt") or path.name.startswith("requirements"):
+        if path.suffix == ".txt":
+            return analyze_requirements(path)
     return []
 
 
-__all__ = ["analyze_path", "SourceFinding"]
+__all__ = ["analyze_path", "analyze_package_json", "analyze_requirements", "SourceFinding"]

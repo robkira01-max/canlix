@@ -1,0 +1,13 @@
+{
+  "name": "mcp-server-safe",
+  "version": "1.0.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.4",
+    "axios": "1.7.2",
+    "express": "4.19.2"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5",
+    "jest": "29.7.0"
+  }
+}

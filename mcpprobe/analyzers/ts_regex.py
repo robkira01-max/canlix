@@ -84,6 +84,16 @@ _PROTO_POLLUTION = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-010: insecure PRNG — Math.random() in a security-sensitive context
+# ---------------------------------------------------------------------------
+
+_MATH_RANDOM = re.compile(r"\bMath\.random\s*\(\s*\)")
+# Checks whether the line contains a security-sensitive name (token, secret, etc.)
+_TS_SECURITY_CONTEXT = re.compile(
+    r"(?i)\b(?:token|secret|password|passwd|nonce|salt|otp|session_id|private_key|api_key|auth_key|pin)\b",
+)
+
+# ---------------------------------------------------------------------------
 # TS-009: SQL injection — template literal in DB query/execute call
 # ---------------------------------------------------------------------------
 
@@ -268,6 +278,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "File I/O with variable path — path traversal risk",
             "Validate the path with path.resolve() + a trusted prefix check before I/O operations.",
+        )
+
+    # TS-010: insecure PRNG — Math.random() used in a security-sensitive context
+    if _MATH_RANDOM.search(raw) and _TS_SECURITY_CONTEXT.search(raw):
+        _add(
+            "TS-010",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "Math.random() used in a security-sensitive context — not cryptographically secure",
+            "Use crypto.getRandomValues() (browser) or crypto.randomBytes() (Node.js) for security tokens.",
         )
 
     return result

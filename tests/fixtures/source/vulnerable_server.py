@@ -2,6 +2,7 @@
 
 import os
 import pickle
+import random
 import subprocess
 
 import requests
@@ -54,3 +55,9 @@ def read_user_file(filepath: str):
 def get_user(user_id: str):
     # SRC-009: SQL injection via f-string in cursor.execute
     cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
+
+
+def issue_session_token() -> str:
+    # SRC-010: insecure PRNG for security token generation
+    token = random.randint(0, 999999)
+    return str(token)

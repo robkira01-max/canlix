@@ -162,10 +162,21 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_nine_rules():
+def test_vulnerable_fixture_has_all_ten_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008", "SRC-009"}
+    expected = {
+        "SRC-001",
+        "SRC-002",
+        "SRC-003",
+        "SRC-004",
+        "SRC-005",
+        "SRC-006",
+        "SRC-007",
+        "SRC-008",
+        "SRC-009",
+        "SRC-010",
+    }
     assert expected.issubset(rule_ids)
 
 
@@ -330,3 +341,70 @@ def test_SRC009_passes_literal_sql(tmp_path):
     p = _py(tmp_path, 'cursor.execute("SELECT * FROM users")')
     findings = analyze_python(p)
     assert not any(f.rule_id == "SRC-009" for f in findings)
+
+
+# ── SRC-010: insecure PRNG — random.* in security-sensitive context ──────────
+
+
+def test_SRC010_detects_randint_assigned_to_token(tmp_path):
+    p = _py(tmp_path, "import random\ntoken = random.randint(0, 999999)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-010" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC010_detects_random_assigned_to_secret(tmp_path):
+    p = _py(tmp_path, "import random\nsecret = random.random()")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_detects_choice_assigned_to_password(tmp_path):
+    p = _py(tmp_path, "import random\nchars = 'abc'\npassword = random.choice(chars)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_detects_randint_assigned_to_otp(tmp_path):
+    p = _py(tmp_path, "import random\notp = random.randint(100000, 999999)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_detects_randrange_assigned_to_session_id(tmp_path):
+    p = _py(tmp_path, "import random\nsession_id = random.randrange(0, 2**32)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_detects_return_in_security_named_function(tmp_path):
+    p = _py(
+        tmp_path,
+        "import random\ndef generate_token():\n    return random.randint(0, 999999)",
+    )
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_passes_random_for_non_security_use(tmp_path):
+    p = _py(tmp_path, "import random\nindex = random.randint(0, 10)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_passes_random_choice_for_color(tmp_path):
+    p = _py(tmp_path, "import random\ncolors = ['red', 'blue']\ncolor = random.choice(colors)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_passes_secrets_token_hex(tmp_path):
+    p = _py(tmp_path, "import secrets\ntoken = secrets.token_hex(32)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-010" for f in findings)
+
+
+def test_SRC010_fixture_fires_on_vulnerable_server(tmp_path):
+    from mcpprobe.analyzers.python_ast import analyze_python as _ap
+
+    findings = _ap(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-010" for f in findings)

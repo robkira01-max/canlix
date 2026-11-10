@@ -1,0 +1,7 @@
+# Mix of pinned and unpinned — findings expected for unpinned lines
+requests==2.31.0
+httpx
+fastapi>=0.100.0
+pydantic
+# a comment — should not be flagged
+uvicorn==0.29.0
