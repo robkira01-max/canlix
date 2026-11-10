@@ -1510,11 +1510,50 @@ def test_SRC057_passes_webbrowser_open_literal(tmp_path):
     assert not any(f.rule_id == "SRC-057" for f in analyze_python(p))
 
 
-# ── Full fixture — all 57 rules ───────────────────────────────────────────────
+# ── SRC-058: ftplib.FTP(host) — SSRF via FTP ──────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_fifty_seven_rules():
+def test_SRC058_detects_FTP_host_param(tmp_path):
+    p = _py(tmp_path, "import ftplib\ndef conn(host: str):\n    ftplib.FTP(host)")
+    assert any(f.rule_id == "SRC-058" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC058_passes_FTP_literal(tmp_path):
+    p = _py(tmp_path, "import ftplib\nftplib.FTP('ftp.example.com')")
+    assert not any(f.rule_id == "SRC-058" for f in analyze_python(p))
+
+
+# ── SRC-059: smtplib.SMTP(host) — SSRF via SMTP ──────────────────────────────
+
+
+def test_SRC059_detects_SMTP_host_param(tmp_path):
+    p = _py(tmp_path, "import smtplib\ndef mailer(host: str):\n    smtplib.SMTP(host)")
+    assert any(f.rule_id == "SRC-059" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC059_passes_SMTP_literal(tmp_path):
+    p = _py(tmp_path, "import smtplib\nsmtplib.SMTP('mail.example.com')")
+    assert not any(f.rule_id == "SRC-059" for f in analyze_python(p))
+
+
+# ── SRC-060: ldap3.Server(host) — LDAP SSRF ───────────────────────────────────
+
+
+def test_SRC060_detects_ldap3_Server_param(tmp_path):
+    p = _py(tmp_path, "import ldap3\ndef ldap_conn(host: str):\n    ldap3.Server(host)")
+    assert any(f.rule_id == "SRC-060" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC060_passes_ldap3_Server_literal(tmp_path):
+    p = _py(tmp_path, "import ldap3\nldap3.Server('ldap.example.com')")
+    assert not any(f.rule_id == "SRC-060" for f in analyze_python(p))
+
+
+# ── Full fixture — all 60 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_sixty_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 58)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 61)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

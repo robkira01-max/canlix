@@ -1517,11 +1517,65 @@ def test_TS057_passes_exec_literal(tmp_path):
     assert not any(f.rule_id == "TS-057" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 57 rules ───────────────────────────────────────────────
+# ── TS-058: execFile(req.xxx) — user-controlled executable path ──────────────
 
 
-def test_vulnerable_ts_fixture_has_all_fifty_seven_rules():
+def test_TS058_detects_execFile_req_query(tmp_path):
+    p = _ts(tmp_path, "execFile(req.query.binary, ['--safe']);")
+    assert any(f.rule_id == "TS-058" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS058_detects_child_process_execFile_req(tmp_path):
+    p = _ts(tmp_path, "child_process.execFile(req.body.cmd);")
+    assert any(f.rule_id == "TS-058" for f in analyze_typescript(p))
+
+
+def test_TS058_passes_execFile_literal(tmp_path):
+    p = _ts(tmp_path, 'execFile("/usr/bin/ls", ["-la"]);')
+    assert not any(f.rule_id == "TS-058" for f in analyze_typescript(p))
+
+
+# ── TS-059: net.createConnection(req.xxx) — raw TCP SSRF ─────────────────────
+
+
+def test_TS059_detects_net_createConnection_req(tmp_path):
+    p = _ts(tmp_path, "net.createConnection(req.query.port, req.query.host);")
+    assert any(f.rule_id == "TS-059" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS059_detects_net_connect_req(tmp_path):
+    p = _ts(tmp_path, "net.connect(80, req.params.host);")
+    assert any(f.rule_id == "TS-059" for f in analyze_typescript(p))
+
+
+def test_TS059_passes_net_createConnection_literal(tmp_path):
+    p = _ts(tmp_path, 'net.createConnection(6379, "localhost");')
+    assert not any(f.rule_id == "TS-059" for f in analyze_typescript(p))
+
+
+# ── TS-060: res.jsonp(req.xxx) — JSONP callback injection ────────────────────
+
+
+def test_TS060_detects_jsonp_req_query(tmp_path):
+    p = _ts(tmp_path, "res.jsonp(req.query.data);")
+    assert any(f.rule_id == "TS-060" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS060_detects_jsonp_req_body(tmp_path):
+    p = _ts(tmp_path, "res.jsonp(req.body.payload);")
+    assert any(f.rule_id == "TS-060" for f in analyze_typescript(p))
+
+
+def test_TS060_passes_jsonp_literal(tmp_path):
+    p = _ts(tmp_path, 'res.jsonp({ status: "ok" });')
+    assert not any(f.rule_id == "TS-060" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 60 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_sixty_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 58)}
+    expected = {f"TS-{i:03d}" for i in range(1, 61)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

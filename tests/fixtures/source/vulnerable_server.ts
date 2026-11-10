@@ -287,3 +287,20 @@ function downloadFile(res: any, req: any): void {
 function runCommand(req: any): void {
   exec(req.query.cmd);
 }
+
+// TS-058: execFile() with user-controlled executable path
+import { execFile } from "child_process";
+function runBinary(req: any): void {
+  execFile(req.query.binary, ["--safe"]);
+}
+
+// TS-059: net.createConnection with user-controlled host — raw TCP SSRF
+import net from "net";
+function proxyTcp(req: any): void {
+  net.createConnection(req.query.port, req.query.host);
+}
+
+// TS-060: res.jsonp() with user-controlled data — JSONP callback injection
+function sendJsonp(res: any, req: any): void {
+  res.jsonp(req.query.data);
+}

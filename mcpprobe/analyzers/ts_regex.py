@@ -575,6 +575,38 @@ _EXEC_VAR_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-058: child_process.execFile(req.xxx) — user-controlled executable file path
+# ---------------------------------------------------------------------------
+
+_EXEC_FILE_REQ = re.compile(
+    r"""(?x)
+    \b(?:child_process\.execFile|(?<![A-Za-z0-9_$])execFile)\s*\(
+    \s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-059: net.createConnection / net.connect with request data — raw TCP SSRF
+# ---------------------------------------------------------------------------
+
+_NET_CONNECT_REQ = re.compile(
+    r"""(?x)
+    \bnet\.(?:createConnection|connect)\s*\(
+    [^)]*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-060: res.jsonp(req.xxx) — JSONP callback injection from request data
+# ---------------------------------------------------------------------------
+
+_JSONP_REQ = re.compile(
+    r"""(?x)
+    \bres\.jsonp\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -1271,6 +1303,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "exec(req.xxx) — user-controlled command string executes arbitrary shell commands",
             "Use execFile() with an args array and shell: false. Never pass request data to exec().",
+        )
+
+    # TS-058: execFile(req.xxx) — user-controlled executable file path
+    if _EXEC_FILE_REQ.search(raw):
+        _add(
+            "TS-058",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "execFile(req.xxx) — user-controlled executable path allows arbitrary file execution",
+            "Allowlist permitted executable paths. Never let callers supply the binary to run.",
+        )
+
+    # TS-059: net.createConnection with request data — raw TCP SSRF
+    if _NET_CONNECT_REQ.search(raw):
+        _add(
+            "TS-059",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "net.createConnection(req.xxx) — user-controlled host/port enables raw TCP SSRF",
+            "Hardcode the target host and port. Never allow callers to choose the TCP endpoint.",
+        )
+
+    # TS-060: res.jsonp(req.xxx) — JSONP callback injection
+    if _JSONP_REQ.search(raw):
+        _add(
+            "TS-060",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.jsonp(req.xxx) — user-controlled JSONP data enables XSS via callback injection",
+            "Sanitize and validate data before passing to res.jsonp(). Never use raw request data as JSONP payload.",
         )
 
     # TS-052: document.getElementById(req.xxx) — DOM injection via user-controlled element ID

@@ -155,6 +155,12 @@ _RENDER_TEMPLATE_STRING_FUNCS = frozenset({"render_template_string", "flask.rend
 _PROCESS_FUNCS = frozenset({"multiprocessing.Process", "Process"})
 # SRC-057: webbrowser.open with user-controlled URL — open redirect in OS browser
 _WEBBROWSER_FUNCS = frozenset({"webbrowser.open", "webbrowser.open_new", "webbrowser.open_new_tab"})
+# SRC-058: ftplib.FTP / FTP_TLS with user-controlled host — SSRF via FTP, plaintext credentials
+_FTP_FUNCS = frozenset({"ftplib.FTP", "ftplib.FTP_TLS", "FTP", "FTP_TLS"})
+# SRC-059: smtplib.SMTP / SMTP_SSL with user-controlled host — open relay / SSRF
+_SMTP_FUNCS = frozenset({"smtplib.SMTP", "smtplib.SMTP_SSL", "smtplib.LMTP", "SMTP", "SMTP_SSL"})
+# SRC-060: ldap3.Server / ldap.initialize with user-controlled host — LDAP injection / SSRF
+_LDAP_FUNCS = frozenset({"ldap3.Server", "ldap.initialize", "ldap3.Connection", "Server"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1322,6 +1328,45 @@ class _Visitor(ast.NodeVisitor):
                     f"webbrowser.open({url_arg.id}) — user-controlled URL opens the OS browser "
                     "(open redirect / phishing risk)",
                     "Validate the URL against an allowlist before calling webbrowser.open().",
+                )
+
+        # SRC-058: ftplib.FTP(host) with user-controlled host — SSRF via FTP
+        if fname in _FTP_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-058",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ftplib.FTP({host_arg.id}) — user-controlled FTP host enables SSRF; credentials sent in cleartext",
+                    "Allowlist FTP host values. Never connect to arbitrary user-supplied hosts.",
+                )
+
+        # SRC-059: smtplib.SMTP(host) with user-controlled host — open relay / SSRF
+        if fname in _SMTP_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-059",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"smtplib.SMTP({host_arg.id}) — user-controlled SMTP host allows SSRF and email relay abuse",
+                    "Hardcode the SMTP host in configuration. Never let callers supply the mail server address.",
+                )
+
+        # SRC-060: ldap3.Server(host) / ldap.initialize(url) with user-controlled value — LDAP SSRF
+        if fname in _LDAP_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-060",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}({host_arg.id}) — user-controlled LDAP host enables SSRF and directory injection",
+                    "Hardcode the LDAP server URL in configuration. Never allow callers to choose the directory host.",
                 )
 
         self.generic_visit(node)

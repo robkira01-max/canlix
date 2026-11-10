@@ -350,3 +350,25 @@ def run_in_process(callback: callable) -> None:
 def open_url_in_browser(url: str) -> None:
     # SRC-057: user-controlled URL opened in OS browser — open redirect / phishing
     webbrowser.open(url)
+
+
+import ftplib  # noqa: E402
+import smtplib  # noqa: E402
+
+import ldap3  # noqa: E402
+
+
+def connect_ftp(host: str) -> ftplib.FTP:
+    # SRC-058: user-controlled FTP host — SSRF, plaintext credentials
+    return ftplib.FTP(host)
+
+
+def send_mail(host: str) -> smtplib.SMTP:
+    # SRC-059: user-controlled SMTP host — SSRF, open relay
+    return smtplib.SMTP(host)
+
+
+def connect_ldap(host: str) -> ldap3.Connection:
+    # SRC-060: user-controlled LDAP server — directory SSRF
+    server = ldap3.Server(host)
+    return ldap3.Connection(server)
