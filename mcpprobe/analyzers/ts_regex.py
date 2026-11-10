@@ -825,6 +825,34 @@ _DYNAMIC_IMPORT_REQ = re.compile(
     """,
 )
 
+# TS-085: req.session[req.xxx] — user-controlled session key access
+_SESSION_KEY_REQ = re.compile(
+    r"""(?x)
+    \breq\.session\s*\[\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-086: Sequelize.query(req.xxx) / sequelize.query(req.xxx) — raw ORM query injection
+_SEQUELIZE_QUERY_REQ = re.compile(
+    r"""(?x)
+    \bsequelize(?:Instance)?\.query\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    |
+    \b(?:db|pool|connection)\.query\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+    re.IGNORECASE,
+)
+
+# TS-087: res.locals[req.xxx] — user-controlled res.locals key
+_RES_LOCALS_KEY_REQ = re.compile(
+    r"""(?x)
+    \bres\.locals\s*\[\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1732,6 +1760,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "import(req.xxx) — user-controlled dynamic import loads arbitrary modules",
             "Allowlist module specifiers. Never let request data determine which module to import.",
+        )
+
+    # TS-085: req.session[req.xxx] — user-controlled session key access
+    if _SESSION_KEY_REQ.search(raw):
+        _add(
+            "TS-085",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "req.session[req.xxx] — user-controlled session key enables session data theft or injection",
+            "Use a fixed set of session keys. Never let request data determine which session property to access.",
+        )
+
+    # TS-086: sequelize.query(req.xxx) — raw ORM query injection
+    if _SEQUELIZE_QUERY_REQ.search(raw):
+        _add(
+            "TS-086",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "sequelize.query/db.query(req.xxx) — user-controlled raw query string enables SQL injection",
+            "Use parameterised queries or the ORM's model API. Never pass request data directly to query().",
+        )
+
+    # TS-087: res.locals[req.xxx] — user-controlled res.locals key
+    if _RES_LOCALS_KEY_REQ.search(raw):
+        _add(
+            "TS-087",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.locals[req.xxx] — user-controlled property key on res.locals enables prototype pollution",
+            "Use a fixed set of res.locals keys. Never let request data determine which property to set.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

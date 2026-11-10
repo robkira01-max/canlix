@@ -1912,11 +1912,53 @@ def test_SRC084_passes_hardlink_literal(tmp_path):
     assert not any(f.rule_id == "SRC-084" for f in analyze_python(p))
 
 
-# ── Full fixture — all 84 rules ───────────────────────────────────────────────
+# ── SRC-085: sock.connect((user_host, port)) — raw TCP SSRF ──────────────────
 
 
-def test_vulnerable_fixture_has_all_eighty_four_rules():
+def test_SRC085_detects_socket_connect_param(tmp_path):
+    p = _py(tmp_path, "def conn(sock, host: str):\n    sock.connect((host, 443))")
+    assert any(f.rule_id == "SRC-085" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC085_passes_socket_connect_literal(tmp_path):
+    p = _py(tmp_path, "import socket\ns = socket.socket()\ns.connect(('example.com', 443))")
+    assert not any(f.rule_id == "SRC-085" for f in analyze_python(p))
+
+
+# ── SRC-086: ast.literal_eval(user_input) — DoS via nested structures ─────────
+
+
+def test_SRC086_detects_literal_eval_param(tmp_path):
+    p = _py(tmp_path, "import ast\ndef parse(data: str):\n    return ast.literal_eval(data)")
+    assert any(f.rule_id == "SRC-086" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC086_passes_literal_eval_literal(tmp_path):
+    p = _py(tmp_path, "import ast\nast.literal_eval('[1, 2, 3]')")
+    assert not any(f.rule_id == "SRC-086" for f in analyze_python(p))
+
+
+# ── SRC-087: Popen(f-string with param) — argument injection ──────────────────
+
+
+def test_SRC087_detects_popen_fstring_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import subprocess\ndef run(cmd: str):\n    subprocess.Popen(f'/bin/tool --input {cmd}')",
+    )
+    assert any(f.rule_id == "SRC-087" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC087_passes_popen_literal_string(tmp_path):
+    p = _py(tmp_path, "import subprocess\nsubprocess.Popen('/bin/ls -la')")
+    assert not any(f.rule_id == "SRC-087" for f in analyze_python(p))
+
+
+# ── Full fixture — all 87 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_eighty_seven_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 85)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 88)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

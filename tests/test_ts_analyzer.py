@@ -1993,11 +1993,65 @@ def test_TS084_passes_import_literal(tmp_path):
     assert not any(f.rule_id == "TS-084" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 84 rules ───────────────────────────────────────────────
+# ── TS-085: req.session[req.xxx] — user-controlled session key ───────────────
 
 
-def test_vulnerable_ts_fixture_has_all_eighty_four_rules():
+def test_TS085_detects_session_key_req(tmp_path):
+    p = _ts(tmp_path, "const val = req.session[req.query.key];")
+    assert any(f.rule_id == "TS-085" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS085_detects_session_body_key(tmp_path):
+    p = _ts(tmp_path, "req.session[req.body.prop] = 'x';")
+    assert any(f.rule_id == "TS-085" for f in analyze_typescript(p))
+
+
+def test_TS085_passes_session_literal_key(tmp_path):
+    p = _ts(tmp_path, 'const user = req.session["userId"];')
+    assert not any(f.rule_id == "TS-085" for f in analyze_typescript(p))
+
+
+# ── TS-086: sequelize.query(req.xxx) — raw ORM SQL injection ─────────────────
+
+
+def test_TS086_detects_sequelize_query_req(tmp_path):
+    p = _ts(tmp_path, "sequelize.query(req.query.sql);")
+    assert any(f.rule_id == "TS-086" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS086_detects_db_query_req(tmp_path):
+    p = _ts(tmp_path, "db.query(req.body.statement);")
+    assert any(f.rule_id == "TS-086" for f in analyze_typescript(p))
+
+
+def test_TS086_passes_sequelize_literal(tmp_path):
+    p = _ts(tmp_path, 'sequelize.query("SELECT * FROM users WHERE id = :id", { replacements: { id } });')
+    assert not any(f.rule_id == "TS-086" for f in analyze_typescript(p))
+
+
+# ── TS-087: res.locals[req.xxx] — user-controlled property key ───────────────
+
+
+def test_TS087_detects_locals_key_req(tmp_path):
+    p = _ts(tmp_path, "res.locals[req.query.key] = 'value';")
+    assert any(f.rule_id == "TS-087" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS087_detects_locals_body_key(tmp_path):
+    p = _ts(tmp_path, "res.locals[req.body.prop] = data;")
+    assert any(f.rule_id == "TS-087" for f in analyze_typescript(p))
+
+
+def test_TS087_passes_locals_literal_key(tmp_path):
+    p = _ts(tmp_path, 'res.locals["userId"] = req.user.id;')
+    assert not any(f.rule_id == "TS-087" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 87 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_eighty_seven_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 85)}
+    expected = {f"TS-{i:03d}" for i in range(1, 88)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

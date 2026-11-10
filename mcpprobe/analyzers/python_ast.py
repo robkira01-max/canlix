@@ -195,6 +195,8 @@ _TEMPFILE_DIR_FUNCS = frozenset({"tempfile.NamedTemporaryFile", "tempfile.mkstem
 _SYMLINK_FUNCS = frozenset({"os.symlink", "symlink"})
 # SRC-084: os.link with user-controlled source path — hard link attack
 _HARDLINK_FUNCS = frozenset({"os.link", "link"})
+# SRC-087: subprocess.Popen/run with JoinedStr (f-string) cmd — command injection without shell=True
+_POPEN_FUNCS_FSTR = frozenset({"subprocess.Popen", "subprocess.run", "subprocess.call", "Popen"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1630,6 +1632,56 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"os.link({src_arg.id}, ...) — user-controlled hard link source enables file access bypass",
                     "Never allow callers to control hard link source paths. Restrict to allowlisted locations.",
+                )
+
+        # SRC-085: sock.connect((host, port)) with user-controlled host — raw TCP SSRF
+        # Detect via attribute inspection: any .connect((param, ...)) call
+        if self._param_names and isinstance(node.func, ast.Attribute) and node.func.attr == "connect" and node.args:
+            addr_arg = node.args[0]
+            if (
+                isinstance(addr_arg, ast.Tuple)
+                and addr_arg.elts
+                and isinstance(addr_arg.elts[0], ast.Name)
+                and addr_arg.elts[0].id in self._param_names
+            ):
+                self._add(
+                    "SRC-085",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"socket.connect(({addr_arg.elts[0].id}, ...)) — user-controlled host enables raw TCP SSRF",
+                    "Allowlist permitted hosts. Never connect a socket to a user-supplied address.",
+                )
+
+        # SRC-086: ast.literal_eval(user_input) — DoS via deeply nested literal structures
+        _is_literal_eval = fname in {"ast.literal_eval", "literal_eval"} or fname.endswith(".literal_eval")
+        if _is_literal_eval and node.args and self._param_names:
+            val_arg = node.args[0]
+            if isinstance(val_arg, ast.Name) and val_arg.id in self._param_names:
+                self._add(
+                    "SRC-086",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ast.literal_eval({val_arg.id}) — user-controlled input can cause DoS via nested structures",
+                    "Cap input length before calling ast.literal_eval(). Consider json.loads() with a size limit.",
+                )
+
+        # SRC-087: subprocess.Popen/run with JoinedStr (f-string) cmd — injection without shell=True
+        if fname in _POPEN_FUNCS_FSTR and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            has_shell = any(
+                kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                for kw in node.keywords
+            )
+            if not has_shell and isinstance(cmd_arg, ast.JoinedStr) and self._has_param_in_expr(cmd_arg):
+                self._add(
+                    "SRC-087",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "subprocess.Popen(f'...{param}...') — f-string command without shell=True still injects arg",
+                    "Build the command as a list of fixed strings. Never interpolate user input into Popen().",
                 )
 
         # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple

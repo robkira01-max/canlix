@@ -428,3 +428,18 @@ function setMime(res: any, req: any): void {
 async function loadPlugin(req: any): Promise<unknown> {
   return import(req.query.plugin);
 }
+
+// TS-085: req.session[req.xxx] — user-controlled session key access
+function readSession(req: any): unknown {
+  return req.session[req.query.key];
+}
+
+// TS-086: sequelize.query() with user-controlled SQL — ORM SQL injection
+async function rawQuery(req: any): Promise<unknown> {
+  return sequelize.query(req.query.sql);
+}
+
+// TS-087: res.locals[req.xxx] — user-controlled property key
+function setLocal(res: any, req: any): void {
+  res.locals[req.query.key] = "value";
+}

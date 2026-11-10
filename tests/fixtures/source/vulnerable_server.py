@@ -517,3 +517,21 @@ def make_symlink(target: str, link_path: str) -> None:
 def hard_link(src: str, dst: str) -> None:
     # SRC-084: os.link with user-controlled source path — hard link attack
     os.link(src, dst)
+
+
+import ast as stdlib_ast  # noqa: E402  (alias avoids conflict with the `ast` stdlib re-import above)
+
+
+def tcp_connect_host(sock: object, host: str) -> None:
+    # SRC-085: socket.connect with user-controlled host in tuple
+    sock.connect((host, 443))  # type: ignore[attr-defined]
+
+
+def safe_parse(data: str) -> object:
+    # SRC-086: literal_eval with user-controlled input — DoS via nested structures
+    return stdlib_ast.literal_eval(data)
+
+
+def run_pipeline(cmd: str) -> None:
+    # SRC-087: Popen with f-string — arg injection without shell=True
+    subprocess.Popen(f"/usr/local/bin/tool --input {cmd}")
