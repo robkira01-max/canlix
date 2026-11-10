@@ -84,6 +84,18 @@ _PROTO_POLLUTION = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-009: SQL injection — template literal in DB query/execute call
+# ---------------------------------------------------------------------------
+
+_SQL_TEMPLATE = re.compile(
+    r"""(?x)
+    \.(?:query|execute|raw|run|exec)\s*\(\s*`[^`]*\$\{  # .query(`...${
+    | \bknex\s*\.\s*raw\s*\(\s*`[^`]*\$\{               # knex.raw(`...${
+    | \bsequelize\s*\.\s*query\s*\(\s*`[^`]*\$\{         # sequelize.query(`...${
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-008: path traversal — fs I/O with non-literal path argument
 # ---------------------------------------------------------------------------
 
@@ -236,6 +248,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "HTTP request with variable URL — SSRF risk",
             "Validate the URL against an allowlist. Never pass raw user-supplied URLs to HTTP clients.",
+        )
+
+    # TS-009: SQL injection — template literal in DB query
+    if _SQL_TEMPLATE.search(raw):
+        _add(
+            "TS-009",
+            Severity.HIGH,
+            Confidence.MEDIUM,
+            "SQL query built with template literal interpolation — SQL injection risk",
+            "Use parameterised queries: db.query(sql, [params]). Never interpolate values into SQL.",
         )
 
     # TS-008: path traversal — fs I/O with non-literal path

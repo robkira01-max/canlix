@@ -7,6 +7,8 @@ import subprocess
 import requests
 import yaml
 
+cursor = None  # represents a live DB cursor in real code
+
 # SRC-001: hardcoded GitHub token (key prefix pattern)
 GH_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz1234567890ab"
 
@@ -47,3 +49,8 @@ def fetch_remote_resource(url: str):
 def read_user_file(filepath: str):
     # SRC-008: file I/O with path from function parameter — path traversal risk
     return open(filepath).read()
+
+
+def get_user(user_id: str):
+    # SRC-009: SQL injection via f-string in cursor.execute
+    cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")

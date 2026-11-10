@@ -58,6 +58,8 @@ _PATH_IO_FUNCS = {
     "shutil.move",
     "shutil.rmtree",
 }
+# SQL method suffixes — matches cursor.execute, db.execute, session.execute, etc.
+_SQL_METHODS = frozenset({".execute", ".executemany", ".executescript", ".query", ".raw"})
 
 
 class _Visitor(ast.NodeVisitor):
@@ -93,6 +95,16 @@ class _Visitor(ast.NodeVisitor):
                 remediation=remediation,
             )
         )
+
+    def _has_param_in_expr(self, node: ast.expr) -> bool:
+        """Return True if node directly references a function parameter."""
+        if isinstance(node, ast.Name):
+            return node.id in self._param_names
+        if isinstance(node, ast.JoinedStr):  # f-string
+            return any(isinstance(v, ast.FormattedValue) and self._has_param_in_expr(v.value) for v in node.values)
+        if isinstance(node, ast.BinOp):  # + or %
+            return self._has_param_in_expr(node.left) or self._has_param_in_expr(node.right)
+        return False
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         old = self._param_names
@@ -236,6 +248,17 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"File I/O with path from function parameter '{path_node.id}' — path traversal risk",
                     "Validate the path against an allowlist or use os.path.realpath + prefix check.",
+                )
+
+        if any(fname.endswith(m) for m in _SQL_METHODS) and self._param_names and node.args:
+            if self._has_param_in_expr(node.args[0]):
+                self._add(
+                    "SRC-009",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    "SQL query built from function parameter — SQL injection risk",
+                    "Use parameterised queries: cursor.execute(sql, [params]). Never format SQL strings.",
                 )
 
         self.generic_visit(node)

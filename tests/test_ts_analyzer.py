@@ -177,10 +177,10 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_eight_rules():
+def test_vulnerable_ts_fixture_has_all_nine_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006", "TS-007", "TS-008"}
+    expected = {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006", "TS-007", "TS-008", "TS-009"}
     assert expected.issubset(rule_ids)
 
 
@@ -282,3 +282,37 @@ def test_TS008_passes_fs_readFile_with_literal(tmp_path):
     p = _ts(tmp_path, 'const data = fs.readFile("/etc/hostname", "utf8", cb);')
     findings = analyze_typescript(p)
     assert not any(f.rule_id == "TS-008" for f in findings)
+
+
+# ── TS-009: SQL injection — template literal in DB query ────────────────────
+
+
+def test_TS009_detects_query_template_literal(tmp_path):
+    p = _ts(tmp_path, "const rows = db.query(`SELECT * FROM users WHERE id = ${userId}`);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-009" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_TS009_detects_execute_template_literal(tmp_path):
+    p = _ts(tmp_path, "conn.execute(`DELETE FROM sessions WHERE token = ${token}`);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-009" for f in findings)
+
+
+def test_TS009_detects_knex_raw(tmp_path):
+    p = _ts(tmp_path, "knex.raw(`SELECT * FROM users WHERE name = '${name}'`);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-009" for f in findings)
+
+
+def test_TS009_passes_parameterised_query(tmp_path):
+    p = _ts(tmp_path, 'db.query("SELECT * FROM users WHERE id = $1", [userId]);')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-009" for f in findings)
+
+
+def test_TS009_passes_static_template_literal(tmp_path):
+    # Template literal with no interpolation — no $ in it
+    p = _ts(tmp_path, "db.query(`SELECT * FROM users WHERE active = true`);")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-009" for f in findings)

@@ -162,10 +162,10 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_eight_rules():
+def test_vulnerable_fixture_has_all_nine_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008"}
+    expected = {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008", "SRC-009"}
     assert expected.issubset(rule_ids)
 
 
@@ -291,3 +291,42 @@ def test_SRC008_passes_module_level_path_var(tmp_path):
     p = _py(tmp_path, 'PATH = "/tmp/data.txt"\nopen(PATH).read()')
     findings = analyze_python(p)
     assert not any(f.rule_id == "SRC-008" for f in findings)
+
+
+# ── SRC-009: SQL injection — parameterised query check ──────────────────────
+
+
+def test_SRC009_detects_fstring_in_execute(tmp_path):
+    p = _py(tmp_path, 'def get(uid):\n    cursor.execute(f"SELECT * FROM users WHERE id = {uid}")')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-009" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_SRC009_detects_percent_format_in_execute(tmp_path):
+    p = _py(tmp_path, 'def get(uid):\n    cursor.execute("SELECT * FROM users WHERE id = %s" % uid)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-009" for f in findings)
+
+
+def test_SRC009_detects_plus_concat_in_query(tmp_path):
+    p = _py(tmp_path, 'def search(term):\n    db.execute("SELECT * FROM items WHERE name = " + term)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-009" for f in findings)
+
+
+def test_SRC009_detects_session_execute(tmp_path):
+    p = _py(tmp_path, 'def get(uid):\n    session.execute(f"SELECT * FROM t WHERE id={uid}")')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-009" for f in findings)
+
+
+def test_SRC009_passes_parameterised_query(tmp_path):
+    p = _py(tmp_path, 'def get(uid):\n    cursor.execute("SELECT * FROM users WHERE id = %s", [uid])')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-009" for f in findings)
+
+
+def test_SRC009_passes_literal_sql(tmp_path):
+    p = _py(tmp_path, 'cursor.execute("SELECT * FROM users")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-009" for f in findings)

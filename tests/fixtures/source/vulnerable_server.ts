@@ -46,3 +46,8 @@ import * as fs from "fs";
 export function readFile(filePath: string): void {
   fs.readFile(filePath, "utf8", () => {});
 }
+
+// TS-009: SQL injection — template literal in db.query (HIGH)
+export function getUser(userId: string): Promise<unknown> {
+  return db.query(`SELECT * FROM users WHERE id = ${userId}`);
+}

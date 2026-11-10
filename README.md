@@ -207,7 +207,7 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 
 ### Source rules — `mcpprobe analyze`
 
-#### Python rules (8) — `.py` files, AST-based
+#### Python rules (9) — `.py` files, AST-based
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -219,8 +219,9 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | SRC-006 | MEDIUM | `yaml.load()` without `Loader=` — arbitrary Python execution |
 | SRC-007 | MEDIUM | HTTP client (`requests`, `httpx`, `urlopen`) with URL from function parameter — SSRF |
 | SRC-008 | MEDIUM | `open()` / `Path()` / `os.remove()` with path from function parameter — path traversal |
+| SRC-009 | HIGH | `cursor.execute()` / `db.query()` with f-string or `+`/`%` interpolation — SQL injection |
 
-#### TypeScript / JavaScript rules (8) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
+#### TypeScript / JavaScript rules (9) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -232,6 +233,7 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | TS-006 | MEDIUM | `__proto__` assignment / `constructor["prototype"]` — prototype pollution |
 | TS-007 | MEDIUM | `fetch()` / `axios` / `got` with variable URL — Server-Side Request Forgery |
 | TS-008 | MEDIUM | `fs.readFile/writeFile/unlink` with variable path — path traversal |
+| TS-009 | HIGH | `.query()`/`.execute()`/`knex.raw()` with template literal interpolation — SQL injection |
 
 ---
 
