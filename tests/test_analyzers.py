@@ -1182,11 +1182,63 @@ def test_SRC036_passes_redirect_literal(tmp_path):
     assert not any(f.rule_id == "SRC-036" for f in analyze_python(p))
 
 
-# ── Full fixture — all 36 rules ───────────────────────────────────────────────
+# ── SRC-037: user-controlled executable in subprocess ─────────────────────────
 
 
-def test_vulnerable_fixture_has_all_thirty_six_rules():
+def test_SRC037_detects_param_as_first_list_element(tmp_path):
+    p = _py(
+        tmp_path,
+        "import subprocess\ndef run(cmd: str):\n    subprocess.run([cmd, '--flag'])",
+    )
+    assert any(f.rule_id == "SRC-037" for f in analyze_python(p))
+
+
+def test_SRC037_passes_literal_executable(tmp_path):
+    p = _py(tmp_path, "import subprocess\nsubprocess.run(['ls', '-la'])")
+    assert not any(f.rule_id == "SRC-037" for f in analyze_python(p))
+
+
+# ── SRC-038: world-writable file permissions ───────────────────────────────────
+
+
+def test_SRC038_detects_chmod_0o777(tmp_path):
+    p = _py(tmp_path, "import os\nos.chmod('/tmp/f', 0o777)")
+    assert any(f.rule_id == "SRC-038" for f in analyze_python(p))
+
+
+def test_SRC038_detects_chmod_0o002(tmp_path):
+    p = _py(tmp_path, "import os\nos.chmod('/tmp/f', 0o002)")
+    assert any(f.rule_id == "SRC-038" for f in analyze_python(p))
+
+
+def test_SRC038_passes_chmod_0o644(tmp_path):
+    p = _py(tmp_path, "import os\nos.chmod('/tmp/f', 0o644)")
+    assert not any(f.rule_id == "SRC-038" for f in analyze_python(p))
+
+
+# ── SRC-039: base64 as obfuscation on sensitive value ─────────────────────────
+
+
+def test_SRC039_detects_b64encode_password(tmp_path):
+    p = _py(tmp_path, "import base64\nbase64.b64encode(password.encode())")
+    assert any(f.rule_id == "SRC-039" for f in analyze_python(p))
+
+
+def test_SRC039_detects_b64decode_secret(tmp_path):
+    p = _py(tmp_path, "import base64\nbase64.b64decode(secret_key)")
+    assert any(f.rule_id == "SRC-039" for f in analyze_python(p))
+
+
+def test_SRC039_passes_b64encode_nonsensitive(tmp_path):
+    p = _py(tmp_path, "import base64\nbase64.b64encode(image_data)")
+    assert not any(f.rule_id == "SRC-039" for f in analyze_python(p))
+
+
+# ── Full fixture — all 39 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_thirty_nine_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 37)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 40)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

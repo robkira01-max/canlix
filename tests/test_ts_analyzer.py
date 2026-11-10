@@ -1159,11 +1159,65 @@ def test_TS036_passes_literal_redirect(tmp_path):
     assert not any(f.rule_id == "TS-036" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 36 rules ───────────────────────────────────────────────
+# ── TS-037: user-controlled executable in spawn / execFile ────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_thirty_six_rules():
+def test_TS037_detects_spawn_variable(tmp_path):
+    p = _ts(tmp_path, "spawn(userCmd, ['--config', 'cfg.json']);")
+    assert any(f.rule_id == "TS-037" for f in analyze_typescript(p))
+
+
+def test_TS037_detects_execFile_variable(tmp_path):
+    p = _ts(tmp_path, "execFile(program, args);")
+    assert any(f.rule_id == "TS-037" for f in analyze_typescript(p))
+
+
+def test_TS037_passes_spawn_literal(tmp_path):
+    p = _ts(tmp_path, 'spawn("node", ["app.js"]);')
+    assert not any(f.rule_id == "TS-037" for f in analyze_typescript(p))
+
+
+# ── TS-038: world-writable file permissions ────────────────────────────────────
+
+
+def test_TS038_detects_chmod_0o777(tmp_path):
+    p = _ts(tmp_path, "fs.chmod(filePath, 0o777, cb);")
+    assert any(f.rule_id == "TS-038" for f in analyze_typescript(p))
+
+
+def test_TS038_detects_chmodSync_511(tmp_path):
+    p = _ts(tmp_path, "fs.chmodSync(filePath, 511);")
+    assert any(f.rule_id == "TS-038" for f in analyze_typescript(p))
+
+
+def test_TS038_passes_chmod_0o644(tmp_path):
+    p = _ts(tmp_path, "fs.chmod(filePath, 0o644, cb);")
+    assert not any(f.rule_id == "TS-038" for f in analyze_typescript(p))
+
+
+# ── TS-039: base64 as obfuscation on a sensitive value ────────────────────────
+
+
+def test_TS039_detects_btoa_password(tmp_path):
+    p = _ts(tmp_path, "const encoded = btoa(password);")
+    assert any(f.rule_id == "TS-039" for f in analyze_typescript(p))
+
+
+def test_TS039_detects_atob_secret(tmp_path):
+    p = _ts(tmp_path, "const val = atob(secretKey);")
+    assert any(f.rule_id == "TS-039" for f in analyze_typescript(p))
+
+
+def test_TS039_passes_btoa_nonsensitive(tmp_path):
+    p = _ts(tmp_path, "const img = btoa(imageData);")
+    assert not any(f.rule_id == "TS-039" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 39 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_thirty_nine_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 37)}
+    expected = {f"TS-{i:03d}" for i in range(1, 40)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

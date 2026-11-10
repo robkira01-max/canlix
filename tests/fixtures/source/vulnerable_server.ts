@@ -181,3 +181,18 @@ const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key_123";
 function loginRedirect(res: any, req: any): void {
   res.redirect(req.query.next);
 }
+
+// TS-037: user-controlled executable in spawn — OS command injection
+function runUserProgram(program: string): void {
+  spawn(program, ["--config", "default.cfg"]);
+}
+
+// TS-038: world-writable file permissions
+function makeFilePublic(filePath: string): void {
+  fs.chmod(filePath, 0o777, () => {});
+}
+
+// TS-039: base64 used as obfuscation on a secret value
+function encodePassword(password: string): string {
+  return btoa(password);
+}

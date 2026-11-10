@@ -16,13 +16,13 @@ export async function handleRequest(
   return { status: "ok", result: data };
 }
 
-export function runSafe(cmd: string, args: string[]): string {
-  const result = childProcess.execFileSync(cmd, args, { encoding: "utf-8" });
+export function runSafe(args: string[]): string {
+  const result = childProcess.execFileSync("node", args, { encoding: "utf-8" });
   return result;
 }
 
-export function spawnSafe(cmd: string, args: string[]): childProcess.ChildProcess {
-  return childProcess.spawn(cmd, args, { shell: false });
+export function spawnSafe(args: string[]): childProcess.ChildProcess {
+  return childProcess.spawn("node", args, { shell: false });
 }
 
 export function loadConfig(filePath: string): Record<string, unknown> {

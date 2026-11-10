@@ -126,6 +126,10 @@ _TEMPFILE_UNSAFE_FUNCS = frozenset({"tempfile.mktemp"})
 _JWT_SIGN_FUNCS = frozenset({"jwt.encode", "jwt.decode", "jose.jwt.encode", "jose.jwt.decode"})
 # SRC-033: deprecated TLS protocol constants (SSLv2, SSLv3, TLSv1.0, TLSv1.1)
 _WEAK_TLS_PROTOCOLS = frozenset({"PROTOCOL_SSLv2", "PROTOCOL_SSLv3", "PROTOCOL_TLSv1", "PROTOCOL_TLSv1_1"})
+# SRC-038: world-writable permission bits (os.chmod with mode & 0o002 set)
+_WORLD_WRITE_BIT = 0o002
+# SRC-039: base64 used as obfuscation on security-sensitive values
+_BASE64_FUNCS = frozenset({"base64.b64decode", "base64.b64encode", "base64.decodebytes", "base64.encodebytes"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -965,6 +969,65 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"os.environ.get('{key_arg.value}', '<literal>') — hardcoded fallback exposes secret in source",
                     "Remove the fallback or use a safe empty default. Load secrets exclusively from the environment.",
+                )
+
+        # SRC-037: subprocess with user-controlled executable — command injection without shell=True
+        if fname in _SHELL_FUNCS and node.args and self._param_names:
+            first_arg = node.args[0]
+            if (
+                isinstance(first_arg, ast.List)
+                and first_arg.elts
+                and isinstance(first_arg.elts[0], ast.Name)
+                and first_arg.elts[0].id in self._param_names
+            ):
+                self._add(
+                    "SRC-037",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}([{first_arg.elts[0].id}, ...]) — user-controlled executable allows OS command injection",
+                    "Validate the command against an allowlist. Never let callers control the executable name.",
+                )
+
+        # SRC-038: world-writable file permissions — os.chmod with o+w bit set
+        if fname == "os.chmod" and len(node.args) >= 2:
+            perm_node = node.args[1]
+            if (
+                isinstance(perm_node, ast.Constant)
+                and isinstance(perm_node.value, int)
+                and perm_node.value & _WORLD_WRITE_BIT
+            ):
+                self._add(
+                    "SRC-038",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.chmod(path, 0o{perm_node.value:03o}) sets world-writable permissions on the file",
+                    "Use restrictive permissions (e.g. 0o640 for files, 0o750 for dirs). Never grant o+w.",
+                )
+
+        # SRC-039: base64 used as encryption/obfuscation on a security-sensitive value
+        if fname in _BASE64_FUNCS and node.args:
+            first_arg = node.args[0]
+            # Resolve security name: plain Name OR x.encode()/x.decode() pattern
+            sec_name: str | None = None
+            if isinstance(first_arg, ast.Name):
+                sec_name = first_arg.id
+            elif (
+                isinstance(first_arg, ast.Call)
+                and isinstance(first_arg.func, ast.Attribute)
+                and isinstance(first_arg.func.value, ast.Name)
+                and first_arg.func.attr in {"encode", "decode"}
+            ):
+                sec_name = first_arg.func.value.id
+            if sec_name and _is_security_name(sec_name):
+                self._add(
+                    "SRC-039",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"{fname}({sec_name}) — base64 is encoding, not encryption; secrets remain recoverable",
+                    "Use a proper encryption library (cryptography, Fernet) or a secrets manager instead.",
                 )
 
         # SRC-036: open redirect — redirect() with URL taken directly from request data

@@ -459,6 +459,49 @@ _INNER_HTML_ASSIGN = re.compile(
 _INNER_HTML_LITERAL_SAFE = re.compile(r"""\.(?:inner|outer)HTML\s*\+?=\s*["'`]""")
 
 # ---------------------------------------------------------------------------
+# TS-037: user-controlled executable in spawn / execFile — command injection
+# ---------------------------------------------------------------------------
+
+_SPAWN_VAR = re.compile(
+    r"""(?x)
+    \bspawn\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*      # spawn(variable
+    | \bexecFile\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*  # execFile(variable
+    | \bexecFileSync\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+_SPAWN_LITERAL_SAFE = re.compile(
+    r"""(?x)
+    \bspawn\s*\(\s*["'`]
+    | \bexecFile(?:Sync)?\s*\(\s*["'`]
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-038: world-writable file permissions — fs.chmod with 0o777 / 0777 / 777
+# ---------------------------------------------------------------------------
+
+_CHMOD_WORLD_WRITE = re.compile(
+    r"""(?x)
+    \bfs\.chmod(?:Sync)?\s*\([^,]+,\s*
+    (?:0o?777|0777|511|0o?766|0o?776|0o?667|0o?676|0o?677|0o?666|438)
+    \b
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-039: base64 used as encryption/obfuscation on a security-sensitive value
+# ---------------------------------------------------------------------------
+
+_BASE64_SENSITIVE = re.compile(
+    r"""(?x)
+    \batob\s*\(\s*(?:encoded)?(?:password|passwd|secret|token|api_?key|credential)
+    | \bbtoa\s*\(\s*(?:password|passwd|secret|token|api_?key|credential)
+    | Buffer\.from\s*\(\s*(?:password|passwd|secret|token|api_?key|credential)[^,]*,\s*["']base64["']
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # TS-034: unsafe YAML deserialisation — js-yaml .load() without schema
 # ---------------------------------------------------------------------------
 
@@ -888,6 +931,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "innerHTML/outerHTML/document.write with variable input — DOM-based XSS risk",
             "Use element.textContent instead of innerHTML. If HTML is needed, sanitise with DOMPurify.",
+        )
+
+    # TS-037: user-controlled executable in spawn / execFile — command injection
+    if _SPAWN_VAR.search(raw) and not _SPAWN_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-037",
+            Severity.HIGH,
+            Confidence.MEDIUM,
+            "spawn/execFile with variable executable — user-controlled command name allows OS injection",
+            "Validate the executable against an allowlist. Never let callers control the binary path.",
+        )
+
+    # TS-038: world-writable file permissions
+    if _CHMOD_WORLD_WRITE.search(raw):
+        _add(
+            "TS-038",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "fs.chmod with world-writable permissions — any user on the system can modify the file",
+            "Use restrictive permissions (e.g. 0o640 for files, 0o750 for dirs). Never grant o+w.",
+        )
+
+    # TS-039: base64 used as encryption/obfuscation on a security-sensitive value
+    if _BASE64_SENSITIVE.search(raw):
+        _add(
+            "TS-039",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "base64 applied to a secret value — encoding is not encryption; value is trivially reversible",
+            "Use a proper encryption library (node:crypto, libsodium) or a secrets manager instead.",
         )
 
     # TS-034: unsafe YAML deserialization — js-yaml .load() without schema

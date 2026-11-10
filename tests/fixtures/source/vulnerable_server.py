@@ -216,3 +216,21 @@ request = None  # stub — represents Flask/FastAPI request object in real code
 def handle_login_redirect(url: str):
     # SRC-036: open redirect from request data
     return redirect(request.args.get("next", "/"))  # type: ignore[union-attr]
+
+
+def run_user_command(args: list, program: str):
+    # SRC-037: user-controlled executable in subprocess — OS command injection
+    return subprocess.run([program, "--config", "default.cfg"])
+
+
+def set_public_permissions(path: str):
+    # SRC-038: world-writable permissions — anyone on the system can modify the file
+    os.chmod(path, 0o777)
+
+
+import base64  # noqa: E402
+
+
+def store_encoded_password(password: str) -> str:
+    # SRC-039: base64 used as obfuscation on a secret — not encryption
+    return base64.b64encode(password.encode()).decode()
