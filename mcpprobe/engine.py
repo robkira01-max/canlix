@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import time
 from collections import Counter
+from pathlib import Path
 
-from mcpprobe.models import Confidence, Finding, MCPServer, ScanResult, Severity
+from mcpprobe.analyzers import analyze_path
+from mcpprobe.models import Confidence, Finding, MCPServer, ScanResult, Severity, SourceFinding
 from mcpprobe.rules import ALL_RULES
+
+_SOURCE_EXTS = {".py", ".ts", ".js"}
 
 
 def _check_duplicate_names(servers: list[MCPServer]) -> list[Finding]:
@@ -29,7 +33,32 @@ def _check_duplicate_names(servers: list[MCPServer]) -> list[Finding]:
     return findings
 
 
-def scan(servers: list[MCPServer]) -> ScanResult:
+def _extract_source_path(server: MCPServer) -> Path | None:
+    """Return a local source file or directory to analyze, if discoverable."""
+    candidates = list(server.args) + [server.command]
+    for token in candidates:
+        if not token:
+            continue
+        p = Path(token)
+        if p.suffix in _SOURCE_EXTS and p.exists():
+            return p
+        if p.is_dir():
+            return p
+    return None
+
+
+def _collect_source_findings(servers: list[MCPServer]) -> list[SourceFinding]:
+    seen: set[Path] = set()
+    findings: list[SourceFinding] = []
+    for server in servers:
+        path = _extract_source_path(server)
+        if path and path not in seen:
+            seen.add(path)
+            findings.extend(analyze_path(path))
+    return findings
+
+
+def scan(servers: list[MCPServer], *, analyze_source: bool = True) -> ScanResult:
     t0 = time.monotonic()
     findings: list[Finding] = []
 
@@ -41,5 +70,9 @@ def scan(servers: list[MCPServer]) -> ScanResult:
 
     findings.extend(_check_duplicate_names(servers))
 
+    source_findings: list[SourceFinding] = []
+    if analyze_source:
+        source_findings = _collect_source_findings(servers)
+
     elapsed_ms = (time.monotonic() - t0) * 1000
-    return ScanResult(servers=servers, findings=findings, scan_duration_ms=elapsed_ms)
+    return ScanResult(servers=servers, findings=findings, source_findings=source_findings, scan_duration_ms=elapsed_ms)

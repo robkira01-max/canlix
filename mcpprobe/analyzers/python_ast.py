@@ -1,0 +1,173 @@
+"""AST-based security analyzer for Python MCP server source files."""
+
+from __future__ import annotations
+
+import ast
+import re
+from pathlib import Path
+
+from mcpprobe.models import Confidence, Severity, SourceFinding
+
+_KEY_PREFIXES = re.compile(
+    r"^(sk-[A-Za-z0-9]{32,}"
+    r"|ghp_[A-Za-z0-9]{36,}"
+    r"|AKIA[0-9A-Z]{16}"
+    r"|xox[bpoa]-[A-Za-z0-9\-]+"
+    r"|ya29\.[A-Za-z0-9_\-]+"
+    r"|AIza[A-Za-z0-9_\-]{35}"
+    r")"
+)
+_SECRET_VARNAMES = re.compile(
+    r"(?i)(api[_-]?key|apikey|secret|password|passwd|token|auth_token|credential|private[_-]?key|access[_-]?key)"
+)
+_SHELL_FUNCS = {
+    "subprocess.run",
+    "subprocess.call",
+    "subprocess.Popen",
+    "subprocess.check_output",
+    "subprocess.check_call",
+}
+
+
+class _Visitor(ast.NodeVisitor):
+    def __init__(self, lines: list[str], path: Path) -> None:
+        self.findings: list[SourceFinding] = []
+        self.lines = lines
+        self.path = path
+
+    def _snip(self, lineno: int) -> str:
+        if 1 <= lineno <= len(self.lines):
+            return self.lines[lineno - 1].strip()
+        return ""
+
+    def _add(
+        self,
+        rule_id: str,
+        severity: Severity,
+        confidence: Confidence,
+        lineno: int,
+        message: str,
+        remediation: str,
+    ) -> None:
+        self.findings.append(
+            SourceFinding(
+                rule_id=rule_id,
+                severity=severity,
+                confidence=confidence,
+                file_path=self.path,
+                line_number=lineno,
+                message=message,
+                code_snippet=self._snip(lineno),
+                remediation=remediation,
+            )
+        )
+
+    def _func_name(self, node: ast.Call) -> str:
+        if isinstance(node.func, ast.Name):
+            return node.func.id
+        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            return f"{node.func.value.id}.{node.func.attr}"
+        return ""
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        if isinstance(node.value, str) and _KEY_PREFIXES.match(node.value):
+            self._add(
+                "SRC-001",
+                Severity.CRITICAL,
+                Confidence.HIGH,
+                node.lineno,
+                "Hardcoded API key or token detected in source code",
+                "Move secret to an environment variable or secrets manager. Never commit credentials.",
+            )
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            val = node.value.value
+            if len(val) >= 16 and not _KEY_PREFIXES.match(val):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and _SECRET_VARNAMES.search(target.id):
+                        self._add(
+                            "SRC-001",
+                            Severity.HIGH,
+                            Confidence.MEDIUM,
+                            node.lineno,
+                            f"Potential secret in variable '{target.id}' — value looks like a credential",
+                            "Use os.environ.get() or a secrets manager instead of hardcoding.",
+                        )
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        fname = self._func_name(node)
+
+        if fname in ("eval", "exec"):
+            self._add(
+                "SRC-002",
+                Severity.HIGH,
+                Confidence.HIGH,
+                node.lineno,
+                f"Use of '{fname}()' allows arbitrary code execution",
+                f"Remove {fname}(). Replace with explicit logic or ast.literal_eval() for safe parsing.",
+            )
+
+        elif fname in _SHELL_FUNCS:
+            for kw in node.keywords:
+                if kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                    self._add(
+                        "SRC-003",
+                        Severity.HIGH,
+                        Confidence.HIGH,
+                        node.lineno,
+                        f"'{fname}(shell=True)' enables command injection via unsanitised input",
+                        "Use shell=False and pass args as a list: subprocess.run(['cmd', 'arg']).",
+                    )
+
+        elif fname in ("os.system", "os.popen"):
+            self._add(
+                "SRC-004",
+                Severity.HIGH,
+                Confidence.HIGH,
+                node.lineno,
+                f"'{fname}()' is a command injection risk",
+                "Replace with subprocess.run(['cmd', 'arg'], shell=False).",
+            )
+
+        elif fname in ("pickle.loads", "pickle.load"):
+            self._add(
+                "SRC-005",
+                Severity.MEDIUM,
+                Confidence.HIGH,
+                node.lineno,
+                "pickle deserialization executes arbitrary code on untrusted data",
+                "Avoid pickle for untrusted input. Use json, msgpack, or protobuf instead.",
+            )
+
+        elif fname == "yaml.load":
+            has_loader = any(kw.arg == "Loader" for kw in node.keywords)
+            if not has_loader:
+                self._add(
+                    "SRC-006",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "yaml.load() without Loader= can execute arbitrary Python objects",
+                    "Replace with yaml.safe_load() or pass Loader=yaml.SafeLoader.",
+                )
+
+        self.generic_visit(node)
+
+
+def analyze_python(path: Path) -> list[SourceFinding]:
+    """Parse a Python file and return security findings."""
+    try:
+        source = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    try:
+        tree = ast.parse(source, filename=str(path))
+    except SyntaxError:
+        return []
+    lines = source.splitlines()
+    visitor = _Visitor(lines, path)
+    visitor.visit(tree)
+    return visitor.findings

@@ -72,19 +72,33 @@ class Finding:
 
 
 @dataclass
+class SourceFinding:
+    rule_id: str
+    severity: Severity
+    confidence: Confidence
+    file_path: Path
+    line_number: int
+    message: str
+    code_snippet: str
+    remediation: str
+
+
+@dataclass
 class ScanResult:
     servers: list[MCPServer] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
+    source_findings: list[SourceFinding] = field(default_factory=list)
     scan_duration_ms: float = 0.0
 
     @property
     def score(self) -> int:
-        raw = sum(f.severity.score for f in self.findings)
+        all_findings: list[Finding | SourceFinding] = list(self.findings) + list(self.source_findings)
+        raw = sum(f.severity.score for f in all_findings)
         return max(0, 100 - raw)
 
     @property
     def has_critical(self) -> bool:
-        return any(f.severity == Severity.CRITICAL for f in self.findings)
+        return any(f.severity == Severity.CRITICAL for f in self.findings + self.source_findings)
 
     def findings_by_severity(self) -> dict[Severity, list[Finding]]:
         result: dict[Severity, list[Finding]] = {s: [] for s in Severity}
