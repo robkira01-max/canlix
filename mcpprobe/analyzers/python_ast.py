@@ -82,6 +82,41 @@ _INSECURE_RANDOM_FUNCS = frozenset(
         "random.gauss",
     }
 )
+# SRC-019: unsafe deserialization beyond pickle (marshal, shelve, jsonpickle, dill)
+_UNSAFE_DESER_FUNCS = frozenset(
+    {
+        "marshal.loads",
+        "marshal.load",
+        "shelve.open",
+        "jsonpickle.decode",
+        "dill.loads",
+        "dill.load",
+        "dill.loads",
+        "ruamel.yaml.load",
+    }
+)
+# SRC-020: hardcoded cryptographic key/IV passed to cipher constructor
+_CIPHER_FUNCS = frozenset(
+    {
+        "AES.new",
+        "ARC4.new",
+        "DES.new",
+        "DES3.new",
+        "Blowfish.new",
+        "Cipher",
+        "Fernet",
+        "cryptography.fernet.Fernet",
+        "cryptography.hazmat.primitives.ciphers.Cipher",
+    }
+)
+# SRC-021: CORS wildcard — FastAPI / Starlette / Flask-CORS allow_origins=["*"]
+_CORS_MIDDLEWARE_FUNCS = frozenset(
+    {
+        "CORSMiddleware",
+        "CORS",
+        "app.add_middleware",
+    }
+)
 # SRC-018: XML parsers vulnerable to entity expansion (XXE)
 # Includes both full module paths and common import-alias forms (import ET as ET, etc.)
 _XML_PARSE_FUNCS = frozenset(
@@ -559,6 +594,46 @@ class _Visitor(ast.NodeVisitor):
                 "ssl._create_unverified_context() disables certificate verification — allows MITM attacks",
                 "Use ssl.create_default_context() without modification to enforce certificate verification.",
             )
+
+        # SRC-019: unsafe deserialization — marshal, shelve, jsonpickle, dill execute arbitrary code
+        if fname in _UNSAFE_DESER_FUNCS:
+            self._add(
+                "SRC-019",
+                Severity.HIGH,
+                Confidence.HIGH,
+                node.lineno,
+                f"{fname}() deserializes arbitrary objects — attacker-controlled input can execute code",
+                "Avoid these deserializers for untrusted data. Use json.loads() or a schema-validated format.",
+            )
+
+        # SRC-020: hardcoded key passed as literal to cipher constructor
+        if fname in _CIPHER_FUNCS and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, (str, bytes)):
+                self._add(
+                    "SRC-020",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Hardcoded cryptographic key passed to {fname}() — key material must not be in source",
+                    "Load keys from environment variables or a secrets manager. Never hardcode crypto keys.",
+                )
+
+        # SRC-021: CORS wildcard — allow_origins=["*"] is dangerous when combined with credentials
+        if fname in _CORS_MIDDLEWARE_FUNCS:
+            for kw in node.keywords:
+                if kw.arg == "allow_origins" and isinstance(kw.value, ast.List):
+                    for elt in kw.value.elts:
+                        if isinstance(elt, ast.Constant) and elt.value == "*":
+                            self._add(
+                                "SRC-021",
+                                Severity.MEDIUM,
+                                Confidence.HIGH,
+                                node.lineno,
+                                "CORS allow_origins=['*'] — any origin can make cross-origin requests",
+                                "Restrict allowed origins to a known allowlist. Wildcard + credentials = auth bypass.",
+                            )
+                            break
 
         self.generic_visit(node)
 

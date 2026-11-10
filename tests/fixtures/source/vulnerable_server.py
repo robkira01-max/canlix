@@ -105,3 +105,24 @@ def redirect(url: str) -> str:  # noqa: F811 — shadowed intentionally for test
 def do_redirect(url: str):
     # SRC-015: open redirect — redirect() with user-supplied URL
     return redirect(url)
+
+
+import jsonpickle  # noqa: E402, F401
+
+
+def load_object(data: str):
+    # SRC-019: unsafe deserialization via jsonpickle
+    return jsonpickle.decode(data)
+
+
+from Crypto.Cipher import AES  # noqa: E402, F401
+
+
+def encrypt_data(plaintext: bytes):
+    # SRC-020: hardcoded AES key
+    return AES.new(b"hardcoded_key_16", AES.MODE_GCM)
+
+
+def configure_cors(app):
+    # SRC-021: CORS wildcard
+    app.add_middleware("CORSMiddleware", allow_origins=["*"])

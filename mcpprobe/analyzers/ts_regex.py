@@ -104,6 +104,21 @@ _TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
 _TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
 
 # ---------------------------------------------------------------------------
+# TS-018: XXE — unsafe XML parsing via DOMParser or similar
+# ---------------------------------------------------------------------------
+
+_XXE_DOM_PARSER = re.compile(
+    r"""(?x)
+    new\s+DOMParser\s*\(\s*\)\.parseFromString\s*\(\s*[A-Za-z_$]  # new DOMParser().parseFromString(var
+    | \bparseFromString\s*\(\s*[A-Za-z_$]                           # parser.parseFromString(var
+    | new\s+JSDOM\s*\(\s*[A-Za-z_$]                                 # new JSDOM(var
+    | xmldom\.DOMParser\s*\(\s*\)\.parseFromString                   # xmldom.DOMParser().parseFromString
+    """,
+)
+# Skip when the first arg is a plain string literal
+_XXE_LITERAL_SAFE = re.compile(r"""parseFromString\s*\(\s*["'`]|new\s+JSDOM\s*\(\s*["'`]""")
+
+# ---------------------------------------------------------------------------
 # TS-017: insecure cookie — res.cookie() without httpOnly or secure flags
 # ---------------------------------------------------------------------------
 
@@ -245,6 +260,43 @@ _SSRF_FETCH = re.compile(
 # Negation: skip lines where the argument is a plain https?:// string (definitely safe)
 _SSRF_LITERAL_SAFE = re.compile(r"""\bfetch\s*\(\s*["'`]https?://""")
 _SSRF_AXIOS_LITERAL_SAFE = re.compile(r"""\baxios\.[a-z]+\s*\(\s*["'`]https?://""")
+
+
+# ---------------------------------------------------------------------------
+# TS-019: unsafe deserialization — node-serialize / serialize-javascript eval
+# ---------------------------------------------------------------------------
+
+_UNSAFE_DESERIALIZE = re.compile(
+    r"""(?x)
+    \bserialize\.unserialize\s*\(                        # node-serialize
+    | \bunserialize\s*\(\s*[A-Za-z_$]                    # bare unserialize(variable
+    | \beval\s*\(\s*JSON\.parse\s*\(                      # eval(JSON.parse(...))
+    | \.fromJSON\s*\(\s*[A-Za-z_$]                        # .fromJSON(variable)
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-020: hardcoded cryptographic key/IV — string literal passed to createCipheriv
+# ---------------------------------------------------------------------------
+
+_HARDCODED_CRYPTO_KEY = re.compile(
+    r"""(?x)
+    createCipheriv\s*\(\s*["'`][^"'`]+["'`]\s*,\s*["'`]  # createCipheriv("aes-256-gcm", "hardcoded
+    | createDecipheriv\s*\(\s*["'`][^"'`]+["'`]\s*,\s*["'`]  # createDecipheriv("aes-256-gcm", "hardcoded
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-021: CORS wildcard — Access-Control-Allow-Origin: * or cors({origin: "*"})
+# ---------------------------------------------------------------------------
+
+_CORS_WILDCARD = re.compile(
+    r"""(?x)
+    setHeader\s*\(\s*["']Access-Control-Allow-Origin["']\s*,\s*["']\*["']  # setHeader("ACAO", "*")
+    | cors\s*\(\s*\{[^}]*origin\s*:\s*["']\*["']                            # cors({ origin: "*" })
+    | ["']Access-Control-Allow-Origin["']\s*:\s*["']\*["']                  # object literal "ACAO": "*"
+    """,
+)
 
 
 def analyze_typescript(path: Path) -> list[SourceFinding]:
@@ -407,6 +459,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
         )
 
+    # TS-018: XXE — unsafe XML parsing with a non-literal input
+    if _XXE_DOM_PARSER.search(raw) and not _XXE_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-018",
+            Severity.HIGH,
+            Confidence.MEDIUM,
+            "Unsafe XML parsing — DOMParser/JSDOM with variable input may be vulnerable to XXE",
+            "Sanitise XML input before parsing. Disable external entity resolution if the parser supports it.",
+        )
+
     # TS-017: insecure cookie — res.cookie() without httpOnly/secure on same line
     if _COOKIE_SET.search(raw):
         missing = []
@@ -471,6 +533,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "Math.random() used in a security-sensitive context — not cryptographically secure",
             "Use crypto.getRandomValues() (browser) or crypto.randomBytes() (Node.js) for security tokens.",
+        )
+
+    # TS-019: unsafe deserialization — node-serialize / eval(JSON.parse()) patterns
+    if _UNSAFE_DESERIALIZE.search(raw):
+        _add(
+            "TS-019",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Unsafe deserialization — node-serialize or eval(JSON.parse()) can execute arbitrary code",
+            "Use JSON.parse() with explicit validation. Never deserialize untrusted data with node-serialize.",
+        )
+
+    # TS-020: hardcoded cryptographic key/IV as string literal in createCipheriv
+    if _HARDCODED_CRYPTO_KEY.search(raw):
+        _add(
+            "TS-020",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Hardcoded cryptographic key or IV in createCipheriv/createDecipheriv — key material must not be in source",
+            "Load keys from process.env or a secrets manager. Use crypto.randomBytes(32) for IV generation.",
+        )
+
+    # TS-021: CORS wildcard — Access-Control-Allow-Origin: * allows any origin
+    if _CORS_WILDCARD.search(raw):
+        _add(
+            "TS-021",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "CORS wildcard origin (*) — any website can make cross-origin requests to this endpoint",
+            "Restrict allowed origins to a known allowlist. Wildcard + credentials = auth bypass risk.",
         )
 
     return result

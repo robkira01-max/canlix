@@ -73,6 +73,11 @@ function verifyToken(storedToken: string, userToken: string): boolean {
   return storedToken === userToken;
 }
 
+// TS-018: XXE — DOMParser with variable XML input (HIGH)
+function parseXml(xmlData: string): Document {
+  return new DOMParser().parseFromString(xmlData, "text/xml");
+}
+
 // TS-017: insecure cookie — missing httpOnly and secure (MEDIUM)
 function setSession(res: any, token: string): void {
   res.cookie("session", token, { sameSite: "strict" });
@@ -85,3 +90,18 @@ const jwtOptions = { algorithms: ["none"] };
 function handleRedirect(res: any, url: string): void {
   res.redirect(url);
 }
+
+// TS-019: unsafe deserialization — node-serialize
+import serialize from "node-serialize";
+function loadObject(data: string): unknown {
+  return serialize.unserialize(data);
+}
+
+// TS-020: hardcoded cryptographic key in createCipheriv
+function encryptData(plaintext: Buffer): Buffer {
+  const cipher = crypto.createCipheriv("aes-256-gcm", "hardcoded_32_byte_key_1234567890a", iv);
+  return cipher.update(plaintext);
+}
+
+// TS-021: CORS wildcard — any origin allowed
+const corsOptions = { "Access-Control-Allow-Origin": "*" };

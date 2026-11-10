@@ -697,8 +697,131 @@ def test_TS017_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 17 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_seventeen_rules():
+# ── TS-018: XXE injection ─────────────────────────────────────────────────────
+
+
+def test_TS018_detects_DOMParser_parseFromString_variable(tmp_path):
+    p = _ts(tmp_path, 'const doc = new DOMParser().parseFromString(xmlData, "text/xml");')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-018" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_TS018_detects_parser_parseFromString_variable(tmp_path):
+    p = _ts(tmp_path, "const doc = parser.parseFromString(xmlInput);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-018" for f in findings)
+
+
+def test_TS018_detects_new_JSDOM_variable(tmp_path):
+    p = _ts(tmp_path, "const dom = new JSDOM(htmlContent);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-018" for f in findings)
+
+
+def test_TS018_passes_parseFromString_literal(tmp_path):
+    p = _ts(tmp_path, 'const doc = parser.parseFromString("<root/>", "text/xml");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-018" for f in findings)
+
+
+def test_TS018_passes_JSDOM_literal(tmp_path):
+    p = _ts(tmp_path, 'const dom = new JSDOM("<html></html>");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-018" for f in findings)
+
+
+def test_TS018_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-018" for f in findings)
+
+
+# ── Full fixture — all 18 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_eighteen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 18)}
+    expected = {f"TS-{i:03d}" for i in range(1, 19)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-019: unsafe deserialization ───────────────────────────────────────────
+
+
+def test_TS019_detects_node_serialize_unserialize(tmp_path):
+    p = _ts(tmp_path, "const obj = serialize.unserialize(userInput);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-019" for f in findings)
+
+
+def test_TS019_detects_eval_json_parse(tmp_path):
+    p = _ts(tmp_path, "const obj = eval(JSON.parse(data));")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-019" for f in findings)
+
+
+def test_TS019_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-019" for f in findings)
+
+
+# ── TS-020: hardcoded crypto key ─────────────────────────────────────────────
+
+
+def test_TS020_detects_createCipheriv_literal_key(tmp_path):
+    p = _ts(tmp_path, 'crypto.createCipheriv("aes-256-gcm", "hardcoded_key_32_bytes_12345678", iv)')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-020" for f in findings)
+
+
+def test_TS020_detects_createDecipheriv_literal_key(tmp_path):
+    p = _ts(tmp_path, 'crypto.createDecipheriv("aes-256-cbc", "hardcoded_key", iv)')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-020" for f in findings)
+
+
+def test_TS020_passes_variable_key(tmp_path):
+    p = _ts(tmp_path, 'crypto.createCipheriv("aes-256-gcm", key, iv)')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-020" for f in findings)
+
+
+def test_TS020_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-020" for f in findings)
+
+
+# ── TS-021: CORS wildcard ────────────────────────────────────────────────────
+
+
+def test_TS021_detects_cors_origin_wildcard(tmp_path):
+    p = _ts(tmp_path, 'app.use(cors({ origin: "*" }));')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-021" for f in findings)
+
+
+def test_TS021_detects_set_header_wildcard(tmp_path):
+    p = _ts(tmp_path, 'res.setHeader("Access-Control-Allow-Origin", "*");')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-021" for f in findings)
+
+
+def test_TS021_passes_specific_origin(tmp_path):
+    p = _ts(tmp_path, 'res.setHeader("Access-Control-Allow-Origin", "https://example.com");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-021" for f in findings)
+
+
+def test_TS021_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-021" for f in findings)
+
+
+# ── Full fixture — all 21 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_twentyone_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 22)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

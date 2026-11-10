@@ -732,8 +732,131 @@ def test_SRC017_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 17 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_seventeen_rules():
+# ── SRC-018: XXE injection ────────────────────────────────────────────────────
+
+
+def test_SRC018_detects_ElementTree_fromstring(tmp_path):
+    p = _py(tmp_path, "import xml.etree.ElementTree as ET\nET.fromstring(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-018" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_SRC018_detects_ElementTree_parse(tmp_path):
+    p = _py(tmp_path, "import xml.etree.ElementTree as ET\nET.parse(filename)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-018" for f in findings)
+
+
+def test_SRC018_detects_minidom_parseString(tmp_path):
+    p = _py(tmp_path, "from xml.dom import minidom\nminidom.parseString(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-018" for f in findings)
+
+
+def test_SRC018_detects_lxml_fromstring(tmp_path):
+    p = _py(tmp_path, "from lxml import etree\netree.fromstring(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-018" for f in findings)
+
+
+def test_SRC018_passes_defusedxml(tmp_path):
+    p = _py(tmp_path, "import defusedxml.ElementTree as ET\nET.fromstring(data)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-018" for f in findings)
+
+
+def test_SRC018_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-018" for f in findings)
+
+
+# ── Full fixture — all 18 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_eighteen_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 18)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 19)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-019: unsafe deserialization beyond pickle ─────────────────────────────
+
+
+def test_SRC019_detects_jsonpickle_decode(tmp_path):
+    p = _py(tmp_path, "import jsonpickle\njsonpickle.decode(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-019" for f in findings)
+
+
+def test_SRC019_detects_marshal_loads(tmp_path):
+    p = _py(tmp_path, "import marshal\nmarshal.loads(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-019" for f in findings)
+
+
+def test_SRC019_detects_dill_loads(tmp_path):
+    p = _py(tmp_path, "import dill\ndill.loads(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-019" for f in findings)
+
+
+def test_SRC019_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-019" for f in findings)
+
+
+# ── SRC-020: hardcoded cryptographic key ─────────────────────────────────────
+
+
+def test_SRC020_detects_AES_new_literal_key(tmp_path):
+    p = _py(tmp_path, 'from Crypto.Cipher import AES\nAES.new(b"mysecretkey12345", AES.MODE_GCM)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-020" for f in findings)
+
+
+def test_SRC020_detects_Fernet_literal_key(tmp_path):
+    p = _py(tmp_path, 'from cryptography.fernet import Fernet\nFernet("some_hardcoded_key")')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-020" for f in findings)
+
+
+def test_SRC020_passes_variable_key(tmp_path):
+    p = _py(tmp_path, "AES.new(key, AES.MODE_GCM)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-020" for f in findings)
+
+
+def test_SRC020_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-020" for f in findings)
+
+
+# ── SRC-021: CORS wildcard ────────────────────────────────────────────────────
+
+
+def test_SRC021_detects_allow_origins_wildcard(tmp_path):
+    p = _py(tmp_path, 'app.add_middleware("CORSMiddleware", allow_origins=["*"])')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-021" for f in findings)
+
+
+def test_SRC021_passes_specific_origin(tmp_path):
+    p = _py(tmp_path, 'app.add_middleware("CORSMiddleware", allow_origins=["https://example.com"])')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-021" for f in findings)
+
+
+def test_SRC021_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-021" for f in findings)
+
+
+# ── Full fixture — all 21 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_twentyone_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 22)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
