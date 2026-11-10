@@ -169,6 +169,10 @@ _URLLIB_REQUEST_FUNCS = frozenset({"urllib.request.Request", "urllib.request.url
 _ZIPIMPORT_FUNCS = frozenset({"zipimport.zipimporter", "zipimporter"})
 # SRC-066: asyncio.create_subprocess_shell with user-controlled command — async shell injection
 _ASYNC_SHELL_FUNCS = frozenset({"asyncio.create_subprocess_shell", "create_subprocess_shell"})
+# SRC-067: socket.create_connection with user-controlled host in address tuple — SSRF
+_SOCKET_CONNECT_FUNCS = frozenset({"socket.create_connection", "create_connection"})
+# SRC-068: hashlib.pbkdf2_hmac with user-controlled iteration count — DoS via CPU exhaustion
+# SRC-069: subprocess.Popen / subprocess.run with user-controlled `executable` kwarg
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1385,6 +1389,56 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"{fname}({url_arg.id}) — user-controlled URL enables SSRF via urllib",
                     "Validate the URL against an allowlist of permitted hosts before making the request.",
+                )
+
+        # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple
+        if fname in _SOCKET_CONNECT_FUNCS and node.args and self._param_names:
+            addr_arg = node.args[0]
+            if (
+                isinstance(addr_arg, ast.Tuple)
+                and addr_arg.elts
+                and isinstance(addr_arg.elts[0], ast.Name)
+                and addr_arg.elts[0].id in self._param_names
+            ):
+                self._add(
+                    "SRC-067",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"socket.create_connection(({addr_arg.elts[0].id}, ...)) — user-controlled host enables SSRF",
+                    "Allowlist permitted hosts before opening raw TCP connections.",
+                )
+
+        # SRC-068: hashlib.pbkdf2_hmac with user-controlled iteration count — DoS
+        if fname == "hashlib.pbkdf2_hmac" and self._param_names:
+            iter_arg: ast.expr | None = None
+            if len(node.args) >= 4:
+                iter_arg = node.args[3]
+            else:
+                kw = next((k for k in node.keywords if k.arg == "iterations"), None)
+                if kw:
+                    iter_arg = kw.value
+            if iter_arg is not None and isinstance(iter_arg, ast.Name) and iter_arg.id in self._param_names:
+                self._add(
+                    "SRC-068",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"hashlib.pbkdf2_hmac(..., iterations={iter_arg.id}) — user controls KDF cost (DoS via CPU)",
+                    "Cap iterations to a sane maximum (e.g. ≤ 600000) before calling pbkdf2_hmac().",
+                )
+
+        # SRC-069: subprocess.Popen / run with user-controlled executable= kwarg — command hijack
+        if fname in _SHELL_FUNCS and self._param_names:
+            exe_kw = next((k for k in node.keywords if k.arg == "executable"), None)
+            if exe_kw and isinstance(exe_kw.value, ast.Name) and exe_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-069",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}(executable={exe_kw.value.id}) — user-controlled executable overrides the binary",
+                    "Hardcode the executable path. Never allow callers to override subprocess.executable.",
                 )
 
         # SRC-066: asyncio.create_subprocess_shell(cmd) with user-controlled cmd — async shell injection

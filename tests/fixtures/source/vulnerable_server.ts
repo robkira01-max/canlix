@@ -336,3 +336,18 @@ function openWindow(req: any): void {
 function renderContent(req: any): void {
   $("#output").html(req.query.content);
 }
+
+// TS-067: Object.defineProperty with user-controlled property name
+function defineUserProp(req: any, obj: any): void {
+  Object.defineProperty(obj, req.query.prop, { value: "x", writable: true });
+}
+
+// TS-068: crypto.createCipheriv with user-controlled algorithm
+function encryptUserAlgo(req: any, key: Buffer, iv: Buffer): void {
+  crypto.createCipheriv(req.query.algo, key, iv);
+}
+
+// TS-069: fs.writeFileSync with user-controlled path — write path traversal
+function saveFile(req: any, data: Buffer): void {
+  fs.writeFileSync(req.query.path, data);
+}

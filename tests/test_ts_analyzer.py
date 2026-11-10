@@ -1674,11 +1674,65 @@ def test_TS066_passes_jquery_html_literal(tmp_path):
     assert not any(f.rule_id == "TS-066" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 66 rules ───────────────────────────────────────────────
+# ── TS-067: Object.defineProperty(obj, req.xxx, ...) — property injection ────
 
 
-def test_vulnerable_ts_fixture_has_all_sixty_six_rules():
+def test_TS067_detects_defineProperty_req(tmp_path):
+    p = _ts(tmp_path, 'Object.defineProperty(obj, req.query.prop, { value: "x" });')
+    assert any(f.rule_id == "TS-067" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS067_detects_defineProperty_body(tmp_path):
+    p = _ts(tmp_path, "Object.defineProperty(target, req.body.key, descriptor);")
+    assert any(f.rule_id == "TS-067" for f in analyze_typescript(p))
+
+
+def test_TS067_passes_defineProperty_literal(tmp_path):
+    p = _ts(tmp_path, 'Object.defineProperty(obj, "value", { writable: false });')
+    assert not any(f.rule_id == "TS-067" for f in analyze_typescript(p))
+
+
+# ── TS-068: crypto.createCipheriv(req.xxx, ...) — algorithm confusion ─────────
+
+
+def test_TS068_detects_createCipheriv_req(tmp_path):
+    p = _ts(tmp_path, "crypto.createCipheriv(req.query.algo, key, iv);")
+    assert any(f.rule_id == "TS-068" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS068_detects_createDecipheriv_req(tmp_path):
+    p = _ts(tmp_path, "crypto.createDecipheriv(req.body.cipher, key, iv);")
+    assert any(f.rule_id == "TS-068" for f in analyze_typescript(p))
+
+
+def test_TS068_passes_createCipheriv_literal(tmp_path):
+    p = _ts(tmp_path, 'crypto.createCipheriv("aes-256-gcm", key, iv);')
+    assert not any(f.rule_id == "TS-068" for f in analyze_typescript(p))
+
+
+# ── TS-069: fs.writeFileSync(req.xxx, ...) — write path traversal ────────────
+
+
+def test_TS069_detects_writeFileSync_req(tmp_path):
+    p = _ts(tmp_path, "fs.writeFileSync(req.query.path, data);")
+    assert any(f.rule_id == "TS-069" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS069_detects_writeFileSync_body(tmp_path):
+    p = _ts(tmp_path, "fs.writeFileSync(req.body.filename, content);")
+    assert any(f.rule_id == "TS-069" for f in analyze_typescript(p))
+
+
+def test_TS069_passes_writeFileSync_literal(tmp_path):
+    p = _ts(tmp_path, 'fs.writeFileSync("/tmp/output.txt", data);')
+    assert not any(f.rule_id == "TS-069" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 69 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_sixty_nine_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 67)}
+    expected = {f"TS-{i:03d}" for i in range(1, 70)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

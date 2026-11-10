@@ -413,3 +413,21 @@ async def make_request_no_tls() -> None:
 async def run_async_shell(cmd: str) -> None:
     # SRC-066: asyncio.create_subprocess_shell with user-controlled command
     await asyncio.create_subprocess_shell(cmd)
+
+
+import hashlib  # noqa: E402
+
+
+def tcp_connect(host: str) -> None:
+    # SRC-067: socket.create_connection with user-controlled host — SSRF
+    socket.create_connection((host, 443))
+
+
+def kdf_stretch(password: str, salt: bytes, iterations: int) -> bytes:
+    # SRC-068: user-controlled iteration count — DoS via CPU exhaustion
+    return hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
+
+
+def run_user_exe(exe: str) -> None:
+    # SRC-069: subprocess executable= kwarg override — binary hijack
+    subprocess.run(["dummy"], executable=exe)

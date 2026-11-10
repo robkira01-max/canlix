@@ -1635,11 +1635,66 @@ def test_SRC066_passes_create_subprocess_shell_literal(tmp_path):
     assert not any(f.rule_id == "SRC-066" for f in analyze_python(p))
 
 
-# ── Full fixture — all 66 rules ───────────────────────────────────────────────
+# ── SRC-067: socket.create_connection((host, port)) — raw TCP SSRF ───────────
 
 
-def test_vulnerable_fixture_has_all_sixty_six_rules():
+def test_SRC067_detects_create_connection_tuple_param(tmp_path):
+    p = _py(tmp_path, "import socket\ndef conn(host: str):\n    socket.create_connection((host, 443))")
+    assert any(f.rule_id == "SRC-067" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC067_passes_create_connection_literal_host(tmp_path):
+    p = _py(tmp_path, "import socket\nsocket.create_connection(('example.com', 443))")
+    assert not any(f.rule_id == "SRC-067" for f in analyze_python(p))
+
+
+# ── SRC-068: pbkdf2_hmac(iterations=user) — KDF DoS ──────────────────────────
+
+
+def test_SRC068_detects_pbkdf2_iterations_positional(tmp_path):
+    p = _py(
+        tmp_path,
+        "import hashlib\ndef kdf(pwd: str, s: bytes, iters: int):\n"
+        "    hashlib.pbkdf2_hmac('sha256', pwd.encode(), s, iters)",
+    )
+    assert any(f.rule_id == "SRC-068" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC068_detects_pbkdf2_iterations_kwarg(tmp_path):
+    p = _py(
+        tmp_path,
+        "import hashlib\ndef kdf(pwd: str, s: bytes, n: int):\n"
+        "    hashlib.pbkdf2_hmac('sha256', pwd.encode(), s, iterations=n)",
+    )
+    assert any(f.rule_id == "SRC-068" for f in analyze_python(p))
+
+
+def test_SRC068_passes_pbkdf2_literal_iterations(tmp_path):
+    p = _py(tmp_path, "import hashlib\nhashlib.pbkdf2_hmac('sha256', b'x', b's', 600000)")
+    assert not any(f.rule_id == "SRC-068" for f in analyze_python(p))
+
+
+# ── SRC-069: Popen(executable=user) — executable override ────────────────────
+
+
+def test_SRC069_detects_subprocess_executable_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import subprocess\ndef run(exe: str):\n    subprocess.run(['dummy'], executable=exe)",
+    )
+    assert any(f.rule_id == "SRC-069" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC069_passes_subprocess_executable_literal(tmp_path):
+    p = _py(tmp_path, "import subprocess\nsubprocess.run(['ls'], executable='/bin/ls')")
+    assert not any(f.rule_id == "SRC-069" for f in analyze_python(p))
+
+
+# ── Full fixture — all 69 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_sixty_nine_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 67)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 70)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

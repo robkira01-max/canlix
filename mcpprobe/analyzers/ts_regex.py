@@ -668,6 +668,36 @@ _JQUERY_HTML_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-067: Object.defineProperty(obj, req.xxx, ...) — user-controlled property name
+# ---------------------------------------------------------------------------
+
+_OBJ_DEFINE_PROP_REQ = re.compile(
+    r"""(?x)
+    \bObject\.defineProperty\s*\([^,]+,\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-068: crypto.createCipheriv / createDecipheriv with user-controlled algo
+# ---------------------------------------------------------------------------
+
+_CRYPTO_CIPHER_ALGO_REQ = re.compile(
+    r"""(?x)
+    \bcrypto\.create(?:Cipher|Decipher)iv\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-069: fs.writeFileSync(req.xxx, ...) — synchronous write path traversal
+# ---------------------------------------------------------------------------
+
+_WRITE_FILE_SYNC_REQ = re.compile(
+    r"""(?x)
+    \bfs\.writeFileSync\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -1424,6 +1454,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new vm.Script(req.xxx) — user-controlled code compiled as a VM script; vm is NOT a sandbox",
             "Never compile user-supplied code. Use a safe DSL or allowlisted template engine instead.",
+        )
+
+    # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection
+    if _OBJ_DEFINE_PROP_REQ.search(raw):
+        _add(
+            "TS-067",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Object.defineProperty(obj, req.xxx, ...) — user-controlled property name enables prototype pollution",
+            "Allowlist property names. Never let callers choose what property to define on an object.",
+        )
+
+    # TS-068: crypto.createCipheriv/createDecipheriv with user-controlled algorithm
+    if _CRYPTO_CIPHER_ALGO_REQ.search(raw):
+        _add(
+            "TS-068",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "crypto.createCipheriv(req.xxx, ...) — user-controlled cipher algorithm enables algorithm confusion",
+            "Hardcode the cipher algorithm (e.g. 'aes-256-gcm'). Never let callers choose the cipher.",
+        )
+
+    # TS-069: fs.writeFileSync(req.xxx, data) — synchronous write path traversal
+    if _WRITE_FILE_SYNC_REQ.search(raw):
+        _add(
+            "TS-069",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fs.writeFileSync(req.xxx, ...) — user-controlled path allows writing arbitrary server files",
+            "Validate the path against an allowlist or use path.resolve + prefix check to prevent traversal.",
         )
 
     # TS-064: document.write(req.xxx) — DOM XSS via document.write
