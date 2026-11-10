@@ -18,5 +18,6 @@ def run_safe(cmd: list[str]) -> str:
 
 
 def load_config(path: str) -> dict:
-    with open(path) as f:
+    safe = os.path.realpath(path)
+    with open(safe) as f:
         return json.load(f)

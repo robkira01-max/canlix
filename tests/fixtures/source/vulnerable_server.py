@@ -42,3 +42,8 @@ def load_yaml_config(config_str: str):
 def fetch_remote_resource(url: str):
     # SRC-007: HTTP request with URL from function parameter — SSRF risk
     return requests.get(url)
+
+
+def read_user_file(filepath: str):
+    # SRC-008: file I/O with path from function parameter — path traversal risk
+    return open(filepath).read()

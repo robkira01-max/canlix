@@ -84,6 +84,26 @@ _PROTO_POLLUTION = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-008: path traversal — fs I/O with non-literal path argument
+# ---------------------------------------------------------------------------
+
+_PATH_FS = re.compile(
+    r"""(?x)
+    \bfs\.readFile(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.writeFile(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.appendFile(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.unlink(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.open(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.stat(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.rmdir(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfs\.rm(?:Sync)?\s*\(\s*[A-Za-z_$]
+    | \bfsp\.readFile\s*\(\s*[A-Za-z_$]
+    | \bfsp\.writeFile\s*\(\s*[A-Za-z_$]
+    """,
+)
+_PATH_FS_LITERAL_SAFE = re.compile(r"""\bfs\.\w+\s*\(\s*["'`][^"'`]""")
+
+# ---------------------------------------------------------------------------
 # TS-007: SSRF — fetch/axios/got with non-literal URL argument
 # ---------------------------------------------------------------------------
 
@@ -216,6 +236,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "HTTP request with variable URL — SSRF risk",
             "Validate the URL against an allowlist. Never pass raw user-supplied URLs to HTTP clients.",
+        )
+
+    # TS-008: path traversal — fs I/O with non-literal path
+    if _PATH_FS.search(raw) and not _PATH_FS_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-008",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "File I/O with variable path — path traversal risk",
+            "Validate the path with path.resolve() + a trusted prefix check before I/O operations.",
         )
 
     return result

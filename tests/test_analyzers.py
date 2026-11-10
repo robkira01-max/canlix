@@ -162,10 +162,11 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_seven_rules():
+def test_vulnerable_fixture_has_all_eight_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    assert {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006", "SRC-007"}.issubset(rule_ids)
+    expected = {"SRC-001", "SRC-002", "SRC-003", "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008"}
+    assert expected.issubset(rule_ids)
 
 
 def test_analyze_path_on_directory(tmp_path):
@@ -253,3 +254,40 @@ def test_SRC007_passes_module_level_constant(tmp_path):
     p = _py(tmp_path, 'import requests\nURL = "https://example.com"\nrequests.get(URL)')
     findings = analyze_python(p)
     assert not any(f.rule_id == "SRC-007" for f in findings)
+
+
+# ── SRC-008: path traversal — file I/O with function parameter path ─────────
+
+
+def test_SRC008_detects_open_with_param(tmp_path):
+    p = _py(tmp_path, "def read(filepath):\n    return open(filepath).read()")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-008" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC008_detects_path_constructor_with_param(tmp_path):
+    # Path(p) is in _PATH_IO_FUNCS — fires on the constructor call, not the chained method
+    p = _py(
+        tmp_path,
+        "from pathlib import Path\ndef get(p):\n    return Path(p).read_text()",
+    )
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-008" for f in findings)
+
+
+def test_SRC008_detects_os_remove_with_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef delete(path):\n    os.remove(path)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-008" for f in findings)
+
+
+def test_SRC008_passes_literal_path(tmp_path):
+    p = _py(tmp_path, 'open("/etc/hostname").read()')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-008" for f in findings)
+
+
+def test_SRC008_passes_module_level_path_var(tmp_path):
+    p = _py(tmp_path, 'PATH = "/tmp/data.txt"\nopen(PATH).read()')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-008" for f in findings)

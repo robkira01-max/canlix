@@ -40,3 +40,9 @@ export function mergeUnsafe(
 export async function fetchRemote(url: string): Promise<Response> {
   return fetch(url);
 }
+
+// TS-008: path traversal — fs.readFile with variable path (MEDIUM)
+import * as fs from "fs";
+export function readFile(filePath: string): void {
+  fs.readFile(filePath, "utf8", () => {});
+}

@@ -26,8 +26,9 @@ export function spawnSafe(cmd: string, args: string[]): childProcess.ChildProces
 }
 
 export function loadConfig(filePath: string): Record<string, unknown> {
-  const resolved = path.resolve(BASE_DIR, path.basename(filePath));
-  const content = fs.readFileSync(resolved, "utf-8");
+  // path.basename strips directory components — only the filename is used
+  const safeName = path.basename(filePath);
+  const content = fs.readFileSync(`${BASE_DIR}/${safeName}`, "utf-8");
   return JSON.parse(content);
 }
 

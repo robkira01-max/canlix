@@ -177,10 +177,11 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_seven_rules():
+def test_vulnerable_ts_fixture_has_all_eight_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    assert {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006", "TS-007"}.issubset(rule_ids)
+    expected = {"TS-001", "TS-002", "TS-003", "TS-004", "TS-005", "TS-006", "TS-007", "TS-008"}
+    assert expected.issubset(rule_ids)
 
 
 def test_analyze_path_picks_up_ts_files(tmp_path):
@@ -248,3 +249,36 @@ def test_TS007_passes_axios_with_literal_url(tmp_path):
     p = _ts(tmp_path, 'const res = axios.get("https://api.example.com/items");')
     findings = analyze_typescript(p)
     assert not any(f.rule_id == "TS-007" for f in findings)
+
+
+# ── TS-008: path traversal — fs I/O with variable path ──────────────────────
+
+
+def test_TS008_detects_fs_readFile_with_variable(tmp_path):
+    p = _ts(tmp_path, "fs.readFile(userPath, 'utf8', callback);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-008" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS008_detects_fs_readFileSync_with_variable(tmp_path):
+    p = _ts(tmp_path, "const data = fs.readFileSync(filePath);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-008" for f in findings)
+
+
+def test_TS008_detects_fs_writeFile_with_variable(tmp_path):
+    p = _ts(tmp_path, "fs.writeFile(outputPath, content, callback);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-008" for f in findings)
+
+
+def test_TS008_detects_fs_unlink_with_variable(tmp_path):
+    p = _ts(tmp_path, "fs.unlink(targetPath, callback);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-008" for f in findings)
+
+
+def test_TS008_passes_fs_readFile_with_literal(tmp_path):
+    p = _ts(tmp_path, 'const data = fs.readFile("/etc/hostname", "utf8", cb);')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-008" for f in findings)

@@ -45,6 +45,19 @@ _HTTP_CLIENT_FUNCS = {
     "urlopen",
     "urllib.request.urlopen",
 }
+_PATH_IO_FUNCS = {
+    "open",
+    "Path",  # Path(user_path) — entry point for pathlib traversal
+    "os.path.exists",
+    "os.path.isfile",
+    "os.path.isdir",
+    "os.remove",
+    "os.unlink",
+    "os.rmdir",
+    "shutil.copy",
+    "shutil.move",
+    "shutil.rmtree",
+}
 
 
 class _Visitor(ast.NodeVisitor):
@@ -211,6 +224,18 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"HTTP request with URL from function parameter '{url_node.id}' — SSRF risk",
                     "Validate the URL against an allowlist. Never pass raw user-supplied URLs to HTTP clients.",
+                )
+
+        if fname in _PATH_IO_FUNCS and self._param_names:
+            path_node: ast.expr | None = node.args[0] if node.args else None
+            if path_node and isinstance(path_node, ast.Name) and path_node.id in self._param_names:
+                self._add(
+                    "SRC-008",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"File I/O with path from function parameter '{path_node.id}' — path traversal risk",
+                    "Validate the path against an allowlist or use os.path.realpath + prefix check.",
                 )
 
         self.generic_visit(node)
