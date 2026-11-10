@@ -5,9 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from mcpprobe.analyzers.python_ast import analyze_python
+from mcpprobe.analyzers.ts_regex import analyze_typescript
 from mcpprobe.models import SourceFinding
 
 _SKIP = {"node_modules", ".venv", "venv", "__pycache__", ".git", "dist", "build", ".tox"}
+_TS_SUFFIXES = {".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx"}
 
 
 def analyze_path(path: Path) -> list[SourceFinding]:
@@ -26,6 +28,8 @@ def analyze_path(path: Path) -> list[SourceFinding]:
 def _analyze_file(path: Path) -> list[SourceFinding]:
     if path.suffix == ".py":
         return analyze_python(path)
+    if path.suffix in _TS_SUFFIXES:
+        return analyze_typescript(path)
     return []
 
 

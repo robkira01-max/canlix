@@ -37,7 +37,7 @@ LOW (1)
 | | MCPProbe | Snyk Agent Scan |
 |---|---|---|
 | Config scanning (stdio / HTTP / SSE) | ✅ | stdio only |
-| Source code analysis (Python AST) | ✅ | ❌ |
+| Source code analysis (Python AST + TypeScript/JS regex) | ✅ | ❌ |
 | Active live server probing | ✅ | ❌ |
 | Prompt-injection detection | ✅ | ❌ |
 | Local-first, zero data upload | ✅ | ❌ |
@@ -81,20 +81,21 @@ Auto-detects configs from:
 
 ---
 
-### `analyze` — Python source code analysis
+### `analyze` — source code analysis (Python + TypeScript/JavaScript)
 
 ```bash
 # Scan a single file
 mcpprobe analyze server.py
+mcpprobe analyze server.ts
 
-# Scan a whole project directory
+# Scan a whole project directory (auto-detects .py, .ts, .js, .mjs, .cjs)
 mcpprobe analyze ./my-mcp-server/
 
 # JSON output
 mcpprobe analyze server.py --output json
 ```
 
-Detects hardcoded secrets, `eval()`/`exec()`, `shell=True`, `os.system()`, `pickle.loads()`, and `yaml.load()` without `Loader=` — all via Python's built-in `ast` module, zero external dependencies.
+Detects hardcoded secrets, `eval()`, dangerous process execution, prototype pollution — Python via the built-in `ast` module, TypeScript/JavaScript via regex. Zero external dependencies, no Node.js required.
 
 ---
 
@@ -182,7 +183,9 @@ Connects to a live MCP server, enumerates its tools and resources, and runs pass
 
 ---
 
-### Source rules (6) — `mcpprobe analyze`
+### Source rules — `mcpprobe analyze`
+
+#### Python rules (6) — `.py` files, AST-based
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -192,6 +195,17 @@ Connects to a live MCP server, enumerates its tools and resources, and runs pass
 | SRC-004 | HIGH | `os.system()` / `os.popen()` — command injection |
 | SRC-005 | MEDIUM | `pickle.loads()` — unsafe deserialization of untrusted data |
 | SRC-006 | MEDIUM | `yaml.load()` without `Loader=` — arbitrary Python execution |
+
+#### TypeScript / JavaScript rules (6) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
+
+| Rule | Severity | Description |
+|---|---|---|
+| TS-001 | CRITICAL / HIGH | Hardcoded API key or token (`sk-`, `ghp_`, `AKIA…`, JWT header) / secret variable name |
+| TS-002 | HIGH | `eval()` — arbitrary code execution |
+| TS-003 | HIGH | `execSync()` — always shell-equivalent; use `execFileSync(cmd, args)` instead |
+| TS-004 | HIGH | `shell: true` in `spawn()`/`exec()` options — command injection via unsanitised input |
+| TS-005 | HIGH | `exec()` with template literal — string interpolation enables command injection |
+| TS-006 | MEDIUM | `__proto__` assignment / `constructor["prototype"]` — prototype pollution |
 
 ---
 
