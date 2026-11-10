@@ -216,6 +216,19 @@ class _Visitor(ast.NodeVisitor):
                     )
                     break
 
+        # SRC-014: debug mode enabled — DEBUG = True (or truthy constant)
+        if isinstance(node.value, ast.Constant) and node.value.value is True:
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id.upper() in ("DEBUG", "DEBUG_MODE", "FLASK_DEBUG"):
+                    self._add(
+                        "SRC-014",
+                        Severity.MEDIUM,
+                        Confidence.HIGH,
+                        node.lineno,
+                        f"'{target.id} = True' enables debug mode — must not be True in production",
+                        "Set DEBUG via environment variable: DEBUG = os.environ.get('DEBUG', 'false') == 'true'.",
+                    )
+
         self.generic_visit(node)
 
     def visit_Compare(self, node: ast.Compare) -> None:

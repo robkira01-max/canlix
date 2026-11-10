@@ -104,6 +104,24 @@ _TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
 _TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
 
 # ---------------------------------------------------------------------------
+# TS-014: debug mode hardcoded — NODE_ENV="development" or DEBUG=true in source
+# ---------------------------------------------------------------------------
+
+_DEBUG_NODE_ENV = re.compile(
+    r"""(?x)
+    NODE_ENV\s*[=:]\s*["']development["']   # NODE_ENV = "development" (assignment or object prop)
+    | NODE_ENV\s*[=:]\s*["']dev["']          # NODE_ENV = "dev"
+    """,
+)
+_DEBUG_TRUE = re.compile(
+    r"""(?x)
+    (?:const|let|var|export\s+const)\s+
+    (?:DEBUG|debug|DEBUG_MODE|FLASK_DEBUG)   # variable name
+    \s*(?::\s*\w+\s*)?=\s*true\b             # = true (TypeScript/JS boolean)
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-013: timing-safe comparison — === / !== with security-sensitive names
 # ---------------------------------------------------------------------------
 
@@ -343,6 +361,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "TLS certificate verification disabled — allows MITM attacks",
             "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
+        )
+
+    # TS-014: debug mode hardcoded in source
+    if _DEBUG_NODE_ENV.search(raw) or _DEBUG_TRUE.search(raw):
+        _add(
+            "TS-014",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "Debug mode hardcoded in source — must not be enabled in production",
+            "Read NODE_ENV / DEBUG from process.env at runtime; never hardcode 'development' or true.",
         )
 
     # TS-013: timing-safe comparison — ==, ===, !=, !== used on a security-sensitive name vs non-literal

@@ -515,8 +515,55 @@ def test_TS013_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 13 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_thirteen_rules():
+# ── TS-014: debug mode hardcoded ─────────────────────────────────────────────
+
+
+def test_TS014_detects_NODE_ENV_development(tmp_path):
+    p = _ts(tmp_path, 'const NODE_ENV = "development";')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-014" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS014_detects_NODE_ENV_dev(tmp_path):
+    p = _ts(tmp_path, "const NODE_ENV = 'dev';")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-014" for f in findings)
+
+
+def test_TS014_detects_DEBUG_true(tmp_path):
+    p = _ts(tmp_path, "const DEBUG = true;")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-014" for f in findings)
+
+
+def test_TS014_passes_NODE_ENV_production(tmp_path):
+    p = _ts(tmp_path, 'const NODE_ENV = "production";')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-014" for f in findings)
+
+
+def test_TS014_passes_NODE_ENV_from_process_env(tmp_path):
+    p = _ts(tmp_path, "const env = process.env.NODE_ENV;")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-014" for f in findings)
+
+
+def test_TS014_passes_DEBUG_false(tmp_path):
+    p = _ts(tmp_path, "const DEBUG = false;")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-014" for f in findings)
+
+
+def test_TS014_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-014" for f in findings)
+
+
+# ── Full fixture — all 14 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_fourteen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 14)}
+    expected = {f"TS-{i:03d}" for i in range(1, 15)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

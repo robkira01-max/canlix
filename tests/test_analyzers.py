@@ -541,8 +541,55 @@ def test_SRC013_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 13 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_thirteen_rules():
+# ── SRC-014: debug mode enabled ──────────────────────────────────────────────
+
+
+def test_SRC014_detects_DEBUG_true(tmp_path):
+    p = _py(tmp_path, "DEBUG = True")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-014" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC014_detects_FLASK_DEBUG_true(tmp_path):
+    p = _py(tmp_path, "FLASK_DEBUG = True")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-014" for f in findings)
+
+
+def test_SRC014_detects_DEBUG_MODE_true(tmp_path):
+    p = _py(tmp_path, "DEBUG_MODE = True")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-014" for f in findings)
+
+
+def test_SRC014_passes_DEBUG_false(tmp_path):
+    p = _py(tmp_path, "DEBUG = False")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-014" for f in findings)
+
+
+def test_SRC014_passes_DEBUG_from_env(tmp_path):
+    p = _py(tmp_path, "import os\nDEBUG = os.environ.get('DEBUG', 'false') == 'true'")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-014" for f in findings)
+
+
+def test_SRC014_passes_other_true_assignment(tmp_path):
+    p = _py(tmp_path, "VERBOSE = True")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-014" for f in findings)
+
+
+def test_SRC014_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-014" for f in findings)
+
+
+# ── Full fixture — all 14 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_fourteen_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 14)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 15)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

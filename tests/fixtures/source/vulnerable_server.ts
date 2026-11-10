@@ -5,6 +5,9 @@
 
 import { exec, execSync, spawn } from "child_process";
 
+// TS-014: debug mode hardcoded (MEDIUM)
+const NODE_ENV = "development";
+
 // TS-001: hardcoded GitHub token (key prefix — CRITICAL)
 const GH_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz1234567890ab";
 

@@ -10,6 +10,9 @@ import subprocess
 import requests
 import yaml
 
+# SRC-014: debug mode enabled in source
+DEBUG = True
+
 cursor = None  # represents a live DB cursor in real code
 
 # SRC-001: hardcoded GitHub token (key prefix pattern)
