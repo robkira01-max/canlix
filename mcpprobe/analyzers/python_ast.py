@@ -335,6 +335,30 @@ class _Visitor(ast.NodeVisitor):
                     "Use parameterised queries: cursor.execute(sql, [params]). Never format SQL strings.",
                 )
 
+        # SRC-011: TLS verification disabled — verify=False kwarg
+        for kw in node.keywords:
+            if kw.arg == "verify" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
+                self._add(
+                    "SRC-011",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "TLS certificate verification disabled (verify=False) — allows MITM attacks",
+                    "Remove verify=False. Use certifi or the system CA bundle. Never disable TLS verification.",
+                )
+                break
+
+        # SRC-011: ssl._create_unverified_context() explicitly bypasses certificate checks
+        if fname in ("ssl._create_unverified_context",):
+            self._add(
+                "SRC-011",
+                Severity.HIGH,
+                Confidence.HIGH,
+                node.lineno,
+                "ssl._create_unverified_context() disables certificate verification — allows MITM attacks",
+                "Use ssl.create_default_context() without modification to enforce certificate verification.",
+            )
+
         self.generic_visit(node)
 
 

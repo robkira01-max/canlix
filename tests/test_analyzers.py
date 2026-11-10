@@ -162,7 +162,7 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_ten_rules():
+def test_vulnerable_fixture_has_all_eleven_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
     expected = {
@@ -176,6 +176,7 @@ def test_vulnerable_fixture_has_all_ten_rules():
         "SRC-008",
         "SRC-009",
         "SRC-010",
+        "SRC-011",
     }
     assert expected.issubset(rule_ids)
 
@@ -408,3 +409,53 @@ def test_SRC010_fixture_fires_on_vulnerable_server(tmp_path):
 
     findings = _ap(FIXTURES / "vulnerable_server.py")
     assert any(f.rule_id == "SRC-010" for f in findings)
+
+
+# ── SRC-011: TLS verification disabled ──────────────────────────────────────
+
+
+def test_SRC011_detects_verify_false_in_requests_get(tmp_path):
+    p = _py(tmp_path, 'import requests\nrequests.get("https://example.com", verify=False)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-011" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_SRC011_detects_verify_false_in_requests_post(tmp_path):
+    p = _py(tmp_path, 'import requests\nrequests.post("https://api.example.com", json={}, verify=False)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-011" for f in findings)
+
+
+def test_SRC011_detects_verify_false_in_httpx(tmp_path):
+    p = _py(tmp_path, 'import httpx\nhttpx.get("https://example.com", verify=False)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-011" for f in findings)
+
+
+def test_SRC011_detects_ssl_create_unverified_context(tmp_path):
+    p = _py(tmp_path, "import ssl\nctx = ssl._create_unverified_context()")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-011" for f in findings)
+
+
+def test_SRC011_passes_verify_true(tmp_path):
+    p = _py(tmp_path, 'import requests\nrequests.get("https://example.com", verify=True)')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-011" for f in findings)
+
+
+def test_SRC011_passes_no_verify_kwarg(tmp_path):
+    p = _py(tmp_path, 'import requests\nrequests.get("https://example.com")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-011" for f in findings)
+
+
+def test_SRC011_passes_ssl_create_default_context(tmp_path):
+    p = _py(tmp_path, "import ssl\nctx = ssl.create_default_context()")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-011" for f in findings)
+
+
+def test_SRC011_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-011" for f in findings)

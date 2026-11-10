@@ -221,8 +221,9 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | SRC-008 | MEDIUM | `open()` / `Path()` / `os.remove()` with path from function parameter — path traversal |
 | SRC-009 | HIGH | `cursor.execute()` / `db.query()` with f-string or `+`/`%` interpolation — SQL injection |
 | SRC-010 | MEDIUM | `random.*` assigned to a security-sensitive variable (token, secret, password, otp…) — insecure PRNG |
+| SRC-011 | HIGH | `verify=False` in HTTP client call or `ssl._create_unverified_context()` — TLS verification disabled, MITM risk |
 
-#### TypeScript / JavaScript rules (10) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
+#### TypeScript / JavaScript rules (11) — `.ts`, `.js`, `.mjs`, `.cjs` files, regex-based, no Node.js required
 
 | Rule | Severity | Description |
 |---|---|---|
@@ -236,6 +237,7 @@ SARIF output is supported by all three commands (`scan`, `analyze`, `probe`) and
 | TS-008 | MEDIUM | `fs.readFile/writeFile/unlink` with variable path — path traversal |
 | TS-009 | HIGH | `.query()`/`.execute()`/`knex.raw()` with template literal interpolation — SQL injection |
 | TS-010 | MEDIUM | `Math.random()` on a line assigning to `token`, `secret`, `password`, `otp`… — insecure PRNG |
+| TS-011 | HIGH | `rejectUnauthorized: false` or `NODE_TLS_REJECT_UNAUTHORIZED=0` — TLS verification disabled, MITM risk |
 
 ---
 

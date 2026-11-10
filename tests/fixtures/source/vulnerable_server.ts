@@ -57,3 +57,6 @@ export function generateSessionToken(): string {
   const token = Math.random().toString(36).substring(2);
   return token;
 }
+
+// TS-011: TLS certificate verification disabled (HIGH)
+const tlsOptions = { rejectUnauthorized: false };

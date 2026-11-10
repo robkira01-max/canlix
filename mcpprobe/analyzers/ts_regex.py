@@ -84,6 +84,15 @@ _PROTO_POLLUTION = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-011: TLS verification disabled
+# ---------------------------------------------------------------------------
+
+# rejectUnauthorized: false — in any options object (https.request, tls.connect, etc.)
+_TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
+# NODE_TLS_REJECT_UNAUTHORIZED set to "0" or 0 at runtime
+_TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
+
+# ---------------------------------------------------------------------------
 # TS-010: insecure PRNG — Math.random() in a security-sensitive context
 # ---------------------------------------------------------------------------
 
@@ -278,6 +287,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "File I/O with variable path — path traversal risk",
             "Validate the path with path.resolve() + a trusted prefix check before I/O operations.",
+        )
+
+    # TS-011: TLS verification disabled
+    if _TLS_REJECT_FALSE.search(raw) or _TLS_ENV_ZERO.search(raw):
+        _add(
+            "TS-011",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "TLS certificate verification disabled — allows MITM attacks",
+            "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
         )
 
     # TS-010: insecure PRNG — Math.random() used in a security-sensitive context

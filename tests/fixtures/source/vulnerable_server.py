@@ -3,6 +3,7 @@
 import os
 import pickle
 import random
+import ssl
 import subprocess
 
 import requests
@@ -61,3 +62,7 @@ def issue_session_token() -> str:
     # SRC-010: insecure PRNG for security token generation
     token = random.randint(0, 999999)
     return str(token)
+
+
+# SRC-011: TLS certificate verification disabled
+ssl._create_unverified_context()

@@ -177,7 +177,7 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_ten_rules():
+def test_vulnerable_ts_fixture_has_all_eleven_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
     expected = {
@@ -191,6 +191,7 @@ def test_vulnerable_ts_fixture_has_all_ten_rules():
         "TS-008",
         "TS-009",
         "TS-010",
+        "TS-011",
     }
     assert expected.issubset(rule_ids)
 
@@ -383,3 +384,47 @@ def test_TS010_passes_crypto_random_bytes_for_token(tmp_path):
 def test_TS010_fixture_fires_on_vulnerable_server(tmp_path):
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     assert any(f.rule_id == "TS-010" for f in findings)
+
+
+# ── TS-011: TLS verification disabled ───────────────────────────────────────
+
+
+def test_TS011_detects_reject_unauthorized_false(tmp_path):
+    p = _ts(tmp_path, "const opts = { rejectUnauthorized: false };")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-011" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_TS011_detects_reject_unauthorized_false_in_https_options(tmp_path):
+    p = _ts(tmp_path, "https.request({ hostname: 'example.com', rejectUnauthorized: false });")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-011" for f in findings)
+
+
+def test_TS011_detects_node_tls_env_string(tmp_path):
+    p = _ts(tmp_path, 'process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-011" for f in findings)
+
+
+def test_TS011_detects_node_tls_env_bare(tmp_path):
+    p = _ts(tmp_path, "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-011" for f in findings)
+
+
+def test_TS011_passes_reject_unauthorized_true(tmp_path):
+    p = _ts(tmp_path, "const opts = { rejectUnauthorized: true };")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-011" for f in findings)
+
+
+def test_TS011_passes_no_tls_options(tmp_path):
+    p = _ts(tmp_path, 'const opts = { hostname: "example.com", port: 443 };')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-011" for f in findings)
+
+
+def test_TS011_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-011" for f in findings)
