@@ -469,3 +469,18 @@ def tokenise_and_run(cmd: str) -> None:
     # SRC-075: shlex.split with user-controlled input — shell tokenisation injection
     args = shlex.split(cmd)
     subprocess.run(args)
+
+
+def inspect_namespace(key: str) -> object:
+    # SRC-076: globals() called inside a function with parameters — namespace exposure
+    return globals()[key]
+
+
+def create_user_dir(path: str) -> None:
+    # SRC-077: os.makedirs with user-controlled path — arbitrary directory creation
+    os.makedirs(path, exist_ok=True)
+
+
+def capture_output(cmd: str) -> bytes:
+    # SRC-078: subprocess.check_output(cmd, shell=True) with user-controlled cmd
+    return subprocess.check_output(cmd, shell=True)

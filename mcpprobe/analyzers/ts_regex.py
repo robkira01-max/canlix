@@ -752,6 +752,31 @@ _PBKDF2_REQ = re.compile(
     """,
 )
 
+# TS-076: NoSQL injection — .find(req.xxx) passes user object to MongoDB query
+_NOSQL_FIND_REQ = re.compile(
+    r"""(?x)
+    \.find\s*\(\s*
+    req\.(?:query|params|body)(?:\.[A-Za-z_$][A-Za-z0-9_$.]*)?
+    \s*[,)]
+    """,
+)
+
+# TS-077: spawn/spawnSync with template literal containing req.xxx as program name
+_SPAWN_TMPL_REQ = re.compile(
+    r"""(?x)
+    \b(?:child_process\.)?spawn(?:Sync)?\s*\(\s*`[^`]*
+    \$\{req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*\}
+    """,
+)
+
+# TS-078: res.cookie(name, req.xxx) — user-controlled cookie value
+_COOKIE_VALUE_REQ = re.compile(
+    r"""(?x)
+    \bres\.cookie\s*\([^,]+,\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1569,6 +1594,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "crypto.pbkdf2(req.xxx) — user-controlled input in async KDF enables CPU-exhaustion DoS",
             "Cap password length and enforce a fixed iteration count. Never let callers control KDF parameters.",
+        )
+
+    # TS-076: .find(req.xxx) — NoSQL injection, user object passed to MongoDB query
+    if _NOSQL_FIND_REQ.search(raw):
+        _add(
+            "TS-076",
+            Severity.HIGH,
+            Confidence.HIGH,
+            ".find(req.xxx) — user-controlled query object enables NoSQL operator injection",
+            "Validate and sanitise query fields. Never pass raw request objects to database query methods.",
+        )
+
+    # TS-077: spawn(template-literal with req.xxx) — command injection via template literal
+    if _SPAWN_TMPL_REQ.search(raw):
+        _add(
+            "TS-077",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "spawn(`...${req.xxx}`) — user-controlled template literal in spawn enables command injection",
+            "Build the command argument list from allowlisted values. Never interpolate request data into spawn().",
+        )
+
+    # TS-078: res.cookie(name, req.xxx) — user-controlled cookie value
+    if _COOKIE_VALUE_REQ.search(raw):
+        _add(
+            "TS-078",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.cookie(name, req.xxx) — user-controlled cookie value enables session fixation and header injection",
+            "Validate and sanitise the cookie value. Never set cookies directly from request data.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

@@ -382,3 +382,18 @@ function appendLog(req: any, msg: string): void {
 function deriveKey(req: any, salt: Buffer): void {
   crypto.pbkdf2(req.query.password, salt, 100000, 64, "sha256", () => {});
 }
+
+// TS-076: .find() with user-controlled query object — NoSQL injection
+async function findUser(req: any): Promise<unknown> {
+  return db.collection("users").find(req.query, {});
+}
+
+// TS-077: spawn() with template literal containing request data — command injection
+function runTool2(req: any): void {
+  spawn(`/usr/bin/${req.query.tool}`, ["--run"]);
+}
+
+// TS-078: res.cookie() with user-controlled value — session fixation
+function setCookie(res: any, req: any): void {
+  res.cookie("pref", req.query.theme, { httpOnly: true });
+}

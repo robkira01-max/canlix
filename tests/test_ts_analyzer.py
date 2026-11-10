@@ -1831,11 +1831,65 @@ def test_TS075_passes_pbkdf2_literal(tmp_path):
     assert not any(f.rule_id == "TS-075" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 75 rules ───────────────────────────────────────────────
+# ── TS-076: .find(req.xxx) — NoSQL injection ─────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_seventy_five_rules():
+def test_TS076_detects_find_req(tmp_path):
+    p = _ts(tmp_path, "db.collection('users').find(req.query, {});")
+    assert any(f.rule_id == "TS-076" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS076_detects_find_body(tmp_path):
+    p = _ts(tmp_path, "Model.find(req.body);")
+    assert any(f.rule_id == "TS-076" for f in analyze_typescript(p))
+
+
+def test_TS076_passes_find_literal(tmp_path):
+    p = _ts(tmp_path, 'Model.find({ role: "user" });')
+    assert not any(f.rule_id == "TS-076" for f in analyze_typescript(p))
+
+
+# ── TS-077: spawn(`...${req.xxx}`) — template literal command injection ───────
+
+
+def test_TS077_detects_spawn_template_req(tmp_path):
+    p = _ts(tmp_path, "spawn(`/usr/bin/${req.query.tool}`, ['--run']);")
+    assert any(f.rule_id == "TS-077" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS077_detects_spawnSync_template_req(tmp_path):
+    p = _ts(tmp_path, "spawnSync(`/bin/${req.params.cmd}`, []);")
+    assert any(f.rule_id == "TS-077" for f in analyze_typescript(p))
+
+
+def test_TS077_passes_spawn_literal(tmp_path):
+    p = _ts(tmp_path, 'spawn("/usr/bin/ls", ["-la"]);')
+    assert not any(f.rule_id == "TS-077" for f in analyze_typescript(p))
+
+
+# ── TS-078: res.cookie(name, req.xxx) — user-controlled cookie value ──────────
+
+
+def test_TS078_detects_cookie_value_req(tmp_path):
+    p = _ts(tmp_path, 'res.cookie("theme", req.query.theme, { httpOnly: true });')
+    assert any(f.rule_id == "TS-078" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS078_detects_cookie_body_value(tmp_path):
+    p = _ts(tmp_path, 'res.cookie("lang", req.body.locale);')
+    assert any(f.rule_id == "TS-078" for f in analyze_typescript(p))
+
+
+def test_TS078_passes_cookie_literal_value(tmp_path):
+    p = _ts(tmp_path, 'res.cookie("session", token, { httpOnly: true, secure: true });')
+    assert not any(f.rule_id == "TS-078" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 78 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_seventy_eight_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 76)}
+    expected = {f"TS-{i:03d}" for i in range(1, 79)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

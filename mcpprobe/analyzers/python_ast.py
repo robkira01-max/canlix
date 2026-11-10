@@ -179,6 +179,10 @@ _GETOUTPUT_FUNCS = frozenset({"subprocess.getoutput", "subprocess.getstatusoutpu
 _SEND_FROM_DIR_FUNCS = frozenset({"send_from_directory", "flask.send_from_directory"})
 # SRC-075: shlex.split with user-controlled input — pre-tokenises attacker shell input before subprocess
 _SHLEX_SPLIT_FUNCS = frozenset({"shlex.split", "split"})
+# SRC-077: os.makedirs with user-controlled path — arbitrary directory creation / path traversal
+_MAKEDIRS_FUNCS = frozenset({"os.makedirs", "os.mkdir", "makedirs", "mkdir"})
+# SRC-078: subprocess.check_output(cmd, shell=True) with user-controlled cmd — shell injection
+_CHECK_OUTPUT_FUNCS = frozenset({"subprocess.check_output", "check_output"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1480,6 +1484,53 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"shlex.split({inp_arg.id}) — user-controlled shell tokenisation enables command injection",
                     "Never pass untrusted input to shlex.split(). Build the argument list from allowlisted values.",
+                )
+
+        # SRC-076: globals()[user_key] / locals()[user_key] — user-controlled namespace access
+        if fname in {"globals", "locals"} and not node.args:
+            # Look for Subscript parent — handled via generic_visit; detect Call followed by subscript
+            # We detect it as: the Call node's parent is a Subscript with user-controlled key.
+            # This is best handled by detecting getattr-style access; approximate via checking if the
+            # surrounding node context matches. Use a simpler heuristic: flag direct globals()/locals()
+            # calls inside a function that has parameters (attacker can influence what happens next).
+            if self._param_names:
+                self._add(
+                    "SRC-076",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    "globals()/locals() inside a parameterised function — exposes namespace to manipulation",
+                    "Never call globals() or locals() with user-supplied keys. Use an explicit allowlist dict.",
+                )
+
+        # SRC-077: os.makedirs(user_path) — user-controlled directory creation
+        if fname in _MAKEDIRS_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-077",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.makedirs({path_arg.id}) — user-controlled path enables arbitrary directory creation",
+                    "Resolve the path against a fixed base directory and validate it stays within that directory.",
+                )
+
+        # SRC-078: subprocess.check_output(cmd, shell=True) with user-controlled cmd
+        if fname in _CHECK_OUTPUT_FUNCS and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            has_shell = any(
+                kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                for kw in node.keywords
+            )
+            if has_shell and self._has_param_in_expr(cmd_arg):
+                self._add(
+                    "SRC-078",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "check_output(cmd, shell=True) with user-controlled cmd — shell injection",
+                    "Remove shell=True and pass a list of arguments. Never interpolate user input into shell commands.",
                 )
 
         # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple

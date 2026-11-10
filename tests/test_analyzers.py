@@ -1786,11 +1786,53 @@ def test_SRC075_passes_shlex_split_literal(tmp_path):
     assert not any(f.rule_id == "SRC-075" for f in analyze_python(p))
 
 
-# ── Full fixture — all 75 rules ───────────────────────────────────────────────
+# ── SRC-076: globals()/locals() in parameterised function — namespace exposure ─
 
 
-def test_vulnerable_fixture_has_all_seventy_five_rules():
+def test_SRC076_detects_globals_in_function(tmp_path):
+    p = _py(tmp_path, "def lookup(key: str):\n    return globals()[key]")
+    assert any(f.rule_id == "SRC-076" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC076_passes_globals_at_module_level(tmp_path):
+    p = _py(tmp_path, "g = globals()")
+    assert not any(f.rule_id == "SRC-076" for f in analyze_python(p))
+
+
+# ── SRC-077: os.makedirs(user_path) — arbitrary directory creation ────────────
+
+
+def test_SRC077_detects_makedirs_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef make(path: str):\n    os.makedirs(path)")
+    assert any(f.rule_id == "SRC-077" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC077_passes_makedirs_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.makedirs('/tmp/app/data')")
+    assert not any(f.rule_id == "SRC-077" for f in analyze_python(p))
+
+
+# ── SRC-078: check_output(cmd, shell=True) with param — shell injection ────────
+
+
+def test_SRC078_detects_check_output_shell_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import subprocess\ndef run(cmd: str):\n    subprocess.check_output(cmd, shell=True)",
+    )
+    assert any(f.rule_id == "SRC-078" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC078_passes_check_output_no_shell(tmp_path):
+    p = _py(tmp_path, "import subprocess\ndef run(cmd: str):\n    subprocess.check_output(cmd)")
+    assert not any(f.rule_id == "SRC-078" for f in analyze_python(p))
+
+
+# ── Full fixture — all 78 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_seventy_eight_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 76)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 79)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
