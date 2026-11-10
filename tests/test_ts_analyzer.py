@@ -562,8 +562,55 @@ def test_TS014_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 14 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_fourteen_rules():
+# ── TS-015: open redirect ─────────────────────────────────────────────────────
+
+
+def test_TS015_detects_res_redirect_variable(tmp_path):
+    p = _ts(tmp_path, "res.redirect(url);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-015" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS015_detects_window_location_variable(tmp_path):
+    p = _ts(tmp_path, "window.location.href = redirectUrl;")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-015" for f in findings)
+
+
+def test_TS015_detects_response_redirect(tmp_path):
+    p = _ts(tmp_path, "response.redirect(targetUrl);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-015" for f in findings)
+
+
+def test_TS015_passes_res_redirect_literal(tmp_path):
+    p = _ts(tmp_path, 'res.redirect("/dashboard");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-015" for f in findings)
+
+
+def test_TS015_passes_window_location_literal(tmp_path):
+    p = _ts(tmp_path, 'window.location.href = "/home";')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-015" for f in findings)
+
+
+def test_TS015_passes_window_location_https(tmp_path):
+    p = _ts(tmp_path, 'window.location.href = "https://example.com";')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-015" for f in findings)
+
+
+def test_TS015_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-015" for f in findings)
+
+
+# ── Full fixture — all 15 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_fifteen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 15)}
+    expected = {f"TS-{i:03d}" for i in range(1, 16)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

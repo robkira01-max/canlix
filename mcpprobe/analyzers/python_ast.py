@@ -45,6 +45,13 @@ _HTTP_CLIENT_FUNCS = {
     "urlopen",
     "urllib.request.urlopen",
 }
+_REDIRECT_FUNCS = {
+    "redirect",
+    "flask.redirect",
+    "werkzeug.utils.redirect",
+    "fastapi.responses.RedirectResponse",
+    "starlette.responses.RedirectResponse",
+}
 _PATH_IO_FUNCS = {
     "open",
     "Path",  # Path(user_path) — entry point for pathlib traversal
@@ -367,6 +374,19 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     "SQL query built from function parameter — SQL injection risk",
                     "Use parameterised queries: cursor.execute(sql, [params]). Never format SQL strings.",
+                )
+
+        # SRC-015: open redirect — redirect() with a URL from a function parameter
+        if fname in _REDIRECT_FUNCS and self._param_names and node.args:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-015",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"Open redirect: redirect() with parameter '{url_arg.id}' — attacker-controlled URL",
+                    "Validate the redirect URL against an allowlist. Never redirect to a raw user-supplied value.",
                 )
 
         # SRC-012: weak hash algorithm — MD5 or SHA-1

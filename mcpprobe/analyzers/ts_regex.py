@@ -104,6 +104,22 @@ _TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
 _TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
 
 # ---------------------------------------------------------------------------
+# TS-015: open redirect — location / res.redirect with a non-literal URL
+# ---------------------------------------------------------------------------
+
+_OPEN_REDIRECT = re.compile(
+    r"""(?x)
+    window\.location(?:\.href)?\s*=\s*[A-Za-z_$]      # window.location[.href] = variable
+    | res\.redirect\s*\(\s*[A-Za-z_$]                   # res.redirect(variable
+    | response\.redirect\s*\(\s*[A-Za-z_$]              # response.redirect(variable
+    | router\.navigate\s*\(\s*[A-Za-z_$]                # Angular router.navigate(variable
+    | next\s*\(\s*['"]?redirect['"]\s*,\s*[A-Za-z_$]   # next('redirect', variable)
+    """,
+)
+# Skip lines where the URL is clearly a literal string
+_REDIRECT_LITERAL = re.compile(r"""(?:\.redirect|\.href|\.location)\s*\(?[= ]*["'`/]""")
+
+# ---------------------------------------------------------------------------
 # TS-014: debug mode hardcoded — NODE_ENV="development" or DEBUG=true in source
 # ---------------------------------------------------------------------------
 
@@ -361,6 +377,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "TLS certificate verification disabled — allows MITM attacks",
             "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
+        )
+
+    # TS-015: open redirect — location / res.redirect with a non-literal URL
+    if _OPEN_REDIRECT.search(raw) and not _REDIRECT_LITERAL.search(raw):
+        _add(
+            "TS-015",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "Open redirect: URL set to a variable — attacker can redirect to a malicious site",
+            "Validate the redirect URL against an allowlist. Never redirect to a raw user-supplied value.",
         )
 
     # TS-014: debug mode hardcoded in source

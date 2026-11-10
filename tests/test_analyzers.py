@@ -588,8 +588,57 @@ def test_SRC014_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 14 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_fourteen_rules():
+# ── SRC-015: open redirect ────────────────────────────────────────────────────
+
+
+def test_SRC015_detects_redirect_with_param(tmp_path):
+    p = _py(tmp_path, "def go(url):\n    return redirect(url)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-015" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC015_detects_flask_redirect(tmp_path):
+    p = _py(tmp_path, "def go(url):\n    return flask.redirect(url)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-015" for f in findings)
+
+
+def test_SRC015_detects_werkzeug_redirect(tmp_path):
+    p = _py(tmp_path, "def go(url):\n    return werkzeug.utils.redirect(url)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-015" for f in findings)
+
+
+def test_SRC015_passes_redirect_with_literal(tmp_path):
+    p = _py(tmp_path, 'def go():\n    return redirect("/home")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-015" for f in findings)
+
+
+def test_SRC015_passes_redirect_outside_function(tmp_path):
+    # No param scope — module-level variable is not a function parameter
+    p = _py(tmp_path, 'destination = "/dashboard"\nredirect(destination)')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-015" for f in findings)
+
+
+def test_SRC015_passes_redirect_with_different_param(tmp_path):
+    # `url` is not a parameter, `name` is — redirect(url) should not fire
+    p = _py(tmp_path, 'def go(name):\n    url = "/home"\n    return redirect(url)')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-015" for f in findings)
+
+
+def test_SRC015_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-015" for f in findings)
+
+
+# ── Full fixture — all 15 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_fifteen_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 15)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 16)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

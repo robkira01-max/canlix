@@ -79,3 +79,12 @@ stored_token = "abc"
 user_token = "xyz"
 if stored_token == user_token:
     pass
+
+
+def redirect(url: str) -> str:  # noqa: F811 — shadowed intentionally for test fixture
+    return url
+
+
+def do_redirect(url: str):
+    # SRC-015: open redirect — redirect() with user-supplied URL
+    return redirect(url)
