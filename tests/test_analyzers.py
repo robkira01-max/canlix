@@ -1385,11 +1385,50 @@ def test_SRC048_passes_extractall_with_filter(tmp_path):
     assert not any(f.rule_id == "SRC-048" for f in analyze_python(p))
 
 
-# ── Full fixture — all 48 rules ───────────────────────────────────────────────
+# ── SRC-049: socket.setdefaulttimeout(None) ───────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_forty_eight_rules():
+def test_SRC049_detects_setdefaulttimeout_none(tmp_path):
+    p = _py(tmp_path, "import socket\nsocket.setdefaulttimeout(None)")
+    assert any(f.rule_id == "SRC-049" and f.severity == Severity.LOW for f in analyze_python(p))
+
+
+def test_SRC049_passes_setdefaulttimeout_finite(tmp_path):
+    p = _py(tmp_path, "import socket\nsocket.setdefaulttimeout(30)")
+    assert not any(f.rule_id == "SRC-049" for f in analyze_python(p))
+
+
+# ── SRC-050: ctypes.CDLL with user-controlled path ───────────────────────────
+
+
+def test_SRC050_detects_ctypes_CDLL_param(tmp_path):
+    p = _py(tmp_path, "import ctypes\ndef load(lib_path: str):\n    ctypes.CDLL(lib_path)")
+    assert any(f.rule_id == "SRC-050" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_SRC050_passes_ctypes_CDLL_literal(tmp_path):
+    p = _py(tmp_path, "import ctypes\nctypes.CDLL('libssl.so')")
+    assert not any(f.rule_id == "SRC-050" for f in analyze_python(p))
+
+
+# ── SRC-051: threading.Thread(target=param) ───────────────────────────────────
+
+
+def test_SRC051_detects_thread_target_param(tmp_path):
+    p = _py(tmp_path, "import threading\ndef run(callback):\n    threading.Thread(target=callback).start()")
+    assert any(f.rule_id == "SRC-051" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC051_passes_thread_target_literal_func(tmp_path):
+    p = _py(tmp_path, "import threading\ndef worker(): pass\nthreading.Thread(target=worker).start()")
+    assert not any(f.rule_id == "SRC-051" for f in analyze_python(p))
+
+
+# ── Full fixture — all 51 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_fifty_one_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 49)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 52)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -140,6 +140,10 @@ _SEND_FILE_FUNCS = frozenset({"send_file", "flask.send_file", "send_from_directo
 _IMPORT_MODULE_FUNCS = frozenset({"importlib.import_module", "import_module", "__import__"})
 # SRC-048: archive extraction without path filter — zip/tar slip
 _EXTRACTALL_PARENTS = frozenset({"zipfile.ZipFile", "tarfile.open", "tarfile.TarFile", "ZipFile", "TarFile"})
+# SRC-050: dynamic native library loading with user-controlled path — arbitrary code execution
+_CTYPES_LOAD_FUNCS = frozenset({"ctypes.CDLL", "ctypes.cdll.LoadLibrary", "ctypes.WinDLL", "ctypes.OleDLL"})
+# SRC-051: threading.Thread with user-controlled target — arbitrary callable execution
+_THREAD_FUNCS = frozenset({"threading.Thread", "Thread"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1188,6 +1192,45 @@ class _Visitor(ast.NodeVisitor):
                 "extractall() without a path filter allows zip/tar slip — entries can overwrite arbitrary files",
                 "Pass filter='data' (Python 3.12+) or validate each member path against the target directory.",
             )
+
+        # SRC-049: socket.setdefaulttimeout(None) — infinite timeout, DoS risk
+        if fname == "socket.setdefaulttimeout" and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Constant) and first_arg.value is None:
+                self._add(
+                    "SRC-049",
+                    Severity.LOW,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "socket.setdefaulttimeout(None) removes all timeouts — a stalled peer causes indefinite hang",
+                    "Set a finite timeout (e.g. socket.setdefaulttimeout(30)) or use per-socket timeouts.",
+                )
+
+        # SRC-050: ctypes.CDLL / LoadLibrary with user-controlled path — loads arbitrary native code
+        if fname in _CTYPES_LOAD_FUNCS and node.args and self._param_names:
+            lib_arg = node.args[0]
+            if isinstance(lib_arg, ast.Name) and lib_arg.id in self._param_names:
+                self._add(
+                    "SRC-050",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}({lib_arg.id}) — user-controlled library path executes arbitrary native code",
+                    "Never pass user input to ctypes loaders. Allowlist permitted library paths.",
+                )
+
+        # SRC-051: threading.Thread(target=param) — user-controlled callable executed in a thread
+        if fname in _THREAD_FUNCS and self._param_names:
+            target_kw = next((kw for kw in node.keywords if kw.arg == "target"), None)
+            if target_kw and isinstance(target_kw.value, ast.Name) and target_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-051",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Thread(target={target_kw.value.id}) — user-controlled callable executed in a new thread",
+                    "Never pass user-supplied callables to Thread(target=). Use a fixed, allowlisted function.",
+                )
 
         self.generic_visit(node)
 

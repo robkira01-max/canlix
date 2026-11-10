@@ -241,3 +241,18 @@ import { fork } from "child_process";
 function runScript(req: any): void {
   fork(req.query.script);
 }
+
+// TS-049: setTimeout with a variable callback — potential code injection
+function scheduleTask(handler: Function): void {
+  setTimeout(handler, 1000);
+}
+
+// TS-050: process.exit() with user-controlled argument — denial of service
+function shutdown(req: any): void {
+  process.exit(req.query.code);
+}
+
+// TS-051: DOM open redirect via window.location from request data
+function redirectUser(req: any): void {
+  window.location = req.query.returnUrl;
+}

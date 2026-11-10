@@ -542,6 +542,41 @@ _SEND_FILE_FROM_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-049: setTimeout / setInterval with a variable (non-literal) as the callback
+# ---------------------------------------------------------------------------
+
+_SET_TIMEOUT_VAR = re.compile(
+    r"""(?x)
+    \bset(?:Timeout|Interval)\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*  # setTimeout(variable, ...)
+    """,
+)
+_SET_TIMEOUT_LITERAL_SAFE = re.compile(
+    r"""(?x)
+    \bset(?:Timeout|Interval)\s*\(\s*(?:function\s*\(|(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][A-Za-z0-9_$]*)\s*=>|\(\s*\)\s*=>)
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-050: process.exit() with user-controlled argument — denial of service
+# ---------------------------------------------------------------------------
+
+_PROCESS_EXIT_FROM_REQ = re.compile(
+    r"""(?x)
+    \bprocess\.exit\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-051: DOM open redirect — window.location / location.href set from request
+# ---------------------------------------------------------------------------
+
+_DOM_REDIRECT = re.compile(
+    r"""(?x)
+    (?:window\.location|location\.href)\s*=\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-046: fs.writeFile / fs.writeFileSync with user-controlled path from request
 # ---------------------------------------------------------------------------
 
@@ -1141,6 +1176,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.sendFile/download with request data — user-controlled path allows reading any file",
             "Validate the path against an allowlist or serve from a fixed directory using path.basename().",
+        )
+
+    # TS-049: setTimeout/setInterval with a variable callback — potential code injection
+    if _SET_TIMEOUT_VAR.search(raw) and not _SET_TIMEOUT_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-049",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "setTimeout/setInterval with a variable callback — user-controlled callable may execute arbitrary code",
+            "Use a fixed, allowlisted callback function. Never pass user-controlled values as timer callbacks.",
+        )
+
+    # TS-050: process.exit() with user-controlled argument — denial of service
+    if _PROCESS_EXIT_FROM_REQ.search(raw):
+        _add(
+            "TS-050",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "process.exit(req.xxx) — user-controlled exit code allows denial of service",
+            "Never call process.exit() with user-supplied values. Handle errors with exceptions.",
+        )
+
+    # TS-051: DOM open redirect — window.location set from request parameter
+    if _DOM_REDIRECT.search(raw):
+        _add(
+            "TS-051",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "window.location = req.xxx — DOM-based open redirect to user-controlled URL",
+            "Validate the target URL against an allowlist of permitted origins before redirecting.",
         )
 
     # TS-046: fs.writeFile with user-controlled path from request — write to arbitrary path

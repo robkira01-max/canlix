@@ -289,3 +289,24 @@ def extract_archive(archive_path: str, dest: str):
     # SRC-048: extractall() without filter — zip slip path traversal
     with zipfile.ZipFile(archive_path) as zf:
         zf.extractall(dest)
+
+
+import ctypes  # noqa: E402
+import socket  # noqa: E402
+import threading  # noqa: E402
+
+
+def disable_socket_timeout():
+    # SRC-049: infinite socket timeout — stalled peer causes indefinite hang
+    socket.setdefaulttimeout(None)
+
+
+def load_native_library(lib_path: str):
+    # SRC-050: user-controlled native library path — arbitrary code execution
+    return ctypes.CDLL(lib_path)
+
+
+def run_in_thread(callback: callable):
+    # SRC-051: user-controlled callable in Thread target — arbitrary code execution
+    t = threading.Thread(target=callback)
+    t.start()

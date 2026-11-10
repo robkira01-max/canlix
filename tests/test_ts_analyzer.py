@@ -1370,11 +1370,60 @@ def test_TS048_passes_fork_literal_path(tmp_path):
     assert not any(f.rule_id == "TS-048" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 48 rules ───────────────────────────────────────────────
+# ── TS-049: setTimeout/setInterval with variable callback ─────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_forty_eight_rules():
+def test_TS049_detects_setTimeout_variable(tmp_path):
+    p = _ts(tmp_path, "setTimeout(handler, 1000);")
+    assert any(f.rule_id == "TS-049" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS049_passes_setTimeout_arrow_function(tmp_path):
+    p = _ts(tmp_path, "setTimeout(() => doWork(), 1000);")
+    assert not any(f.rule_id == "TS-049" for f in analyze_typescript(p))
+
+
+def test_TS049_passes_setTimeout_function_expression(tmp_path):
+    p = _ts(tmp_path, "setTimeout(function() { doWork(); }, 1000);")
+    assert not any(f.rule_id == "TS-049" for f in analyze_typescript(p))
+
+
+# ── TS-050: process.exit() with user-controlled argument ─────────────────────
+
+
+def test_TS050_detects_process_exit_req_query(tmp_path):
+    p = _ts(tmp_path, "process.exit(req.query.code);")
+    assert any(f.rule_id == "TS-050" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS050_passes_process_exit_literal(tmp_path):
+    p = _ts(tmp_path, "process.exit(1);")
+    assert not any(f.rule_id == "TS-050" for f in analyze_typescript(p))
+
+
+# ── TS-051: DOM open redirect via window.location ────────────────────────────
+
+
+def test_TS051_detects_window_location_req(tmp_path):
+    p = _ts(tmp_path, "window.location = req.query.returnUrl;")
+    assert any(f.rule_id == "TS-051" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS051_detects_location_href_req(tmp_path):
+    p = _ts(tmp_path, "location.href = req.params.url;")
+    assert any(f.rule_id == "TS-051" for f in analyze_typescript(p))
+
+
+def test_TS051_passes_window_location_literal(tmp_path):
+    p = _ts(tmp_path, 'window.location = "/dashboard";')
+    assert not any(f.rule_id == "TS-051" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 51 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_fifty_one_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 49)}
+    expected = {f"TS-{i:03d}" for i in range(1, 52)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
