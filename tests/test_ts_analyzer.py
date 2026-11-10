@@ -2102,11 +2102,62 @@ def test_ts_090_no_fire_on_fixed_key(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-090" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 90 rules ───────────────────────────────────────────────
+# ── TS-091: axios.get/post(req.xxx) — SSRF via axios ─────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_ninety_rules():
+def test_ts_091_fires_on_axios_get_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "import axios from 'axios';\nasync function f(req:any){return axios.get(req.query.url);}\n")
+    assert any(f.rule_id == "TS-091" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_091_fires_on_axios_post_with_req_params(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "import axios from 'axios';\nasync function f(req:any){return axios.post(req.params.url);}\n")
+    assert any(f.rule_id == "TS-091" for f in analyze_typescript(p))
+
+
+def test_ts_091_no_fire_on_hardcoded_url(tmp_path: Path) -> None:
+    p = _ts(
+        tmp_path, "import axios from 'axios';\nasync function f(){return axios.get('https://api.example.com/data');}\n"
+    )
+    assert not any(f.rule_id == "TS-091" for f in analyze_typescript(p))
+
+
+# ── TS-092: res.send(req.xxx) — unsanitized value in response body ────────────
+
+
+def test_ts_092_fires_on_res_send_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(res:any,req:any){res.send(req.query.message);}\n")
+    assert any(f.rule_id == "TS-092" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_ts_092_no_fire_on_safe_send(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(res:any){res.send('OK');}\n")
+    assert not any(f.rule_id == "TS-092" for f in analyze_typescript(p))
+
+
+# ── TS-093: JSON.parse(req.xxx) — prototype pollution / DoS via nested JSON ───
+
+
+def test_ts_093_fires_on_json_parse_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return JSON.parse(req.body.data);}\n")
+    assert any(f.rule_id == "TS-093" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_ts_093_fires_on_json_parse_req_query(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return JSON.parse(req.query.payload);}\n")
+    assert any(f.rule_id == "TS-093" for f in analyze_typescript(p))
+
+
+def test_ts_093_no_fire_on_hardcoded_json(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){return JSON.parse(\'{"key":"val"}\');}\n')
+    assert not any(f.rule_id == "TS-093" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 93 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_ninety_three_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 91)}
+    expected = {f"TS-{i:03d}" for i in range(1, 94)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

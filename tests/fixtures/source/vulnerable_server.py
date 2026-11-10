@@ -539,6 +539,24 @@ def open_archive(archive_path: str) -> None:
     tarfile.open(archive_path)
 
 
+import sqlite3  # noqa: E402
+
+
+def open_user_db(db_path: str) -> sqlite3.Connection:
+    # SRC-091: sqlite3.connect with user-controlled path — arbitrary DB file access
+    return sqlite3.connect(db_path)
+
+
+def apply_chmod(target_path: str) -> None:
+    # SRC-092: os.chmod with user-controlled path — attacker picks which file to chmod
+    os.chmod(target_path, 0o644)
+
+
+def transfer_ownership(target_path: str) -> None:
+    # SRC-093: os.chown with user-controlled path — attacker picks which file to chown
+    os.chown(target_path, 0, 0)
+
+
 import ast as stdlib_ast  # noqa: E402  (alias avoids conflict with the `ast` stdlib re-import above)
 
 

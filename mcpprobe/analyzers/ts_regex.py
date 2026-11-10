@@ -877,6 +877,30 @@ _PROCESS_ENV_KEY_REQ = re.compile(
     """,
 )
 
+# TS-091: axios.get/post/put/delete(req.xxx) — SSRF via axios with user-controlled URL
+_AXIOS_REQ = re.compile(
+    r"""(?x)
+    \baxios\.(?:get|post|put|delete|patch|request|head)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-092: res.send(req.xxx) — XSS via unsanitized response body
+_RES_SEND_REQ = re.compile(
+    r"""(?x)
+    \bres\.send\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-093: JSON.parse(req.xxx) — prototype pollution / DoS via unchecked JSON
+_JSON_PARSE_REQ = re.compile(
+    r"""(?x)
+    \bJSON\.parse\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1844,6 +1868,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "process.env[req.xxx] — user-controlled key can read arbitrary environment variables including secrets",
             "Use a fixed allowlist of env variable names. Never let request data choose which env var to read.",
+        )
+
+    # TS-091: axios.get/post(req.xxx) — SSRF via axios with user-controlled URL
+    if _AXIOS_REQ.search(raw):
+        _add(
+            "TS-091",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "axios.*(req.xxx) — user-controlled URL passed to axios enables SSRF",
+            "Validate and allowlist target URLs. Never pass raw request data to axios as the target URL.",
+        )
+
+    # TS-092: res.send(req.xxx) — unsanitized value in response body, XSS risk
+    if _RES_SEND_REQ.search(raw):
+        _add(
+            "TS-092",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.send(req.xxx) — user-controlled value sent as response body; XSS if HTML content-type",
+            "Sanitize or encode user data before including it in a response body.",
+        )
+
+    # TS-093: JSON.parse(req.xxx) — prototype pollution / DoS via unchecked JSON payload
+    if _JSON_PARSE_REQ.search(raw):
+        _add(
+            "TS-093",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "JSON.parse(req.xxx) — user-controlled JSON; risk of prototype pollution or DoS via deeply nested input",
+            "Validate JSON structure and depth after parsing. Use a safe-merge or schema validator.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

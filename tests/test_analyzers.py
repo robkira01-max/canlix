@@ -1993,11 +1993,50 @@ def test_src_090_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-090" for f in analyze_python(p))
 
 
-# ── Full fixture — all 90 rules ───────────────────────────────────────────────
+# ── SRC-091: sqlite3.connect(user_path) — arbitrary DB file access ────────────
 
 
-def test_vulnerable_fixture_has_all_ninety_rules():
+def test_src_091_fires_on_sqlite_connect_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import sqlite3\ndef open_db(db_path: str):\n    sqlite3.connect(db_path)\n")
+    assert any(f.rule_id == "SRC-091" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_091_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import sqlite3\ndef open_db():\n    sqlite3.connect('/app/data.db')\n")
+    assert not any(f.rule_id == "SRC-091" for f in analyze_python(p))
+
+
+# ── SRC-092: os.chmod(user_path, mode) — user-controlled chmod target ─────────
+
+
+def test_src_092_fires_on_chmod_with_param_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import os\ndef fix_perms(target_path: str):\n    os.chmod(target_path, 0o644)\n")
+    assert any(f.rule_id == "SRC-092" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_092_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import os\ndef fix_perms():\n    os.chmod('/app/config.cfg', 0o644)\n")
+    assert not any(f.rule_id == "SRC-092" for f in analyze_python(p))
+
+
+# ── SRC-093: os.chown(user_path, uid, gid) — user-controlled chown target ─────
+
+
+def test_src_093_fires_on_chown_with_param_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import os\ndef take_ownership(target_path: str):\n    os.chown(target_path, 0, 0)\n")
+    assert any(f.rule_id == "SRC-093" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_093_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import os\ndef take_ownership():\n    os.chown('/app/data', 1000, 1000)\n")
+    assert not any(f.rule_id == "SRC-093" for f in analyze_python(p))
+
+
+# ── Full fixture — all 93 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_ninety_three_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 91)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 94)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

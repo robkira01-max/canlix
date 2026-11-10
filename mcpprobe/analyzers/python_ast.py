@@ -210,6 +210,12 @@ _LOG_HANDLER_FUNCS = frozenset(
 _OS_KILL_FUNCS = frozenset({"os.kill", "os.killpg"})
 # SRC-090: tarfile.open(user_path) — user-controlled archive path, attacker chooses the archive
 _TARFILE_OPEN_FUNCS = frozenset({"tarfile.open", "tarfile.TarFile"})
+# SRC-091: sqlite3.connect(user_path) — user-controlled database path, arbitrary DB file access
+_SQLITE_CONNECT_FUNCS = frozenset({"sqlite3.connect"})
+# SRC-092: os.chmod(user_path, mode) — user-controlled path, can alter permissions on any file
+_CHMOD_PATH_FUNCS = frozenset({"os.chmod", "os.lchmod"})
+# SRC-093: os.chown(user_path, uid, gid) — user-controlled path, can transfer ownership of any file
+_CHOWN_FUNCS = frozenset({"os.chown", "os.lchown"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1849,6 +1855,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"tarfile.open({path_arg.id}) — user-controlled archive path; zip-slip risk on extractall()",
                     "Validate the archive path against an allowlist before opening user-supplied archives.",
+                )
+
+        # SRC-091: sqlite3.connect(user_path) — user-controlled SQLite database path
+        if fname in _SQLITE_CONNECT_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-091",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"sqlite3.connect({path_arg.id}) — user-controlled DB path; attacker opens arbitrary SQLite files",
+                    "Hardcode the database path in configuration. Never allow callers to supply the DB filename.",
+                )
+
+        # SRC-092: os.chmod(user_path, mode) — user-controlled path, attacker picks which file to chmod
+        if fname in _CHMOD_PATH_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-092",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.chmod({path_arg.id}, ...) — user-controlled path enables permission change on arbitrary files",
+                    "Validate the target path against an allowlist. Never let callers choose which file to chmod.",
+                )
+
+        # SRC-093: os.chown(user_path, uid, gid) — user-controlled path, ownership transfer
+        if fname in _CHOWN_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-093",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.chown({path_arg.id}, ...) — user-controlled path enables ownership transfer of any file",
+                    "Validate the target path against an allowlist. Never let callers choose which file to chown.",
                 )
 
         self.generic_visit(node)

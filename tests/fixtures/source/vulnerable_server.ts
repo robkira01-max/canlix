@@ -459,3 +459,19 @@ function runBinarySync(req: any): void {
 function getEnvVar(req: any): string | undefined {
   return process.env[req.query.envKey];
 }
+
+// TS-091: axios.get(req.query.xxx) — SSRF via axios with user-controlled URL
+import axios from "axios";
+async function proxyAxios(req: any): Promise<unknown> {
+  return axios.get(req.query.targetUrl);
+}
+
+// TS-092: res.send(req.query.xxx) — unsanitized value in response body (XSS risk)
+function echoQuery(res: any, req: any): void {
+  res.send(req.query.message);
+}
+
+// TS-093: JSON.parse(req.body.xxx) — prototype pollution / DoS via nested JSON
+function parsePayload(req: any): unknown {
+  return JSON.parse(req.body.data);
+}
