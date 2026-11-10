@@ -177,7 +177,7 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_eleven_rules():
+def test_vulnerable_ts_fixture_has_all_twelve_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
     expected = {
@@ -192,6 +192,7 @@ def test_vulnerable_ts_fixture_has_all_eleven_rules():
         "TS-009",
         "TS-010",
         "TS-011",
+        "TS-012",
     }
     assert expected.issubset(rule_ids)
 
@@ -428,3 +429,47 @@ def test_TS011_passes_no_tls_options(tmp_path):
 def test_TS011_fixture_fires_on_vulnerable_server():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     assert any(f.rule_id == "TS-011" for f in findings)
+
+
+# ── TS-012: weak hash algorithm ──────────────────────────────────────────────
+
+
+def test_TS012_detects_createHash_md5(tmp_path):
+    p = _ts(tmp_path, "const h = crypto.createHash('md5').update(data).digest('hex');")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-012" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS012_detects_createHash_sha1(tmp_path):
+    p = _ts(tmp_path, 'const h = crypto.createHash("sha1").update(data).digest("hex");')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-012" for f in findings)
+
+
+def test_TS012_detects_createHash_sha_dash_1(tmp_path):
+    p = _ts(tmp_path, "const h = crypto.createHash('sha-1');")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-012" for f in findings)
+
+
+def test_TS012_detects_createHash_md5_uppercase(tmp_path):
+    p = _ts(tmp_path, "const h = crypto.createHash('MD5');")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-012" for f in findings)
+
+
+def test_TS012_passes_createHash_sha256(tmp_path):
+    p = _ts(tmp_path, "const h = crypto.createHash('sha256').update(data).digest('hex');")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-012" for f in findings)
+
+
+def test_TS012_passes_createHash_sha3(tmp_path):
+    p = _ts(tmp_path, "const h = crypto.createHash('sha3-256');")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-012" for f in findings)
+
+
+def test_TS012_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-012" for f in findings)

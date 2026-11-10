@@ -162,7 +162,7 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_eleven_rules():
+def test_vulnerable_fixture_has_all_twelve_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
     expected = {
@@ -177,6 +177,7 @@ def test_vulnerable_fixture_has_all_eleven_rules():
         "SRC-009",
         "SRC-010",
         "SRC-011",
+        "SRC-012",
     }
     assert expected.issubset(rule_ids)
 
@@ -459,3 +460,47 @@ def test_SRC011_passes_ssl_create_default_context(tmp_path):
 def test_SRC011_fixture_fires_on_vulnerable_server():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     assert any(f.rule_id == "SRC-011" for f in findings)
+
+
+# ── SRC-012: weak hash algorithm ─────────────────────────────────────────────
+
+
+def test_SRC012_detects_hashlib_md5(tmp_path):
+    p = _py(tmp_path, "import hashlib\nhashlib.md5(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-012" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC012_detects_hashlib_sha1(tmp_path):
+    p = _py(tmp_path, "import hashlib\nhashlib.sha1(data)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-012" for f in findings)
+
+
+def test_SRC012_detects_hashlib_new_md5(tmp_path):
+    p = _py(tmp_path, 'import hashlib\nhashlib.new("md5", data)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-012" for f in findings)
+
+
+def test_SRC012_detects_hashlib_new_sha1_variant(tmp_path):
+    p = _py(tmp_path, 'import hashlib\nhashlib.new("sha-1", data)')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-012" for f in findings)
+
+
+def test_SRC012_passes_hashlib_sha256(tmp_path):
+    p = _py(tmp_path, "import hashlib\nhashlib.sha256(data)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-012" for f in findings)
+
+
+def test_SRC012_passes_hashlib_new_sha256(tmp_path):
+    p = _py(tmp_path, 'import hashlib\nhashlib.new("sha256", data)')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-012" for f in findings)
+
+
+def test_SRC012_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-012" for f in findings)

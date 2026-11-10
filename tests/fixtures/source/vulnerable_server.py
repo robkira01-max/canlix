@@ -1,5 +1,6 @@
 """Vulnerable MCP server — intentionally insecure for testing."""
 
+import hashlib
 import os
 import pickle
 import random
@@ -66,3 +67,6 @@ def issue_session_token() -> str:
 
 # SRC-011: TLS certificate verification disabled
 ssl._create_unverified_context()
+
+# SRC-012: weak hash algorithm
+hashlib.md5(b"data")

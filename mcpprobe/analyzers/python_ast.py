@@ -335,6 +335,37 @@ class _Visitor(ast.NodeVisitor):
                     "Use parameterised queries: cursor.execute(sql, [params]). Never format SQL strings.",
                 )
 
+        # SRC-012: weak hash algorithm — MD5 or SHA-1
+        if fname in ("hashlib.md5", "hashlib.sha1"):
+            self._add(
+                "SRC-012",
+                Severity.MEDIUM,
+                Confidence.HIGH,
+                node.lineno,
+                f"{fname}() is cryptographically broken — do not use for security-sensitive hashing",
+                "Use hashlib.sha256() or hashlib.sha3_256() for security. For passwords use bcrypt/argon2.",
+            )
+        elif fname == "hashlib.new" and node.args:
+            first = node.args[0]
+            if (
+                isinstance(first, ast.Constant)
+                and isinstance(first.value, str)
+                and first.value.lower()
+                in (
+                    "md5",
+                    "sha1",
+                    "sha-1",
+                )
+            ):
+                self._add(
+                    "SRC-012",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"hashlib.new('{first.value}') uses a broken algorithm — do not use for security-sensitive hashing",
+                    "Use hashlib.sha256() or hashlib.sha3_256() for security. For passwords use bcrypt/argon2.",
+                )
+
         # SRC-011: TLS verification disabled — verify=False kwarg
         for kw in node.keywords:
             if kw.arg == "verify" and isinstance(kw.value, ast.Constant) and kw.value.value is False:

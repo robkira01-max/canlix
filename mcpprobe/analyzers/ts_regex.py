@@ -84,6 +84,17 @@ _PROTO_POLLUTION = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-012: weak hash algorithm — MD5 or SHA-1 passed to crypto.createHash
+# ---------------------------------------------------------------------------
+
+_WEAK_HASH = re.compile(
+    r"""(?x)
+    crypto\.createHash\s*\(\s*["'](md5|sha-?1)["']   # crypto.createHash('md5') / ('sha1') / ('sha-1')
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # TS-011: TLS verification disabled
 # ---------------------------------------------------------------------------
 
@@ -287,6 +298,18 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "File I/O with variable path — path traversal risk",
             "Validate the path with path.resolve() + a trusted prefix check before I/O operations.",
+        )
+
+    # TS-012: weak hash algorithm
+    m012 = _WEAK_HASH.search(raw)
+    if m012:
+        algo = m012.group(1).lower()
+        _add(
+            "TS-012",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            f"crypto.createHash('{algo}') uses a broken algorithm — do not use for security-sensitive hashing",
+            "Use crypto.createHash('sha256') or 'sha3-256' for security. For passwords use bcrypt/argon2.",
         )
 
     # TS-011: TLS verification disabled
