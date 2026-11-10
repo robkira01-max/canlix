@@ -117,6 +117,35 @@ _CORS_MIDDLEWARE_FUNCS = frozenset(
         "app.add_middleware",
     }
 )
+# SRC-028: insecure random seed — random.seed() with a fixed/constant value
+# A fixed seed makes the PRNG sequence fully predictable.
+_FIXED_SEED_TYPES = (int, float, str, bytes)
+# SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
+_FAST_HASH_FUNCS = frozenset(
+    {
+        "hashlib.sha256",
+        "hashlib.sha512",
+        "hashlib.sha1",
+        "hashlib.md5",
+        "hashlib.sha3_256",
+        "hashlib.sha3_512",
+        "sha256",
+        "sha512",
+    }
+)
+# Access-control names that should never be used in assert statements
+_AUTH_NAMES = frozenset(
+    {
+        "is_authenticated",
+        "is_admin",
+        "is_superuser",
+        "has_role",
+        "is_authorized",
+        "require_auth",
+        "authenticated",
+        "authorized",
+    }
+)
 # SRC-025: security-header removal — explicit deletion/override of a security header
 _SECURITY_HEADER_NAMES = frozenset(
     {
@@ -331,6 +360,31 @@ class _Visitor(ast.NodeVisitor):
                     f"Security header '{target.slice.value}' explicitly removed — browsers lose protection",
                     "Never delete security headers. Set them via middleware; do not remove them per-route.",
                 )
+        self.generic_visit(node)
+
+    def visit_Assert(self, node: ast.Assert) -> None:
+        def _has_auth_check(expr: ast.expr) -> bool:
+            if isinstance(expr, ast.Attribute) and expr.attr in _AUTH_NAMES:
+                return True
+            if isinstance(expr, ast.Name) and expr.id in _AUTH_NAMES:
+                return True
+            if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute) and expr.func.attr in _AUTH_NAMES:
+                return True
+            if isinstance(expr, ast.BoolOp):
+                return any(_has_auth_check(v) for v in expr.values)
+            if isinstance(expr, ast.UnaryOp) and isinstance(expr.op, ast.Not):
+                return _has_auth_check(expr.operand)
+            return False
+
+        if _has_auth_check(node.test):
+            self._add(
+                "SRC-030",
+                Severity.HIGH,
+                Confidence.MEDIUM,
+                node.lineno,
+                "assert used for access control — Python -O flag disables all assertions at runtime",
+                "Replace assert with an explicit if/raise. Use @login_required or raise HTTPException(403).",
+            )
         self.generic_visit(node)
 
     def _func_name(self, node: ast.Call) -> str:
@@ -794,6 +848,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"{fname}() with user-controlled segment — path traversal with '../' sequences possible",
                     "Resolve the joined path and assert it starts with the allowed base dir. Reject paths with '..'.",
+                )
+
+        # SRC-028: insecure PRNG seed — random.seed(constant) makes the sequence predictable
+        if fname == "random.seed" and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, _FIXED_SEED_TYPES):
+                self._add(
+                    "SRC-028",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"random.seed({first_arg.value!r}) — fixed seed makes PRNG output fully predictable",
+                    "Call random.seed() without arguments (uses OS entropy) or use secrets module instead.",
+                )
+
+        # SRC-029: password hashed with a fast algorithm — not suitable for password storage
+        # Check for hashlib.sha256(password) or hashlib.sha256(password.encode(...))
+        if fname in _FAST_HASH_FUNCS and node.args:
+            first_arg = node.args[0]
+            # Direct name: sha256(password)
+            sec_name = None
+            if isinstance(first_arg, ast.Name) and _is_security_name(first_arg.id):
+                sec_name = first_arg.id
+            # Method call on name: sha256(password.encode())
+            elif (
+                isinstance(first_arg, ast.Call)
+                and isinstance(first_arg.func, ast.Attribute)
+                and isinstance(first_arg.func.value, ast.Name)
+                and _is_security_name(first_arg.func.value.id)
+            ):
+                sec_name = first_arg.func.value.id
+            if sec_name:
+                self._add(
+                    "SRC-029",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"{fname}({sec_name}) — fast hash algorithms are not suitable for password storage",
+                    "Use bcrypt, argon2-cffi, or hashlib.scrypt for password hashing. Never use SHA/MD5.",
                 )
 
         self.generic_visit(node)

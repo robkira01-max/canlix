@@ -342,6 +342,42 @@ _LOG_SENSITIVE_NAME = re.compile(
 
 
 # ---------------------------------------------------------------------------
+# TS-028: fixed PRNG seed — seedrandom/seedrandom-like with literal
+# ---------------------------------------------------------------------------
+
+_FIXED_SEED = re.compile(
+    r"""(?x)
+    \bseedrandom\s*\(\s*["'`\d]              # seedrandom("fixedSeed" or 42
+    | Math\.random\s*\(\s*\)\s*;.*seed       # comment mentioning seed near Math.random
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-029: password hashed with a fast algorithm — createHash('sha256').update(password)
+# ---------------------------------------------------------------------------
+
+_FAST_HASH_PASSWORD = re.compile(
+    r"""(?x)
+    createHash\s*\(\s*["']sha(?:256|512|1|3-256|3-512)["']\s*\)\s*\.update\s*\(\s*
+        (?:password|passwd|pwd|secret|credentials?)\b   # variable name is security-sensitive
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# TS-030: assert used for access-control checks
+# ---------------------------------------------------------------------------
+
+_ASSERT_AUTH = re.compile(
+    r"""(?x)
+    \bassert\s*\(?\s*
+        (?:[A-Za-z_$.]+\.)?
+        (?:is(?:Admin|Authenticated|Authorized|Superuser)|hasRole|isLoggedIn|requiresAuth|authenticated)
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # TS-025: security header explicitly removed / set to unsafe value
 # ---------------------------------------------------------------------------
 
@@ -708,6 +744,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "path.join/resolve with variable segment — '../' sequences can escape the intended directory",
             "Resolve the joined path and assert it starts with the allowed base dir. Reject paths with '..'.",
+        )
+
+    # TS-028: fixed PRNG seed
+    if _FIXED_SEED.search(raw):
+        _add(
+            "TS-028",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "PRNG seeded with a fixed value — random output becomes fully predictable",
+            "Use crypto.randomBytes() for security tokens. Never seed with a constant.",
+        )
+
+    # TS-029: password hashed with fast algorithm
+    if _FAST_HASH_PASSWORD.search(raw):
+        _add(
+            "TS-029",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Password hashed with a fast algorithm (SHA-256/512) — not suitable for password storage",
+            "Use bcrypt, argon2, or scrypt for password hashing. Fast hashes are trivially brute-forced.",
+        )
+
+    # TS-030: assert used for access control
+    if _ASSERT_AUTH.search(raw):
+        _add(
+            "TS-030",
+            Severity.HIGH,
+            Confidence.MEDIUM,
+            "assert used for access control — assertions can be disabled in production builds",
+            "Replace assert with an explicit if/throw. Use middleware guards, not assertions, for auth checks.",
         )
 
     return result

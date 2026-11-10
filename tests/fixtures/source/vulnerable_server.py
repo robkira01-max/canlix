@@ -167,3 +167,17 @@ def create_user(request_data: dict):
 def serve_file(base_dir: str, filename: str):
     # SRC-027: path traversal via os.path.join with user-controlled segment
     return os.path.join(base_dir, filename)
+
+
+# SRC-028: fixed PRNG seed — predictable output
+random.seed(42)
+
+
+def hash_password(password: str) -> str:
+    # SRC-029: password hashed with fast algorithm
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def check_admin(user):
+    # SRC-030: assert used for access control
+    assert user.is_authenticated

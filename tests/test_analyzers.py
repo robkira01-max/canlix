@@ -1009,3 +1009,85 @@ def test_vulnerable_fixture_has_all_twentyseven_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 28)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-028: fixed PRNG seed ──────────────────────────────────────────────────
+
+
+def test_SRC028_detects_random_seed_int(tmp_path):
+    p = _py(tmp_path, "import random\nrandom.seed(42)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-028" for f in findings)
+
+
+def test_SRC028_detects_random_seed_zero(tmp_path):
+    p = _py(tmp_path, "import random\nrandom.seed(0)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-028" for f in findings)
+
+
+def test_SRC028_passes_random_seed_no_arg(tmp_path):
+    p = _py(tmp_path, "import random\nrandom.seed()")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-028" for f in findings)
+
+
+def test_SRC028_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-028" for f in findings)
+
+
+# ── SRC-029: password hashed with fast algorithm ──────────────────────────────
+
+
+def test_SRC029_detects_sha256_on_password_param(tmp_path):
+    p = _py(tmp_path, "import hashlib\ndef store(password: str):\n    return hashlib.sha256(password)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-029" for f in findings)
+
+
+def test_SRC029_passes_non_sensitive_sha256(tmp_path):
+    p = _py(tmp_path, "import hashlib\nhashlib.sha256(document_content)")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-029" for f in findings)
+
+
+def test_SRC029_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-029" for f in findings)
+
+
+# ── SRC-030: assert used for access control ───────────────────────────────────
+
+
+def test_SRC030_detects_assert_is_authenticated(tmp_path):
+    p = _py(tmp_path, "def route(user):\n    assert user.is_authenticated")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-030" for f in findings)
+
+
+def test_SRC030_detects_assert_is_admin(tmp_path):
+    p = _py(tmp_path, "def admin_route(user):\n    assert user.is_admin")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-030" for f in findings)
+
+
+def test_SRC030_passes_non_auth_assert(tmp_path):
+    p = _py(tmp_path, "assert len(items) > 0")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-030" for f in findings)
+
+
+def test_SRC030_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-030" for f in findings)
+
+
+# ── Full fixture — all 30 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_thirty_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 31)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

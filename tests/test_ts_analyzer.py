@@ -989,3 +989,73 @@ def test_vulnerable_ts_fixture_has_all_twentyseven_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 28)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-028: fixed PRNG seed ───────────────────────────────────────────────────
+
+
+def test_TS028_detects_seedrandom_literal(tmp_path):
+    p = _ts(tmp_path, 'const rng = seedrandom("fixedSeed");')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-028" for f in findings)
+
+
+def test_TS028_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-028" for f in findings)
+
+
+# ── TS-029: password hashed with fast algorithm ───────────────────────────────
+
+
+def test_TS029_detects_sha256_update_password(tmp_path):
+    p = _ts(tmp_path, 'crypto.createHash("sha256").update(password).digest("hex")')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-029" for f in findings)
+
+
+def test_TS029_passes_sha256_non_password(tmp_path):
+    p = _ts(tmp_path, 'crypto.createHash("sha256").update(documentContent).digest("hex")')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-029" for f in findings)
+
+
+def test_TS029_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-029" for f in findings)
+
+
+# ── TS-030: assert used for access control ────────────────────────────────────
+
+
+def test_TS030_detects_assert_isAuthenticated(tmp_path):
+    p = _ts(tmp_path, "assert(user.isAuthenticated);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-030" for f in findings)
+
+
+def test_TS030_detects_assert_isAdmin(tmp_path):
+    p = _ts(tmp_path, "assert(session.isAdmin);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-030" for f in findings)
+
+
+def test_TS030_passes_non_auth_assert(tmp_path):
+    p = _ts(tmp_path, "assert(items.length > 0);")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-030" for f in findings)
+
+
+def test_TS030_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-030" for f in findings)
+
+
+# ── Full fixture — all 30 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_thirty_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 31)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

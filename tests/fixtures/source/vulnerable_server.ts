@@ -137,3 +137,17 @@ import path from "path";
 function serveFile(baseDir: string, filename: string): string {
   return path.join(baseDir, filename);
 }
+
+// TS-028: fixed PRNG seed
+import seedrandom from "seedrandom";
+const rng = seedrandom("fixedSeed");
+
+// TS-029: password hashed with fast algorithm
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
+
+// TS-030: assert used for access control
+function adminRoute(user: any): void {
+  assert(user.isAuthenticated);
+}
