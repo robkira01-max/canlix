@@ -1571,11 +1571,65 @@ def test_TS060_passes_jsonp_literal(tmp_path):
     assert not any(f.rule_id == "TS-060" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 60 rules ───────────────────────────────────────────────
+# ── TS-061: fs.readFileSync(req.xxx) — synchronous path traversal ────────────
 
 
-def test_vulnerable_ts_fixture_has_all_sixty_rules():
+def test_TS061_detects_readFileSync_req(tmp_path):
+    p = _ts(tmp_path, 'fs.readFileSync(req.query.file, "utf8");')
+    assert any(f.rule_id == "TS-061" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS061_detects_readFileSync_body(tmp_path):
+    p = _ts(tmp_path, "fs.readFileSync(req.body.path);")
+    assert any(f.rule_id == "TS-061" for f in analyze_typescript(p))
+
+
+def test_TS061_passes_readFileSync_literal(tmp_path):
+    p = _ts(tmp_path, 'fs.readFileSync("/etc/config.json");')
+    assert not any(f.rule_id == "TS-061" for f in analyze_typescript(p))
+
+
+# ── TS-062: spawnSync(req.xxx) — synchronous shell execution ─────────────────
+
+
+def test_TS062_detects_spawnSync_req(tmp_path):
+    p = _ts(tmp_path, "spawnSync(req.query.tool);")
+    assert any(f.rule_id == "TS-062" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS062_detects_child_process_spawnSync(tmp_path):
+    p = _ts(tmp_path, "child_process.spawnSync(req.body.binary);")
+    assert any(f.rule_id == "TS-062" for f in analyze_typescript(p))
+
+
+def test_TS062_passes_spawnSync_literal(tmp_path):
+    p = _ts(tmp_path, 'spawnSync("ls", ["-la"]);')
+    assert not any(f.rule_id == "TS-062" for f in analyze_typescript(p))
+
+
+# ── TS-063: new vm.Script(req.xxx) — VM code injection ───────────────────────
+
+
+def test_TS063_detects_vm_Script_req(tmp_path):
+    p = _ts(tmp_path, "new vm.Script(req.query.code);")
+    assert any(f.rule_id == "TS-063" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS063_detects_Script_req_body(tmp_path):
+    p = _ts(tmp_path, "new Script(req.body.script);")
+    assert any(f.rule_id == "TS-063" for f in analyze_typescript(p))
+
+
+def test_TS063_passes_vm_Script_literal(tmp_path):
+    p = _ts(tmp_path, 'new vm.Script("const x = 1;");')
+    assert not any(f.rule_id == "TS-063" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 63 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_sixty_three_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 61)}
+    expected = {f"TS-{i:03d}" for i in range(1, 64)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

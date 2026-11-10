@@ -1549,11 +1549,55 @@ def test_SRC060_passes_ldap3_Server_literal(tmp_path):
     assert not any(f.rule_id == "SRC-060" for f in analyze_python(p))
 
 
-# ── Full fixture — all 60 rules ───────────────────────────────────────────────
+# ── SRC-061: os.popen(cmd) — shell injection via popen ────────────────────────
 
 
-def test_vulnerable_fixture_has_all_sixty_rules():
+def test_SRC061_detects_os_popen_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef run(cmd: str):\n    os.popen(cmd)")
+    assert any(f.rule_id == "SRC-061" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC061_detects_os_popen_fstring(tmp_path):
+    p = _py(tmp_path, "import os\ndef run(cmd: str):\n    os.popen(f'echo {cmd}')")
+    assert any(f.rule_id == "SRC-061" for f in analyze_python(p))
+
+
+def test_SRC061_passes_os_popen_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.popen('ls -la')")
+    assert not any(f.rule_id == "SRC-061" for f in analyze_python(p))
+
+
+# ── SRC-062: urllib.request.urlretrieve(url) — SSRF ──────────────────────────
+
+
+def test_SRC062_detects_urlretrieve_param(tmp_path):
+    p = _py(tmp_path, "import urllib.request\ndef fetch(url: str):\n    urllib.request.urlretrieve(url)")
+    assert any(f.rule_id == "SRC-062" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC062_passes_urlretrieve_literal(tmp_path):
+    p = _py(tmp_path, "import urllib.request\nurllib.request.urlretrieve('https://example.com/file')")
+    assert not any(f.rule_id == "SRC-062" for f in analyze_python(p))
+
+
+# ── SRC-063: zipimport.zipimporter(path) — arbitrary zip import ───────────────
+
+
+def test_SRC063_detects_zipimporter_param(tmp_path):
+    p = _py(tmp_path, "import zipimport\ndef load(path: str):\n    zipimport.zipimporter(path)")
+    assert any(f.rule_id == "SRC-063" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC063_passes_zipimporter_literal(tmp_path):
+    p = _py(tmp_path, "import zipimport\nzipimport.zipimporter('/opt/plugins/safe.zip')")
+    assert not any(f.rule_id == "SRC-063" for f in analyze_python(p))
+
+
+# ── Full fixture — all 63 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_sixty_three_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 61)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 64)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

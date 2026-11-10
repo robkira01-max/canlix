@@ -161,6 +161,12 @@ _FTP_FUNCS = frozenset({"ftplib.FTP", "ftplib.FTP_TLS", "FTP", "FTP_TLS"})
 _SMTP_FUNCS = frozenset({"smtplib.SMTP", "smtplib.SMTP_SSL", "smtplib.LMTP", "SMTP", "SMTP_SSL"})
 # SRC-060: ldap3.Server / ldap.initialize with user-controlled host — LDAP injection / SSRF
 _LDAP_FUNCS = frozenset({"ldap3.Server", "ldap.initialize", "ldap3.Connection", "Server"})
+# SRC-061: os.popen() with user-controlled command — shell injection
+_OS_POPEN_FUNCS = frozenset({"os.popen", "popen"})
+# SRC-062: urllib.request.Request / urlopen with user-controlled URL — SSRF
+_URLLIB_REQUEST_FUNCS = frozenset({"urllib.request.Request", "urllib.request.urlretrieve", "urlretrieve"})
+# SRC-063: zipimport.zipimporter with user-controlled path — arbitrary zip code import
+_ZIPIMPORT_FUNCS = frozenset({"zipimport.zipimporter", "zipimporter"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1328,6 +1334,45 @@ class _Visitor(ast.NodeVisitor):
                     f"webbrowser.open({url_arg.id}) — user-controlled URL opens the OS browser "
                     "(open redirect / phishing risk)",
                     "Validate the URL against an allowlist before calling webbrowser.open().",
+                )
+
+        # SRC-061: os.popen(cmd) with user-controlled command — shell injection
+        if fname in _OS_POPEN_FUNCS and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            if self._has_param_in_expr(cmd_arg):
+                self._add(
+                    "SRC-061",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "os.popen() with user-controlled command — arbitrary shell command execution",
+                    "Use subprocess.run() with a list of arguments and shell=False. Never pass user input to popen().",
+                )
+
+        # SRC-062: urllib.request.Request / urlretrieve with user-controlled URL — SSRF
+        if fname in _URLLIB_REQUEST_FUNCS and node.args and self._param_names:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-062",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}({url_arg.id}) — user-controlled URL enables SSRF via urllib",
+                    "Validate the URL against an allowlist of permitted hosts before making the request.",
+                )
+
+        # SRC-063: zipimport.zipimporter(path) with user-controlled path — arbitrary zip code import
+        if fname in _ZIPIMPORT_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-063",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"zipimport.zipimporter({path_arg.id}) — user-controlled path imports code from arbitrary zips",
+                    "Never allow callers to control the path passed to zipimporter(). Allowlist permitted archives.",
                 )
 
         # SRC-058: ftplib.FTP(host) with user-controlled host — SSRF via FTP

@@ -304,3 +304,20 @@ function proxyTcp(req: any): void {
 function sendJsonp(res: any, req: any): void {
   res.jsonp(req.query.data);
 }
+
+// TS-061: fs.readFileSync() with user-controlled path — synchronous path traversal
+function readConfig(req: any): string {
+  return fs.readFileSync(req.query.file, "utf8");
+}
+
+// TS-062: spawnSync() with user-controlled executable — synchronous shell injection
+import { spawnSync } from "child_process";
+function runTool(req: any): void {
+  spawnSync(req.query.tool, ["--config", "default.cfg"]);
+}
+
+// TS-063: new vm.Script() with user-controlled code — VM code injection
+function compileScript(req: any): void {
+  const script = new vm.Script(req.query.code);
+  script.runInNewContext({});
+}

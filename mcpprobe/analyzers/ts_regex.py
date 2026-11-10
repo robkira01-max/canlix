@@ -607,6 +607,37 @@ _JSONP_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-061: fs.readFileSync(req.xxx) — synchronous path traversal
+# ---------------------------------------------------------------------------
+
+_READ_FILE_SYNC_REQ = re.compile(
+    r"""(?x)
+    \bfs\.readFileSync\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-062: child_process.spawnSync(req.xxx) — synchronous shell execution
+# ---------------------------------------------------------------------------
+
+_SPAWN_SYNC_REQ = re.compile(
+    r"""(?x)
+    \b(?:child_process\.spawnSync|(?<![A-Za-z0-9_$])spawnSync)\s*\(
+    \s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-063: new vm.Script(req.xxx) — user-controlled code compiled into VM script
+# ---------------------------------------------------------------------------
+
+_VM_SCRIPT_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+(?:vm\.)?Script\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -1333,6 +1364,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.jsonp(req.xxx) — user-controlled JSONP data enables XSS via callback injection",
             "Sanitize and validate data before passing to res.jsonp(). Never use raw request data as JSONP payload.",
+        )
+
+    # TS-061: fs.readFileSync(req.xxx) — synchronous path traversal
+    if _READ_FILE_SYNC_REQ.search(raw):
+        _add(
+            "TS-061",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fs.readFileSync(req.xxx) — user-controlled path allows reading arbitrary server files",
+            "Validate the path against an allowlist or use an async read with proper path sanitization.",
+        )
+
+    # TS-062: spawnSync(req.xxx) — synchronous shell execution with user-controlled command
+    if _SPAWN_SYNC_REQ.search(raw):
+        _add(
+            "TS-062",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "spawnSync(req.xxx) — user-controlled executable in synchronous spawn allows OS command injection",
+            "Allowlist permitted executables. Use spawnSync with a fixed binary and an args array.",
+        )
+
+    # TS-063: new vm.Script(req.xxx) — user-controlled code compiled into VM script
+    if _VM_SCRIPT_REQ.search(raw):
+        _add(
+            "TS-063",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new vm.Script(req.xxx) — user-controlled code compiled as a VM script; vm is NOT a sandbox",
+            "Never compile user-supplied code. Use a safe DSL or allowlisted template engine instead.",
         )
 
     # TS-052: document.getElementById(req.xxx) — DOM injection via user-controlled element ID

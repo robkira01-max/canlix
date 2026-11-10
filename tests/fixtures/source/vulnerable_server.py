@@ -372,3 +372,23 @@ def connect_ldap(host: str) -> ldap3.Connection:
     # SRC-060: user-controlled LDAP server — directory SSRF
     server = ldap3.Server(host)
     return ldap3.Connection(server)
+
+
+import urllib.request  # noqa: E402
+import zipimport  # noqa: E402
+
+
+def run_shell_popen(cmd: str) -> str:
+    # SRC-061: os.popen with user-controlled command — shell injection
+    return os.popen(cmd).read()
+
+
+def fetch_url(url: str) -> bytes:
+    # SRC-062: urllib.request.urlretrieve with user-controlled URL — SSRF
+    local, _ = urllib.request.urlretrieve(url)
+    return open(local, "rb").read()
+
+
+def load_zip_plugin(path: str) -> None:
+    # SRC-063: zipimporter with user-controlled path — arbitrary zip code import
+    zipimport.zipimporter(path)
