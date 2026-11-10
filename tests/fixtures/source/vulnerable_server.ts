@@ -73,6 +73,11 @@ function verifyToken(storedToken: string, userToken: string): boolean {
   return storedToken === userToken;
 }
 
+// TS-017: insecure cookie — missing httpOnly and secure (MEDIUM)
+function setSession(res: any, token: string): void {
+  res.cookie("session", token, { sameSite: "strict" });
+}
+
 // TS-016: JWT algorithm confusion — algorithms: ['none'] (HIGH)
 const jwtOptions = { algorithms: ["none"] };
 

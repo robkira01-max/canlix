@@ -82,6 +82,11 @@ if stored_token == user_token:
     pass
 
 
+def set_session_cookie(response, session_id: str):
+    # SRC-017: cookie without httponly/secure — XSS + plain-HTTP theft risk
+    response.set_cookie("session", session_id)
+
+
 def decode_jwt_insecure(token: str) -> dict:
     # SRC-016: JWT decoded with algorithms=['none'] — auth bypass risk
     return jwt.decode(token, algorithms=["none"])

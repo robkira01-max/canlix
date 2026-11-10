@@ -104,6 +104,21 @@ _TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
 _TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
 
 # ---------------------------------------------------------------------------
+# TS-017: insecure cookie — res.cookie() without httpOnly or secure flags
+# ---------------------------------------------------------------------------
+
+# Detects res.cookie("name", value, { ... }) where the options object is present
+_COOKIE_SET = re.compile(
+    r"""(?x)
+    res\.cookie\s*\(                   # res.cookie(
+    | response\.cookie\s*\(            # response.cookie(
+    | ctx\.cookies\.set\s*\(           # Koa ctx.cookies.set(
+    """,
+)
+_COOKIE_HTTPONLY_TRUE = re.compile(r"\bhttpOnly\s*:\s*true\b", re.IGNORECASE)
+_COOKIE_SECURE_TRUE = re.compile(r"\bsecure\s*:\s*true\b")
+
+# ---------------------------------------------------------------------------
 # TS-016: JWT algorithm confusion or disabled verification
 # ---------------------------------------------------------------------------
 
@@ -391,6 +406,22 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             "TLS certificate verification disabled — allows MITM attacks",
             "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
         )
+
+    # TS-017: insecure cookie — res.cookie() without httpOnly/secure on same line
+    if _COOKIE_SET.search(raw):
+        missing = []
+        if not _COOKIE_HTTPONLY_TRUE.search(raw):
+            missing.append("httpOnly: true")
+        if not _COOKIE_SECURE_TRUE.search(raw):
+            missing.append("secure: true")
+        if missing:
+            _add(
+                "TS-017",
+                Severity.MEDIUM,
+                Confidence.MEDIUM,
+                f"Cookie set without {' and '.join(missing)} — vulnerable to XSS or plain-HTTP theft",
+                "Always set { httpOnly: true, secure: true, sameSite: 'strict' } on session cookies.",
+            )
 
     # TS-016: JWT algorithm confusion or disabled verification
     if _JWT_ALGO_NONE.search(raw):

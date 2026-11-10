@@ -389,6 +389,35 @@ class _Visitor(ast.NodeVisitor):
                     "Validate the redirect URL against an allowlist. Never redirect to a raw user-supplied value.",
                 )
 
+        # SRC-017: insecure cookie — set_cookie() without httponly=True or secure=True
+        if fname in ("response.set_cookie", "resp.set_cookie", "set_cookie"):
+            has_httponly = any(
+                kw.arg == "httponly" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                for kw in node.keywords
+            )
+            has_secure = any(
+                kw.arg == "secure" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+                for kw in node.keywords
+            )
+            if not has_httponly:
+                self._add(
+                    "SRC-017",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    "set_cookie() called without httponly=True — cookie accessible via JavaScript (XSS risk)",
+                    "Add httponly=True to prevent client-side script access to the cookie.",
+                )
+            if not has_secure:
+                self._add(
+                    "SRC-017",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    "set_cookie() called without secure=True — cookie sent over unencrypted HTTP",
+                    "Add secure=True to ensure the cookie is only transmitted over HTTPS.",
+                )
+
         # SRC-016: JWT algorithm confusion or disabled verification
         if fname in ("jwt.decode", "jose.jwt.decode", "python_jose.jwt.decode"):
             for kw in node.keywords:

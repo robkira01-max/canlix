@@ -656,8 +656,49 @@ def test_TS016_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 16 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_sixteen_rules():
+# ── TS-017: insecure cookie ───────────────────────────────────────────────────
+
+
+def test_TS017_detects_res_cookie_without_httpOnly(tmp_path):
+    p = _ts(tmp_path, "res.cookie('session', token, { secure: true });")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-017" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS017_detects_res_cookie_without_secure(tmp_path):
+    p = _ts(tmp_path, "res.cookie('session', token, { httpOnly: true });")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-017" for f in findings)
+
+
+def test_TS017_detects_res_cookie_bare(tmp_path):
+    p = _ts(tmp_path, "res.cookie('session', token);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-017" for f in findings)
+
+
+def test_TS017_passes_res_cookie_with_both_flags(tmp_path):
+    p = _ts(tmp_path, "res.cookie('session', token, { httpOnly: true, secure: true });")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-017" for f in findings)
+
+
+def test_TS017_detects_response_cookie(tmp_path):
+    p = _ts(tmp_path, "response.cookie('session', token, { sameSite: 'strict' });")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-017" for f in findings)
+
+
+def test_TS017_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-017" for f in findings)
+
+
+# ── Full fixture — all 17 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_seventeen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 17)}
+    expected = {f"TS-{i:03d}" for i in range(1, 18)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
