@@ -167,6 +167,8 @@ _OS_POPEN_FUNCS = frozenset({"os.popen", "popen"})
 _URLLIB_REQUEST_FUNCS = frozenset({"urllib.request.Request", "urllib.request.urlretrieve", "urlretrieve"})
 # SRC-063: zipimport.zipimporter with user-controlled path — arbitrary zip code import
 _ZIPIMPORT_FUNCS = frozenset({"zipimport.zipimporter", "zipimporter"})
+# SRC-066: asyncio.create_subprocess_shell with user-controlled command — async shell injection
+_ASYNC_SHELL_FUNCS = frozenset({"asyncio.create_subprocess_shell", "create_subprocess_shell"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -806,7 +808,17 @@ class _Visitor(ast.NodeVisitor):
                 )
 
         # SRC-011: TLS verification disabled — verify=False kwarg
+        # SRC-065: ssl=False kwarg disables TLS in aiohttp / websockets
         for kw in node.keywords:
+            if kw.arg == "ssl" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
+                self._add(
+                    "SRC-065",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "ssl=False disables TLS certificate verification — allows MITM attacks",
+                    "Remove ssl=False or pass an ssl.SSLContext with proper CA verification.",
+                )
             if kw.arg == "verify" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
                 self._add(
                     "SRC-011",
@@ -1255,6 +1267,19 @@ class _Visitor(ast.NodeVisitor):
                     "Never pass user-supplied callables to Thread(target=). Use a fixed, allowlisted function.",
                 )
 
+        # SRC-064: setattr(obj, name, val) with user-controlled attribute name — attribute injection
+        if fname == "setattr" and len(node.args) >= 2 and self._param_names:
+            attr_arg = node.args[1]
+            if isinstance(attr_arg, ast.Name) and attr_arg.id in self._param_names:
+                self._add(
+                    "SRC-064",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"setattr(obj, {attr_arg.id}, ...) — user-controlled attribute name enables attribute injection",
+                    "Allowlist permitted attribute names before calling setattr().",
+                )
+
         # SRC-052: getattr(obj, param) — user-controlled attribute name exposes arbitrary attribute access
         if fname == "getattr" and len(node.args) >= 2 and self._param_names:
             attr_arg = node.args[1]
@@ -1360,6 +1385,19 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"{fname}({url_arg.id}) — user-controlled URL enables SSRF via urllib",
                     "Validate the URL against an allowlist of permitted hosts before making the request.",
+                )
+
+        # SRC-066: asyncio.create_subprocess_shell(cmd) with user-controlled cmd — async shell injection
+        if fname in _ASYNC_SHELL_FUNCS and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            if self._has_param_in_expr(cmd_arg):
+                self._add(
+                    "SRC-066",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "asyncio.create_subprocess_shell() with user-controlled command — async shell injection",
+                    "Use create_subprocess_exec() with a fixed binary and args list. Never pass user input to shell.",
                 )
 
         # SRC-063: zipimport.zipimporter(path) with user-controlled path — arbitrary zip code import

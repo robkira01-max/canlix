@@ -392,3 +392,24 @@ def fetch_url(url: str) -> bytes:
 def load_zip_plugin(path: str) -> None:
     # SRC-063: zipimporter with user-controlled path — arbitrary zip code import
     zipimport.zipimporter(path)
+
+
+import asyncio  # noqa: E402
+
+import aiohttp  # noqa: E402
+
+
+def set_obj_attr(obj: object, attr: str, value: object) -> None:
+    # SRC-064: setattr with user-controlled attribute name — attribute injection
+    setattr(obj, attr, value)
+
+
+async def make_request_no_tls() -> None:
+    # SRC-065: ssl=False disables TLS in aiohttp — MITM risk
+    async with aiohttp.ClientSession() as session:
+        await session.get("https://example.com", ssl=False)
+
+
+async def run_async_shell(cmd: str) -> None:
+    # SRC-066: asyncio.create_subprocess_shell with user-controlled command
+    await asyncio.create_subprocess_shell(cmd)

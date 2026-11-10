@@ -321,3 +321,18 @@ function compileScript(req: any): void {
   const script = new vm.Script(req.query.code);
   script.runInNewContext({});
 }
+
+// TS-064: document.write() with user-controlled HTML — DOM XSS
+function writeToDoc(req: any): void {
+  document.write(req.query.html);
+}
+
+// TS-065: window.open() with user-controlled URL — open redirect
+function openWindow(req: any): void {
+  window.open(req.query.url);
+}
+
+// TS-066: jQuery .html() with user-controlled data — innerHTML injection
+function renderContent(req: any): void {
+  $("#output").html(req.query.content);
+}

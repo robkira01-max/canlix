@@ -1593,11 +1593,53 @@ def test_SRC063_passes_zipimporter_literal(tmp_path):
     assert not any(f.rule_id == "SRC-063" for f in analyze_python(p))
 
 
-# ── Full fixture — all 63 rules ───────────────────────────────────────────────
+# ── SRC-064: setattr(obj, name, val) — attribute injection ────────────────────
 
 
-def test_vulnerable_fixture_has_all_sixty_three_rules():
+def test_SRC064_detects_setattr_name_param(tmp_path):
+    p = _py(tmp_path, "def patch(obj, attr: str, val):\n    setattr(obj, attr, val)")
+    assert any(f.rule_id == "SRC-064" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC064_passes_setattr_literal_name(tmp_path):
+    p = _py(tmp_path, "setattr(obj, 'name', 'Alice')")
+    assert not any(f.rule_id == "SRC-064" for f in analyze_python(p))
+
+
+# ── SRC-065: ssl=False — TLS disabled in aiohttp/websockets ──────────────────
+
+
+def test_SRC065_detects_ssl_false_kwarg(tmp_path):
+    p = _py(tmp_path, "import aiohttp\nasync def req():\n    await session.get(url, ssl=False)")
+    assert any(f.rule_id == "SRC-065" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC065_passes_ssl_true(tmp_path):
+    p = _py(tmp_path, "session.get(url, ssl=True)")
+    assert not any(f.rule_id == "SRC-065" for f in analyze_python(p))
+
+
+# ── SRC-066: asyncio.create_subprocess_shell(cmd) — async shell injection ────
+
+
+def test_SRC066_detects_create_subprocess_shell_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import asyncio\nasync def run(cmd: str):\n    await asyncio.create_subprocess_shell(cmd)",
+    )
+    assert any(f.rule_id == "SRC-066" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC066_passes_create_subprocess_shell_literal(tmp_path):
+    p = _py(tmp_path, "import asyncio\nasync def run():\n    await asyncio.create_subprocess_shell('ls')")
+    assert not any(f.rule_id == "SRC-066" for f in analyze_python(p))
+
+
+# ── Full fixture — all 66 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_sixty_six_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 64)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 67)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -638,6 +638,36 @@ _VM_SCRIPT_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-064: document.write(req.xxx) — DOM XSS via document.write
+# ---------------------------------------------------------------------------
+
+_DOC_WRITE_REQ = re.compile(
+    r"""(?x)
+    \bdocument\.write(?:ln)?\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-065: window.open(req.xxx) — DOM open redirect via window.open
+# ---------------------------------------------------------------------------
+
+_WINDOW_OPEN_REQ = re.compile(
+    r"""(?x)
+    \bwindow\.open\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-066: $(el).html(req.xxx) — jQuery innerHTML injection
+# ---------------------------------------------------------------------------
+
+_JQUERY_HTML_REQ = re.compile(
+    r"""(?x)
+    \)\.html\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -1394,6 +1424,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new vm.Script(req.xxx) — user-controlled code compiled as a VM script; vm is NOT a sandbox",
             "Never compile user-supplied code. Use a safe DSL or allowlisted template engine instead.",
+        )
+
+    # TS-064: document.write(req.xxx) — DOM XSS via document.write
+    if _DOC_WRITE_REQ.search(raw):
+        _add(
+            "TS-064",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "document.write(req.xxx) — user-controlled HTML injected into the document bypasses CSP",
+            "Never use document.write(). Use textContent or a safe DOM API to insert dynamic content.",
+        )
+
+    # TS-065: window.open(req.xxx) — DOM open redirect
+    if _WINDOW_OPEN_REQ.search(raw):
+        _add(
+            "TS-065",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "window.open(req.xxx) — user-controlled URL opens an arbitrary site (open redirect / phishing)",
+            "Validate the URL against an allowlist before calling window.open().",
+        )
+
+    # TS-066: $(el).html(req.xxx) — jQuery innerHTML injection
+    if _JQUERY_HTML_REQ.search(raw):
+        _add(
+            "TS-066",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "$(el).html(req.xxx) — user-controlled HTML injected via jQuery .html() enables XSS",
+            "Use .text() for plain-text content or sanitize HTML with DOMPurify before calling .html().",
         )
 
     # TS-052: document.getElementById(req.xxx) — DOM injection via user-controlled element ID

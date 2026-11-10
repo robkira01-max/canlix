@@ -1625,11 +1625,60 @@ def test_TS063_passes_vm_Script_literal(tmp_path):
     assert not any(f.rule_id == "TS-063" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 63 rules ───────────────────────────────────────────────
+# ── TS-064: document.write(req.xxx) — DOM XSS ────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_sixty_three_rules():
+def test_TS064_detects_document_write_req(tmp_path):
+    p = _ts(tmp_path, "document.write(req.query.html);")
+    assert any(f.rule_id == "TS-064" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS064_detects_document_writeln_req(tmp_path):
+    p = _ts(tmp_path, "document.writeln(req.body.content);")
+    assert any(f.rule_id == "TS-064" for f in analyze_typescript(p))
+
+
+def test_TS064_passes_document_write_literal(tmp_path):
+    p = _ts(tmp_path, 'document.write("<p>Hello</p>");')
+    assert not any(f.rule_id == "TS-064" for f in analyze_typescript(p))
+
+
+# ── TS-065: window.open(req.xxx) — open redirect ─────────────────────────────
+
+
+def test_TS065_detects_window_open_req(tmp_path):
+    p = _ts(tmp_path, "window.open(req.query.url);")
+    assert any(f.rule_id == "TS-065" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS065_passes_window_open_literal(tmp_path):
+    p = _ts(tmp_path, 'window.open("https://example.com");')
+    assert not any(f.rule_id == "TS-065" for f in analyze_typescript(p))
+
+
+# ── TS-066: $(el).html(req.xxx) — jQuery innerHTML injection ─────────────────
+
+
+def test_TS066_detects_jquery_html_req(tmp_path):
+    p = _ts(tmp_path, '$("#output").html(req.query.content);')
+    assert any(f.rule_id == "TS-066" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS066_detects_jquery_html_body(tmp_path):
+    p = _ts(tmp_path, "$(el).html(req.body.markup);")
+    assert any(f.rule_id == "TS-066" for f in analyze_typescript(p))
+
+
+def test_TS066_passes_jquery_html_literal(tmp_path):
+    p = _ts(tmp_path, '$(el).html("<b>safe</b>");')
+    assert not any(f.rule_id == "TS-066" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 66 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_sixty_six_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 64)}
+    expected = {f"TS-{i:03d}" for i in range(1, 67)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
