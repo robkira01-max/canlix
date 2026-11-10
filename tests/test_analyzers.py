@@ -1234,6 +1234,69 @@ def test_SRC039_passes_b64encode_nonsensitive(tmp_path):
     assert not any(f.rule_id == "SRC-039" for f in analyze_python(p))
 
 
+# ── SRC-043: SQL injection via str.format() ───────────────────────────────────
+
+
+def test_SRC043_detects_format_in_execute(tmp_path):
+    p = _py(
+        tmp_path,
+        "def search(term: str):\n    cursor.execute(\"SELECT * FROM users WHERE name = '{}'\".format(term))",
+    )
+    assert any(f.rule_id == "SRC-043" for f in analyze_python(p))
+
+
+def test_SRC043_detects_format_in_query(tmp_path):
+    p = _py(
+        tmp_path,
+        "def find(uid: str):\n    db.query(\"SELECT * FROM users WHERE id = '{}'\".format(uid))",
+    )
+    assert any(f.rule_id == "SRC-043" for f in analyze_python(p))
+
+
+def test_SRC043_passes_parameterized_query(tmp_path):
+    p = _py(tmp_path, "def search(term: str):\n    cursor.execute('SELECT * FROM users WHERE name = %s', (term,))")
+    assert not any(f.rule_id == "SRC-043" for f in analyze_python(p))
+
+
+# ── SRC-044: HTTP header injection ────────────────────────────────────────────
+
+
+def test_SRC044_detects_header_param_assign(tmp_path):
+    p = _py(tmp_path, "def redir(response, url: str):\n    response.headers['Location'] = url")
+    assert any(f.rule_id == "SRC-044" for f in analyze_python(p))
+
+
+def test_SRC044_detects_resp_header_assign(tmp_path):
+    p = _py(tmp_path, "def set_hdr(resp, val: str):\n    resp.headers['X-Custom'] = val")
+    assert any(f.rule_id == "SRC-044" for f in analyze_python(p))
+
+
+def test_SRC044_passes_literal_header_value(tmp_path):
+    p = _py(tmp_path, "response.headers['Content-Type'] = 'application/json'")
+    assert not any(f.rule_id == "SRC-044" for f in analyze_python(p))
+
+
+# ── SRC-045: file serving with user-controlled path ───────────────────────────
+
+
+def test_SRC045_detects_send_file_param(tmp_path):
+    p = _py(tmp_path, "from flask import send_file\ndef serve(filepath: str):\n    return send_file(filepath)")
+    assert any(f.rule_id == "SRC-045" for f in analyze_python(p))
+
+
+def test_SRC045_detects_send_from_directory_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "from flask import send_from_directory\ndef serve(d: str, fn: str):\n    return send_from_directory(d, fn)",
+    )
+    assert any(f.rule_id == "SRC-045" for f in analyze_python(p))
+
+
+def test_SRC045_passes_send_file_literal(tmp_path):
+    p = _py(tmp_path, "from flask import send_file\nsend_file('static/index.html')")
+    assert not any(f.rule_id == "SRC-045" for f in analyze_python(p))
+
+
 # ── SRC-040: compile() with dynamic source ────────────────────────────────────
 
 
@@ -1286,8 +1349,8 @@ def test_SRC042_passes_marshal_loads_constant(tmp_path):
 # ── Full fixture — all 42 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_forty_two_rules():
+def test_vulnerable_fixture_has_all_forty_five_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 43)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 46)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

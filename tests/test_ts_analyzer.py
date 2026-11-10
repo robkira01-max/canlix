@@ -1213,6 +1213,60 @@ def test_TS039_passes_btoa_nonsensitive(tmp_path):
     assert not any(f.rule_id == "TS-039" for f in analyze_typescript(p))
 
 
+# ── TS-043: SQL injection via string concatenation ────────────────────────────
+
+
+def test_TS043_detects_query_concat_string(tmp_path):
+    p = _ts(tmp_path, 'db.query("SELECT * FROM users WHERE id = " + userId);')
+    assert any(f.rule_id == "TS-043" for f in analyze_typescript(p))
+
+
+def test_TS043_detects_execute_concat_string(tmp_path):
+    p = _ts(tmp_path, 'conn.execute("SELECT * FROM t WHERE name = \'" + name + "\'");')
+    assert any(f.rule_id == "TS-043" for f in analyze_typescript(p))
+
+
+def test_TS043_passes_parameterized_query(tmp_path):
+    p = _ts(tmp_path, 'db.query("SELECT * FROM users WHERE id = $1", [userId]);')
+    assert not any(f.rule_id == "TS-043" for f in analyze_typescript(p))
+
+
+# ── TS-044: HTTP header injection ─────────────────────────────────────────────
+
+
+def test_TS044_detects_setHeader_from_query(tmp_path):
+    p = _ts(tmp_path, 'res.setHeader("Location", req.query.returnUrl);')
+    assert any(f.rule_id == "TS-044" for f in analyze_typescript(p))
+
+
+def test_TS044_detects_append_from_body(tmp_path):
+    p = _ts(tmp_path, 'res.append("X-Custom", req.body.value);')
+    assert any(f.rule_id == "TS-044" for f in analyze_typescript(p))
+
+
+def test_TS044_passes_literal_header_value(tmp_path):
+    p = _ts(tmp_path, 'res.setHeader("Content-Type", "application/json");')
+    assert not any(f.rule_id == "TS-044" for f in analyze_typescript(p))
+
+
+# ── TS-045: file serving with user-controlled path ────────────────────────────
+
+
+def test_TS045_detects_sendFile_from_query(tmp_path):
+    p = _ts(tmp_path, "res.sendFile(req.query.file);")
+    assert any(f.rule_id == "TS-045" for f in analyze_typescript(p))
+
+
+def test_TS045_detects_download_from_body(tmp_path):
+    p = _ts(tmp_path, "res.download(req.body.filename);")
+    assert any(f.rule_id == "TS-045" for f in analyze_typescript(p))
+
+
+def test_TS045_passes_sendFile_literal(tmp_path):
+    p = _ts(tmp_path, 'res.sendFile("/var/www/html/index.html");')
+    assert not any(f.rule_id == "TS-045" for f in analyze_typescript(p))
+
+
 # ── TS-040: new Function() with dynamic argument ──────────────────────────────
 
 
@@ -1270,8 +1324,8 @@ def test_TS042_passes_vm_runInNewContext_literal(tmp_path):
 # ── Full fixture — all 42 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_forty_two_rules():
+def test_vulnerable_ts_fixture_has_all_forty_five_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 43)}
+    expected = {f"TS-{i:03d}" for i in range(1, 46)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

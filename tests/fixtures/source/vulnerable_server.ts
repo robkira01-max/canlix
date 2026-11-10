@@ -197,6 +197,21 @@ function encodePassword(password: string): string {
   return btoa(password);
 }
 
+// TS-043: SQL injection via string concatenation
+async function searchByName(term: string): Promise<unknown> {
+  return db.query("SELECT * FROM users WHERE name = '" + term + "'");
+}
+
+// TS-044: header injection from request data
+function setLocationHeader(res: any, req: any): void {
+  res.setHeader("Location", req.query.returnUrl);
+}
+
+// TS-045: path traversal via res.sendFile with request data
+function serveAttachment(res: any, req: any): void {
+  res.sendFile(req.query.file);
+}
+
 // TS-040: new Function() with dynamic argument — runtime code injection
 function runDynamic(userCode: string): unknown {
   return new Function(userCode)();

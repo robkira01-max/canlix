@@ -236,6 +236,24 @@ def store_encoded_password(password: str) -> str:
     return base64.b64encode(password.encode()).decode()
 
 
+def search_by_name(search_term: str):
+    # SRC-043: SQL injection via str.format()
+    cursor.execute("SELECT * FROM users WHERE name = '{}'".format(search_term))
+
+
+def set_location_header(response, return_url: str):
+    # SRC-044: header injection via user-controlled value
+    response.headers["Location"] = return_url
+
+
+from flask import send_file  # noqa: E402, F811
+
+
+def serve_attachment(filepath: str):
+    # SRC-045: path traversal via flask.send_file with user-controlled path
+    return send_file(filepath)
+
+
 def compile_user_code(user_code: str):
     # SRC-040: compile() with user-controlled source — dynamic bytecode compilation
     return compile(user_code, "<string>", "exec")

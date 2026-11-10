@@ -502,6 +502,46 @@ _BASE64_SENSITIVE = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-043: SQL injection via string concatenation in query/execute calls
+# ---------------------------------------------------------------------------
+
+_SQL_CONCAT_TS = re.compile(
+    r"""(?x)
+    \.(?:query|execute|raw|run|exec)\s*\(
+    \s*(?:
+        "[^"\n]*"\s*\+       # "SQL..." + variable  (double-quoted — no issue with inner ')
+        | '[^'\n]*'\s*\+     # 'SQL...' + variable  (single-quoted — no issue with inner ")
+        | [A-Za-z_$][A-Za-z0-9_$]*\s*\+\s*["']   # variable + "SQL..."
+    )
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-044: HTTP header injection — user-controlled value written to setHeader/append
+# ---------------------------------------------------------------------------
+
+_HEADER_INJECT_TS = re.compile(
+    r"""(?x)
+    \bres\.(?:setHeader|append)\s*\(
+    \s*["'`][^"'`\n]+["'`]\s*,\s*
+    req\.(?:query|body|params|headers)\b
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# TS-045: file serving with user-controlled path — res.sendFile / res.download from request
+# ---------------------------------------------------------------------------
+
+_SEND_FILE_FROM_REQ = re.compile(
+    r"""(?x)
+    \bres\.(?:sendFile|download)\s*\(\s*
+    req\.(?:query|body|params)\b
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # TS-040: new Function() with dynamic argument — dynamic code execution (like eval for statements)
 # ---------------------------------------------------------------------------
 
@@ -1035,6 +1075,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "Open redirect: URL taken directly from req.query/body/params — attacker can redirect to any site",
             "Validate the URL against an allowlist or use a safe relative path. Never trust raw request data.",
+        )
+
+    # TS-043: SQL injection via string concatenation in query/execute
+    if _SQL_CONCAT_TS.search(raw):
+        _add(
+            "TS-043",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "SQL query built with string concatenation — SQL injection risk",
+            "Use parameterised queries: db.query(sql, [params]). Never concatenate user values into SQL.",
+        )
+
+    # TS-044: HTTP header injection — user-controlled value from request written to response header
+    if _HEADER_INJECT_TS.search(raw):
+        _add(
+            "TS-044",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.setHeader/append with request data — untrusted value allows CRLF/header injection",
+            "Strip CR/LF characters from header values. Never write raw request data to response headers.",
+        )
+
+    # TS-045: file serving with user-controlled path — path traversal to arbitrary file read
+    if _SEND_FILE_FROM_REQ.search(raw):
+        _add(
+            "TS-045",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "res.sendFile/download with request data — user-controlled path allows reading any file",
+            "Validate the path against an allowlist or serve from a fixed directory using path.basename().",
         )
 
     # TS-040: new Function() with dynamic argument — runtime code compilation (like eval for statements)

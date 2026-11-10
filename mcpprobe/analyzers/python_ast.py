@@ -134,6 +134,8 @@ _BASE64_FUNCS = frozenset({"base64.b64decode", "base64.b64encode", "base64.decod
 _CRED_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z+\-.]*://[^@\s:\"']{1,64}:[^@\s\"']{4,64}@", re.IGNORECASE)
 # SRC-042: marshal deserialization — arbitrary code execution
 _MARSHAL_FUNCS = frozenset({"marshal.loads", "marshal.load"})
+# SRC-045: file serving with user-controlled path
+_SEND_FILE_FUNCS = frozenset({"send_file", "flask.send_file", "send_from_directory", "flask.send_from_directory"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -479,6 +481,24 @@ class _Visitor(ast.NodeVisitor):
                         f"'{target.id} = True' enables debug mode — must not be True in production",
                         "Set DEBUG via environment variable: DEBUG = os.environ.get('DEBUG', 'false') == 'true'.",
                     )
+
+        # SRC-044: HTTP header injection — user-controlled value written directly to response.headers[key]
+        if self._param_names and isinstance(node.value, ast.Name) and node.value.id in self._param_names:
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Subscript)
+                    and isinstance(target.value, ast.Attribute)
+                    and target.value.attr == "headers"
+                ):
+                    self._add(
+                        "SRC-044",
+                        Severity.MEDIUM,
+                        Confidence.MEDIUM,
+                        node.lineno,
+                        f"response.headers[key] = {node.value.id} — user-controlled value allows CRLF injection",
+                        "Strip CR/LF from header values. Never write raw user input to response headers.",
+                    )
+                    break
 
         self.generic_visit(node)
 
@@ -1065,6 +1085,37 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     "Open redirect: URL taken directly from request data — attacker can redirect to any site",
                     "Validate the URL against an allowlist or use a safe relative path. Never trust raw request data.",
+                )
+
+        # SRC-043: SQL injection via .format() — cursor.execute("SELECT...{}".format(param))
+        if any(fname.endswith(m) for m in _SQL_METHODS) and self._param_names and node.args:
+            sql_arg = node.args[0]
+            if (
+                isinstance(sql_arg, ast.Call)
+                and isinstance(sql_arg.func, ast.Attribute)
+                and sql_arg.func.attr == "format"
+                and any(isinstance(a, ast.Name) and a.id in self._param_names for a in sql_arg.args)
+            ):
+                self._add(
+                    "SRC-043",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "SQL query built with str.format() from function parameter — SQL injection risk",
+                    "Use parameterised queries: cursor.execute(sql, [params]). Never format SQL strings.",
+                )
+
+        # SRC-045: flask.send_file / send_from_directory with user-controlled path
+        if fname in _SEND_FILE_FUNCS and node.args:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-045",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}({path_arg.id}) — user-controlled path allows reading any file on the server",
+                    "Validate the path against an allowlist or use send_from_directory with a fixed base dir.",
                 )
 
         # SRC-040: compile() with user-controlled source — dynamic bytecode compilation
