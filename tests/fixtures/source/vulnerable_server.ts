@@ -475,3 +475,18 @@ function echoQuery(res: any, req: any): void {
 function parsePayload(req: any): unknown {
   return JSON.parse(req.body.data);
 }
+
+// TS-094: fs.symlink(req.query.xxx) — user-controlled symlink target (symlink attack)
+function createLink(req: any, linkPath: string): void {
+  fs.symlink(req.query.target, linkPath, () => {});
+}
+
+// TS-095: mongoose.model(req.query.xxx) — user-controlled model name, arbitrary collection access
+function getCollection(req: any): any {
+  return mongoose.model(req.query.collection);
+}
+
+// TS-096: Buffer.allocUnsafe(req.query.xxx) — user-controlled buffer size (DoS)
+function allocBuffer(req: any): Buffer {
+  return Buffer.allocUnsafe(req.query.size);
+}

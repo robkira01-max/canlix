@@ -2032,11 +2032,50 @@ def test_src_093_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-093" for f in analyze_python(p))
 
 
-# ── Full fixture — all 93 rules ───────────────────────────────────────────────
+# ── SRC-094: sock.bind((user_host, port)) — service binds on wrong interface ──
 
 
-def test_vulnerable_fixture_has_all_ninety_three_rules():
+def test_src_094_fires_on_bind_with_param_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "def start_server(sock, host: str):\n    sock.bind((host, 8080))\n")
+    assert any(f.rule_id == "SRC-094" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_094_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "def start_server(sock):\n    sock.bind(('0.0.0.0', 8080))\n")
+    assert not any(f.rule_id == "SRC-094" for f in analyze_python(p))
+
+
+# ── SRC-095: imaplib.IMAP4(user_host) — SSRF via IMAP ────────────────────────
+
+
+def test_src_095_fires_on_imap4_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import imaplib\ndef check_mail(host: str):\n    imaplib.IMAP4(host)\n")
+    assert any(f.rule_id == "SRC-095" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_095_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import imaplib\ndef check_mail():\n    imaplib.IMAP4('mail.example.com')\n")
+    assert not any(f.rule_id == "SRC-095" for f in analyze_python(p))
+
+
+# ── SRC-096: poplib.POP3(user_host) — SSRF via POP3 ──────────────────────────
+
+
+def test_src_096_fires_on_pop3_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import poplib\ndef fetch_mail(host: str):\n    poplib.POP3(host)\n")
+    assert any(f.rule_id == "SRC-096" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_096_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import poplib\ndef fetch_mail():\n    poplib.POP3('pop.example.com')\n")
+    assert not any(f.rule_id == "SRC-096" for f in analyze_python(p))
+
+
+# ── Full fixture — all 96 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_ninety_six_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 94)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 97)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

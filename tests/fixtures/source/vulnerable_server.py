@@ -539,7 +539,24 @@ def open_archive(archive_path: str) -> None:
     tarfile.open(archive_path)
 
 
+import imaplib  # noqa: E402
+import poplib  # noqa: E402
 import sqlite3  # noqa: E402
+
+
+def bind_server(sock: object, host: str) -> None:
+    # SRC-094: sock.bind with user-controlled host — service may listen on wrong interface
+    sock.bind((host, 8080))  # type: ignore[attr-defined]
+
+
+def connect_imap(host: str) -> imaplib.IMAP4:
+    # SRC-095: imaplib.IMAP4 with user-controlled host — SSRF via IMAP
+    return imaplib.IMAP4(host)
+
+
+def connect_pop3(host: str) -> poplib.POP3:
+    # SRC-096: poplib.POP3 with user-controlled host — SSRF via POP3
+    return poplib.POP3(host)
 
 
 def open_user_db(db_path: str) -> sqlite3.Connection:

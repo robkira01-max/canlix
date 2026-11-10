@@ -2153,11 +2153,51 @@ def test_ts_093_no_fire_on_hardcoded_json(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-093" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 93 rules ───────────────────────────────────────────────
+# ── TS-094: fs.symlink(req.xxx) — user-controlled symlink target ──────────────
 
 
-def test_vulnerable_ts_fixture_has_all_ninety_three_rules():
+def test_ts_094_fires_on_fs_symlink_with_req(tmp_path: Path) -> None:
+    code = "import * as fs from 'fs';\nfunction lnk(req:any){fs.symlink(req.query.target,'/app/lnk',()=>{});}\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-094" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_094_no_fire_on_hardcoded_target(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "import * as fs from 'fs';\nfunction lnk(){fs.symlink('/safe/target','/app/lnk',()=>{});}\n")
+    assert not any(f.rule_id == "TS-094" for f in analyze_typescript(p))
+
+
+# ── TS-095: mongoose.model(req.xxx) — arbitrary collection access ─────────────
+
+
+def test_ts_095_fires_on_mongoose_model_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return mongoose.model(req.query.collection);}\n")
+    assert any(f.rule_id == "TS-095" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_095_no_fire_on_hardcoded_model(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(){return mongoose.model('User');}\n")
+    assert not any(f.rule_id == "TS-095" for f in analyze_typescript(p))
+
+
+# ── TS-096: Buffer.allocUnsafe(req.xxx) — user-controlled buffer size (DoS) ───
+
+
+def test_ts_096_fires_on_buffer_alloc_unsafe_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return Buffer.allocUnsafe(req.query.size);}\n")
+    assert any(f.rule_id == "TS-096" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_ts_096_no_fire_on_hardcoded_size(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(){return Buffer.allocUnsafe(1024);}\n")
+    assert not any(f.rule_id == "TS-096" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 96 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_ninety_six_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 94)}
+    expected = {f"TS-{i:03d}" for i in range(1, 97)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

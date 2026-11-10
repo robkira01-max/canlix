@@ -901,6 +901,30 @@ _JSON_PARSE_REQ = re.compile(
     """,
 )
 
+# TS-094: fs.symlink(req.xxx, ...) — user-controlled symlink target (symlink attack)
+_FS_SYMLINK_REQ = re.compile(
+    r"""(?x)
+    \bfs\.symlinks?\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-095: mongoose.model(req.xxx) — user-controlled model name, accesses arbitrary collection
+_MONGOOSE_MODEL_REQ = re.compile(
+    r"""(?x)
+    \bmongoose\.model\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-096: Buffer.allocUnsafe(req.xxx) — user-controlled buffer size, DoS risk
+_BUFFER_ALLOC_REQ = re.compile(
+    r"""(?x)
+    \bBuffer\.allocUnsafe\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1898,6 +1922,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "JSON.parse(req.xxx) — user-controlled JSON; risk of prototype pollution or DoS via deeply nested input",
             "Validate JSON structure and depth after parsing. Use a safe-merge or schema validator.",
+        )
+
+    # TS-094: fs.symlink(req.xxx) — user-controlled symlink target (symlink attack)
+    if _FS_SYMLINK_REQ.search(raw):
+        _add(
+            "TS-094",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fs.symlink(req.xxx, ...) — user-controlled symlink target enables symlink attack on arbitrary paths",
+            "Validate the target path. Never allow callers to control the symlink destination.",
+        )
+
+    # TS-095: mongoose.model(req.xxx) — user-controlled model name, arbitrary collection access
+    if _MONGOOSE_MODEL_REQ.search(raw):
+        _add(
+            "TS-095",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "mongoose.model(req.xxx) — user-controlled model name enables access to arbitrary DB collections",
+            "Allowlist model names. Never let request data determine which Mongoose model to load.",
+        )
+
+    # TS-096: Buffer.allocUnsafe(req.xxx) — user-controlled size enables DoS via large allocation
+    if _BUFFER_ALLOC_REQ.search(raw):
+        _add(
+            "TS-096",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "Buffer.allocUnsafe(req.xxx) — user-controlled buffer size can cause out-of-memory DoS",
+            "Cap allocation size to a sane maximum. Never pass raw request data to Buffer.allocUnsafe.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

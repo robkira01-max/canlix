@@ -216,6 +216,10 @@ _SQLITE_CONNECT_FUNCS = frozenset({"sqlite3.connect"})
 _CHMOD_PATH_FUNCS = frozenset({"os.chmod", "os.lchmod"})
 # SRC-093: os.chown(user_path, uid, gid) — user-controlled path, can transfer ownership of any file
 _CHOWN_FUNCS = frozenset({"os.chown", "os.lchown"})
+# SRC-095: imaplib.IMAP4(user_host) — SSRF via user-controlled IMAP server
+_IMAP_FUNCS = frozenset({"imaplib.IMAP4", "imaplib.IMAP4_SSL", "imaplib.IMAP4_stream", "IMAP4"})
+# SRC-096: poplib.POP3(user_host) — SSRF via user-controlled POP3 server
+_POP3_FUNCS = frozenset({"poplib.POP3", "poplib.POP3_SSL", "POP3"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1894,6 +1898,51 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"os.chown({path_arg.id}, ...) — user-controlled path enables ownership transfer of any file",
                     "Validate the target path against an allowlist. Never let callers choose which file to chown.",
+                )
+
+        # SRC-094: sock.bind((user_host, port)) — user-controlled bind address exposes on wrong interface
+        if self._param_names and isinstance(node.func, ast.Attribute) and node.func.attr == "bind" and node.args:
+            bind_arg = node.args[0]
+            if (
+                isinstance(bind_arg, ast.Tuple)
+                and bind_arg.elts
+                and isinstance(bind_arg.elts[0], ast.Name)
+                and bind_arg.elts[0].id in self._param_names
+            ):
+                _host_id = bind_arg.elts[0].id
+                self._add(
+                    "SRC-094",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"sock.bind(({_host_id}, ...)) — user-controlled bind address; service may listen on wrong iface",
+                    "Hardcode the bind address ('' or '127.0.0.1'). Never let callers choose the listen interface.",
+                )
+
+        # SRC-095: imaplib.IMAP4(user_host) — SSRF via user-controlled IMAP server
+        if fname in _IMAP_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-095",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"imaplib.IMAP4({host_arg.id}) — user-controlled IMAP host enables SSRF",
+                    "Hardcode the IMAP host in configuration. Never allow callers to supply the mail server address.",
+                )
+
+        # SRC-096: poplib.POP3(user_host) — SSRF via user-controlled POP3 server
+        if fname in _POP3_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-096",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"poplib.POP3({host_arg.id}) — user-controlled POP3 host enables SSRF",
+                    "Hardcode the POP3 host in configuration. Never allow callers to supply the mail server address.",
                 )
 
         self.generic_visit(node)
