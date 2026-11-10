@@ -130,6 +130,10 @@ _WEAK_TLS_PROTOCOLS = frozenset({"PROTOCOL_SSLv2", "PROTOCOL_SSLv3", "PROTOCOL_T
 _WORLD_WRITE_BIT = 0o002
 # SRC-039: base64 used as obfuscation on security-sensitive values
 _BASE64_FUNCS = frozenset({"base64.b64decode", "base64.b64encode", "base64.decodebytes", "base64.encodebytes"})
+# SRC-041: credentials embedded in connection-string URL
+_CRED_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z+\-.]*://[^@\s:\"']{1,64}:[^@\s\"']{4,64}@", re.IGNORECASE)
+# SRC-042: marshal deserialization — arbitrary code execution
+_MARSHAL_FUNCS = frozenset({"marshal.loads", "marshal.load"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -412,15 +416,26 @@ class _Visitor(ast.NodeVisitor):
         return ""
 
     def visit_Constant(self, node: ast.Constant) -> None:
-        if isinstance(node.value, str) and _KEY_PREFIXES.match(node.value):
-            self._add(
-                "SRC-001",
-                Severity.CRITICAL,
-                Confidence.HIGH,
-                node.lineno,
-                "Hardcoded API key or token detected in source code",
-                "Move secret to an environment variable or secrets manager. Never commit credentials.",
-            )
+        if isinstance(node.value, str):
+            if _KEY_PREFIXES.match(node.value):
+                self._add(
+                    "SRC-001",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "Hardcoded API key or token detected in source code",
+                    "Move secret to an environment variable or secrets manager. Never commit credentials.",
+                )
+            # SRC-041: credentials embedded in a connection-string URL
+            if _CRED_URL_RE.search(node.value):
+                self._add(
+                    "SRC-041",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "Credentials embedded in connection-string URL — password visible in source and logs",
+                    "Use environment variables for the user/password components and build the URL at runtime.",
+                )
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -1050,6 +1065,32 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     "Open redirect: URL taken directly from request data — attacker can redirect to any site",
                     "Validate the URL against an allowlist or use a safe relative path. Never trust raw request data.",
+                )
+
+        # SRC-040: compile() with user-controlled source — dynamic bytecode compilation
+        if fname == "compile" and node.args:
+            first_arg = node.args[0]
+            if not isinstance(first_arg, ast.Constant):
+                self._add(
+                    "SRC-040",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    "compile() with dynamic source — runtime compilation of untrusted code allows code injection",
+                    "Never compile user-supplied strings. Use ast.literal_eval() for data, or a safe DSL library.",
+                )
+
+        # SRC-042: marshal.loads() — unsafe deserialization (arbitrary code execution via crafted bytes)
+        if fname in _MARSHAL_FUNCS and node.args:
+            first_arg = node.args[0]
+            if not isinstance(first_arg, ast.Constant):
+                self._add(
+                    "SRC-042",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}() deserializes untrusted bytes — a crafted payload executes arbitrary Python code",
+                    "Never deserialize marshal data from untrusted sources. Use json or a schema-validated format.",
                 )
 
         self.generic_visit(node)

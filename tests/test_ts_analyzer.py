@@ -1213,11 +1213,65 @@ def test_TS039_passes_btoa_nonsensitive(tmp_path):
     assert not any(f.rule_id == "TS-039" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 39 rules ───────────────────────────────────────────────
+# ── TS-040: new Function() with dynamic argument ──────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_thirty_nine_rules():
+def test_TS040_detects_new_Function_variable(tmp_path):
+    p = _ts(tmp_path, "const fn = new Function(userCode);")
+    assert any(f.rule_id == "TS-040" for f in analyze_typescript(p))
+
+
+def test_TS040_detects_new_Function_multiple_args_variable(tmp_path):
+    p = _ts(tmp_path, "const fn = new Function('a', bodyCode);")
+    assert not any(f.rule_id == "TS-040" for f in analyze_typescript(p))
+
+
+def test_TS040_passes_new_Function_literal(tmp_path):
+    p = _ts(tmp_path, 'const fn = new Function("return 42");')
+    assert not any(f.rule_id == "TS-040" for f in analyze_typescript(p))
+
+
+# ── TS-041: credentials in connection-string URL ──────────────────────────────
+
+
+def test_TS041_detects_postgresql_credentials(tmp_path):
+    p = _ts(tmp_path, 'const URL = "postgresql://admin:password123@db.host/prod";')
+    assert any(f.rule_id == "TS-041" for f in analyze_typescript(p))
+
+
+def test_TS041_detects_mongodb_credentials(tmp_path):
+    p = _ts(tmp_path, 'const MONGO = "mongodb://user:s3cret@mongo.example.com/mydb";')
+    assert any(f.rule_id == "TS-041" for f in analyze_typescript(p))
+
+
+def test_TS041_passes_url_without_password(tmp_path):
+    p = _ts(tmp_path, 'const URL = "postgresql://localhost/mydb";')
+    assert not any(f.rule_id == "TS-041" for f in analyze_typescript(p))
+
+
+# ── TS-042: vm.runInNewContext / vm.Script with dynamic code ──────────────────
+
+
+def test_TS042_detects_vm_runInNewContext_variable(tmp_path):
+    p = _ts(tmp_path, "vm.runInNewContext(userCode, {});")
+    assert any(f.rule_id == "TS-042" for f in analyze_typescript(p))
+
+
+def test_TS042_detects_vm_runInThisContext_variable(tmp_path):
+    p = _ts(tmp_path, "vm.runInThisContext(code);")
+    assert any(f.rule_id == "TS-042" for f in analyze_typescript(p))
+
+
+def test_TS042_passes_vm_runInNewContext_literal(tmp_path):
+    p = _ts(tmp_path, 'vm.runInNewContext("1 + 1", {});')
+    assert not any(f.rule_id == "TS-042" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 42 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_forty_two_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 40)}
+    expected = {f"TS-{i:03d}" for i in range(1, 43)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

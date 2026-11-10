@@ -502,6 +502,49 @@ _BASE64_SENSITIVE = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-040: new Function() with dynamic argument — dynamic code execution (like eval for statements)
+# ---------------------------------------------------------------------------
+
+_NEW_FUNCTION_VAR = re.compile(
+    r"""(?x)
+    \bnew\s+Function\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*  # new Function(variable
+    """,
+)
+_NEW_FUNCTION_LITERAL_SAFE = re.compile(
+    r"""(?x)
+    \bnew\s+Function\s*\(\s*["'`]  # new Function("literal" — static code, low risk
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-041: credentials embedded in a connection-string URL
+# ---------------------------------------------------------------------------
+
+_CRED_URL_TS = re.compile(
+    r"""(?x)
+    ["'`][a-zA-Z][a-zA-Z+\-.]*://[^@\s:'"` ]{1,64}:[^@\s'"` ]{4,64}@
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# TS-042: vm.runInNewContext / vm.runInThisContext / vm.Script with variable
+# ---------------------------------------------------------------------------
+
+_VM_RUN_VAR = re.compile(
+    r"""(?x)
+    \bvm\.run(?:InNewContext|InThisContext|Script)\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*
+    | \bnew\s+vm\.Script\s*\(\s*[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+_VM_RUN_LITERAL_SAFE = re.compile(
+    r"""(?x)
+    \bvm\.run(?:InNewContext|InThisContext|Script)\s*\(\s*["'`]
+    | \bnew\s+vm\.Script\s*\(\s*["'`]
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-034: unsafe YAML deserialisation — js-yaml .load() without schema
 # ---------------------------------------------------------------------------
 
@@ -992,6 +1035,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "Open redirect: URL taken directly from req.query/body/params — attacker can redirect to any site",
             "Validate the URL against an allowlist or use a safe relative path. Never trust raw request data.",
+        )
+
+    # TS-040: new Function() with dynamic argument — runtime code compilation (like eval for statements)
+    if _NEW_FUNCTION_VAR.search(raw) and not _NEW_FUNCTION_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-040",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new Function(variable) constructs and executes code at runtime — equivalent to eval() for statements",
+            "Remove new Function(). Use explicit logic, a safe expression parser, or a sandboxed worker.",
+        )
+
+    # TS-041: credentials embedded in connection-string URL
+    if _CRED_URL_TS.search(raw):
+        _add(
+            "TS-041",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "Credentials embedded in connection-string URL — password visible in source, logs and version history",
+            "Use environment variables for user/password and build the URL at runtime. Never commit credentials.",
+        )
+
+    # TS-042: vm.runInNewContext / vm.Script with dynamic code — vm is not a security sandbox
+    if _VM_RUN_VAR.search(raw) and not _VM_RUN_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-042",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "vm.runInNewContext/Script with dynamic code — Node.js vm is not a security sandbox; breakout is easy",
+            "Do not use vm for untrusted code isolation. Use a worker_threads sandbox or a separate process.",
         )
 
     return result

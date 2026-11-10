@@ -1234,11 +1234,60 @@ def test_SRC039_passes_b64encode_nonsensitive(tmp_path):
     assert not any(f.rule_id == "SRC-039" for f in analyze_python(p))
 
 
-# ── Full fixture — all 39 rules ───────────────────────────────────────────────
+# ── SRC-040: compile() with dynamic source ────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_thirty_nine_rules():
+def test_SRC040_detects_compile_with_param(tmp_path):
+    p = _py(tmp_path, "def run(user_code: str):\n    return compile(user_code, '<string>', 'exec')")
+    assert any(f.rule_id == "SRC-040" for f in analyze_python(p))
+
+
+def test_SRC040_passes_compile_literal(tmp_path):
+    p = _py(tmp_path, "compile('1 + 1', '<string>', 'eval')")
+    assert not any(f.rule_id == "SRC-040" for f in analyze_python(p))
+
+
+# ── SRC-041: credentials in connection-string URL ─────────────────────────────
+
+
+def test_SRC041_detects_postgresql_credentials(tmp_path):
+    p = _py(tmp_path, 'URL = "postgresql://admin:password123@db.host/prod"')
+    assert any(f.rule_id == "SRC-041" for f in analyze_python(p))
+
+
+def test_SRC041_detects_mongodb_credentials(tmp_path):
+    p = _py(tmp_path, 'MONGO = "mongodb://user:s3cret@mongo.example.com/mydb"')
+    assert any(f.rule_id == "SRC-041" for f in analyze_python(p))
+
+
+def test_SRC041_passes_url_without_password(tmp_path):
+    p = _py(tmp_path, 'URL = "postgresql://localhost/mydb"')
+    assert not any(f.rule_id == "SRC-041" for f in analyze_python(p))
+
+
+# ── SRC-042: marshal.loads() deserialization ──────────────────────────────────
+
+
+def test_SRC042_detects_marshal_loads_variable(tmp_path):
+    p = _py(tmp_path, "import marshal\ndef load(data: bytes):\n    return marshal.loads(data)")
+    assert any(f.rule_id == "SRC-042" for f in analyze_python(p))
+
+
+def test_SRC042_detects_marshal_load_variable(tmp_path):
+    p = _py(tmp_path, "import marshal\ndef load(f):\n    return marshal.load(f)")
+    assert any(f.rule_id == "SRC-042" for f in analyze_python(p))
+
+
+def test_SRC042_passes_marshal_loads_constant(tmp_path):
+    p = _py(tmp_path, r"import marshal" + "\nmarshal.loads(b'\\xdb\\x00\\x00\\x00')")
+    assert not any(f.rule_id == "SRC-042" for f in analyze_python(p))
+
+
+# ── Full fixture — all 42 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_forty_two_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 40)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 43)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

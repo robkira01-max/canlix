@@ -234,3 +234,19 @@ import base64  # noqa: E402
 def store_encoded_password(password: str) -> str:
     # SRC-039: base64 used as obfuscation on a secret — not encryption
     return base64.b64encode(password.encode()).decode()
+
+
+def compile_user_code(user_code: str):
+    # SRC-040: compile() with user-controlled source — dynamic bytecode compilation
+    return compile(user_code, "<string>", "exec")
+
+
+# SRC-041: credentials embedded in connection-string URL
+DB_CONN = "postgresql://admin:super_secret_pass@db.example.com/prod"
+
+import marshal  # noqa: E402
+
+
+def load_binary_data(data: bytes):
+    # SRC-042: marshal.loads — arbitrary code execution via crafted bytes
+    return marshal.loads(data)

@@ -196,3 +196,17 @@ function makeFilePublic(filePath: string): void {
 function encodePassword(password: string): string {
   return btoa(password);
 }
+
+// TS-040: new Function() with dynamic argument — runtime code injection
+function runDynamic(userCode: string): unknown {
+  return new Function(userCode)();
+}
+
+// TS-041: credentials embedded in connection-string URL
+const DB_URL = "postgresql://admin:super_secret_pass@db.example.com/prod";
+
+// TS-042: vm.runInNewContext with user-supplied code — vm is NOT a sandbox
+import vm from "vm";
+function runInSandbox(code: string): unknown {
+  return vm.runInNewContext(code, {});
+}
