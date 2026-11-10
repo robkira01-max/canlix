@@ -688,3 +688,23 @@ def run_pexpect(cmd: str):
 def run_in_cwd(cwd: str) -> None:
     # SRC-111: subprocess.Popen with user-controlled cwd — directory traversal in cwd
     subprocess.Popen(["ls"], cwd=cwd)
+
+
+import psycopg2  # noqa: E402
+import pymysql  # noqa: E402
+import redis  # noqa: E402
+
+
+def connect_redis(host: str):
+    # SRC-112: redis.Redis(host=user_host) — SSRF via user-controlled Redis host
+    return redis.Redis(host=host, port=6379)
+
+
+def connect_mysql(host: str):
+    # SRC-113: pymysql.connect(host=user_host) — SSRF via MySQL host
+    return pymysql.connect(host=host, user="root", password="secret", db="app")
+
+
+def connect_postgres(host: str):
+    # SRC-114: psycopg2.connect(host=user_host) — SSRF via PostgreSQL host
+    return psycopg2.connect(host=host, dbname="app", user="admin", password="secret")

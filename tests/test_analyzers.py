@@ -2270,6 +2270,45 @@ def test_src_111_no_fire_on_hardcoded_cwd(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-111" for f in analyze_python(p))
 
 
+# ── SRC-112: redis.Redis(host=user_host) — SSRF via Redis host ────────────────
+
+
+def test_src_112_fires_on_redis_host_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import redis\ndef conn(host: str):\n    redis.Redis(host=host)\n")
+    assert any(f.rule_id == "SRC-112" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_112_no_fire_on_hardcoded_redis_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import redis\ndef conn():\n    redis.Redis(host='localhost')\n")
+    assert not any(f.rule_id == "SRC-112" for f in analyze_python(p))
+
+
+# ── SRC-113: pymysql.connect(host=user_host) — SSRF via MySQL host ───────────
+
+
+def test_src_113_fires_on_mysql_host_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pymysql\ndef conn(host: str):\n    pymysql.connect(host=host, user='root')\n")
+    assert any(f.rule_id == "SRC-113" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_113_no_fire_on_hardcoded_mysql_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pymysql\ndef conn():\n    pymysql.connect(host='db.internal', user='root')\n")
+    assert not any(f.rule_id == "SRC-113" for f in analyze_python(p))
+
+
+# ── SRC-114: psycopg2.connect(host=user_host) — SSRF via PostgreSQL host ─────
+
+
+def test_src_114_fires_on_psycopg2_host_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import psycopg2\ndef conn(host: str):\n    psycopg2.connect(host=host, dbname='app')\n")
+    assert any(f.rule_id == "SRC-114" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_114_no_fire_on_hardcoded_pg_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import psycopg2\ndef conn():\n    psycopg2.connect(host='db.internal', dbname='app')\n")
+    assert not any(f.rule_id == "SRC-114" for f in analyze_python(p))
+
+
 # ── Full fixture — all 111 rules ──────────────────────────────────────────────
 
 
@@ -2277,4 +2316,11 @@ def test_vulnerable_fixture_has_all_one_hundred_eleven_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 112)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+def test_vulnerable_fixture_has_all_one_hundred_fourteen_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 115)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

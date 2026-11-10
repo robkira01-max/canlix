@@ -571,3 +571,21 @@ function hashPassword2(req: any, salt: Buffer): void {
 function buildUrl(req: any): URL {
   return new URL(req.query.target);
 }
+
+// TS-112: mysql.createConnection({host: req.query.xxx}) — SSRF via MySQL host
+import mysql from "mysql2";
+function connectMySQL(req: any) {
+  return mysql.createConnection({ host: req.query.dbHost, user: "root", password: "secret" });
+}
+
+// TS-113: new Redis(req.query.xxx) — SSRF via ioredis connection string
+import Redis from "ioredis";
+function connectRedis(req: any) {
+  return new Redis(req.query.redisUrl);
+}
+
+// TS-114: createConnection({host: req.query.xxx}) — TypeORM SSRF via user-controlled host
+import { createConnection } from "typeorm";
+async function connectTypeORM(req: any) {
+  return createConnection({ host: req.query.dbHost, type: "postgres", database: "app" });
+}

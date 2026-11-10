@@ -2388,6 +2388,45 @@ def test_ts_111_no_fire_on_literal_url(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-111" for f in analyze_typescript(p))
 
 
+# ── TS-112: mysql.createConnection({host: req.xxx}) — MySQL SSRF ─────────────
+
+
+def test_ts_112_fires_on_mysql_create_connection_with_req_host(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){mysql.createConnection({host:req.query.dbHost});}\n")
+    assert any(f.rule_id == "TS-112" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_112_no_fire_on_hardcoded_mysql_host(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){mysql.createConnection({host:"db.internal"});}\n')
+    assert not any(f.rule_id == "TS-112" for f in analyze_typescript(p))
+
+
+# ── TS-113: new Redis(req.xxx) — SSRF via ioredis connection string ───────────
+
+
+def test_ts_113_fires_on_new_redis_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return new Redis(req.query.redisUrl);}\n")
+    assert any(f.rule_id == "TS-113" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_113_no_fire_on_hardcoded_redis(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){return new Redis("redis://localhost:6379");}\n')
+    assert not any(f.rule_id == "TS-113" for f in analyze_typescript(p))
+
+
+# ── TS-114: createConnection({host: req.xxx}) — TypeORM SSRF ─────────────────
+
+
+def test_ts_114_fires_on_typeorm_create_connection_with_req_host(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "async function f(req:any){createConnection({host:req.query.dbHost,type:'postgres'});}\n")
+    assert any(f.rule_id == "TS-114" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_114_no_fire_on_hardcoded_typeorm_host(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'async function f(){createConnection({host:"db.internal",type:"postgres"});}\n')
+    assert not any(f.rule_id == "TS-114" for f in analyze_typescript(p))
+
+
 # ── Full fixture — all 111 rules ──────────────────────────────────────────────
 
 
@@ -2395,4 +2434,11 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_eleven_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 112)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_fourteen_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 115)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

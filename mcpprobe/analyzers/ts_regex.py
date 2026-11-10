@@ -1046,6 +1046,30 @@ _NEW_URL_REQ = re.compile(
     """,
 )
 
+# TS-112: mysql.createConnection({host: req.xxx}) / mysql2.createConnection({host:req.xxx}) — SSRF
+_MYSQL_CONN_REQ = re.compile(
+    r"""(?x)
+    \b(?:mysql2?\.create(?:Connection|Pool))\s*\(\s*\{[^}]*\bhost\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-113: new Redis(req.xxx) (ioredis) — user-controlled Redis connection string
+_IOREDIS_NEW_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Redis\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-114: createConnection({host: req.xxx}) (TypeORM) — SSRF via user-controlled host
+_TYPEORM_CONN_REQ = re.compile(
+    r"""(?x)
+    \bcreateConnection\s*\(\s*\{[^}]*\bhost\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2225,6 +2249,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new URL(req.xxx) — user-controlled URL parsed with the URL constructor; validate before use",
             "Allowlist permitted origins. Never construct a URL from request data without validation.",
+        )
+
+    # TS-112: mysql.createConnection({host: req.xxx}) — SSRF via MySQL host
+    if _MYSQL_CONN_REQ.search(raw):
+        _add(
+            "TS-112",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "mysql.createConnection({host: req.xxx}) — user-controlled MySQL host enables SSRF",
+            "Hardcode or allowlist the MySQL host. Never accept it from request data.",
+        )
+
+    # TS-113: new Redis(req.xxx) — SSRF via user-controlled ioredis connection string
+    if _IOREDIS_NEW_REQ.search(raw):
+        _add(
+            "TS-113",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Redis(req.xxx) — user-controlled Redis connection string enables SSRF",
+            "Hardcode or allowlist the Redis host/URL. Never pass request data to new Redis().",
+        )
+
+    # TS-114: createConnection({host: req.xxx}) — SSRF via TypeORM user-controlled host
+    if _TYPEORM_CONN_REQ.search(raw):
+        _add(
+            "TS-114",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "createConnection({host: req.xxx}) — user-controlled TypeORM host enables SSRF",
+            "Hardcode the database host. Never let request data determine the connection target.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

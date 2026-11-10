@@ -252,6 +252,14 @@ _PTY_SPAWN_FUNCS = frozenset({"pty.spawn", "pty.fork"})
 _PEXPECT_SPAWN_FUNCS = frozenset({"pexpect.spawn", "pexpect.run", "pexpect.runu"})
 # SRC-111: Popen(cwd=user_path) — user-controlled working directory for subprocess
 _POPEN_CWD_FUNCS = frozenset({"subprocess.Popen", "subprocess.run", "subprocess.call", "Popen"})
+# SRC-112: redis.Redis(host=user_host) — SSRF via user-controlled Redis host
+_REDIS_CLIENT_FUNCS = frozenset({"redis.Redis", "redis.StrictRedis", "redis.client.Redis", "Redis", "StrictRedis"})
+# SRC-113: pymysql.connect(host=user_host) / mysql.connector.connect(host=) — SSRF via MySQL host
+_MYSQL_CONNECT_FUNCS = frozenset(
+    {"mysql.connector.connect", "pymysql.connect", "MySQLdb.connect", "aiomysql.connect", "pymysql.Connect"}
+)
+# SRC-114: psycopg2.connect(host=user_host) — SSRF via PostgreSQL host
+_PSYCOPG_CONNECT_FUNCS = frozenset({"psycopg2.connect", "psycopg.connect", "psycopg2.extras.connect"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2170,6 +2178,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"Popen(cwd={cwd_kw.value.id}) — user-controlled working directory for subprocess",
                     "Hardcode or validate the cwd path. Never allow callers to supply the working directory.",
+                )
+
+        # SRC-112: redis.Redis(host=user_host) — SSRF via user-controlled Redis host
+        if fname in _REDIS_CLIENT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-112",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"redis.Redis(host={host_kw.value.id}) — user-controlled Redis host enables SSRF",
+                    "Hardcode or allowlist the Redis host. Never accept it from user input.",
+                )
+
+        # SRC-113: pymysql.connect(host=user_host) — SSRF via MySQL host
+        if fname in _MYSQL_CONNECT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-113",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"mysql.connect(host={host_kw.value.id}) — user-controlled MySQL host enables SSRF",
+                    "Hardcode or allowlist the MySQL host. Never accept it from user input.",
+                )
+
+        # SRC-114: psycopg2.connect(host=user_host) — SSRF via PostgreSQL host
+        if fname in _PSYCOPG_CONNECT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-114",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"psycopg2.connect(host={host_kw.value.id}) — user-controlled PostgreSQL host enables SSRF",
+                    "Hardcode or allowlist the PostgreSQL host. Never accept it from user input.",
                 )
 
         self.generic_visit(node)
