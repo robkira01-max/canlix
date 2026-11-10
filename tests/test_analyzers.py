@@ -2110,11 +2110,50 @@ def test_src_099_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-099" for f in analyze_python(p))
 
 
-# ── Full fixture — all 99 rules ───────────────────────────────────────────────
+# ── SRC-100: paramiko.Transport(user_host) — SSRF via SSH transport ──────────
 
 
-def test_vulnerable_fixture_has_all_ninety_nine_rules():
+def test_src_100_fires_on_paramiko_transport_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import paramiko\ndef conn(host: str):\n    paramiko.Transport(host)\n")
+    assert any(f.rule_id == "SRC-100" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_100_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import paramiko\ndef conn():\n    paramiko.Transport('ssh.example.com')\n")
+    assert not any(f.rule_id == "SRC-100" for f in analyze_python(p))
+
+
+# ── SRC-101: grpc.insecure_channel(user_target) — SSRF via gRPC ──────────────
+
+
+def test_src_101_fires_on_grpc_insecure_channel_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import grpc\ndef call(target: str):\n    grpc.insecure_channel(target)\n")
+    assert any(f.rule_id == "SRC-101" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_101_no_fire_on_hardcoded_target(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import grpc\ndef call():\n    grpc.insecure_channel('localhost:50051')\n")
+    assert not any(f.rule_id == "SRC-101" for f in analyze_python(p))
+
+
+# ── SRC-102: pymongo.MongoClient(user_host) — SSRF via MongoDB client ─────────
+
+
+def test_src_102_fires_on_mongo_client_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pymongo\ndef db(host: str):\n    pymongo.MongoClient(host)\n")
+    assert any(f.rule_id == "SRC-102" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_102_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pymongo\ndef db():\n    pymongo.MongoClient('mongodb.example.com')\n")
+    assert not any(f.rule_id == "SRC-102" for f in analyze_python(p))
+
+
+# ── Full fixture — all 102 rules ──────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_one_hundred_two_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 100)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 103)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

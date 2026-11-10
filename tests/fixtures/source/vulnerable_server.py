@@ -610,3 +610,23 @@ def open_telnet(host: str) -> telnetlib.Telnet:
 def make_http_conn(host: str) -> http.client.HTTPConnection:
     # SRC-099: http.client.HTTPConnection with user-controlled host — SSRF via stdlib HTTP
     return http.client.HTTPConnection(host)
+
+
+import grpc  # noqa: E402
+import paramiko  # noqa: E402
+import pymongo  # noqa: E402
+
+
+def open_ssh_transport(host: str) -> paramiko.Transport:
+    # SRC-100: paramiko.Transport with user-controlled host — SSRF via SSH transport
+    return paramiko.Transport(host)
+
+
+def open_grpc_channel(target: str):
+    # SRC-101: grpc.insecure_channel with user-controlled target — SSRF via gRPC
+    return grpc.insecure_channel(target)
+
+
+def open_mongo_client(host: str) -> pymongo.MongoClient:
+    # SRC-102: pymongo.MongoClient with user-controlled host — SSRF via MongoDB client
+    return pymongo.MongoClient(host)

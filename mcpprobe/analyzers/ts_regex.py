@@ -949,6 +949,30 @@ _HTTP_MODULE_REQ = re.compile(
     """,
 )
 
+# TS-100: res.attachment(req.xxx) — user-controlled Content-Disposition filename (header injection)
+_RES_ATTACHMENT_REQ = re.compile(
+    r"""(?x)
+    \bres\.attachment\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-101: socket.emit(req.xxx) — user-controlled Socket.IO event name injection
+_SOCKET_EMIT_REQ = re.compile(
+    r"""(?x)
+    \bsocket\.emit\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-102: $.ajax({url: req.xxx}) — jQuery SSRF via user-controlled URL
+_JQUERY_AJAX_URL_REQ = re.compile(
+    r"""(?x)
+    \$\.ajax\s*\(\s*\{[^}]*\burl\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2009,6 +2033,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection
+
+    # TS-100: res.attachment(req.xxx) — user-controlled filename in Content-Disposition header
+    if _RES_ATTACHMENT_REQ.search(raw):
+        _add(
+            "TS-100",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.attachment(req.xxx) — user-controlled filename may enable header injection or path traversal",
+            "Sanitize the filename: strip path separators and disallow special characters.",
+        )
+
+    # TS-101: socket.emit(req.xxx) — user-controlled Socket.IO event name
+    if _SOCKET_EMIT_REQ.search(raw):
+        _add(
+            "TS-101",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "socket.emit(req.xxx) — user-controlled event name can trigger unintended server-side handlers",
+            "Allowlist permitted event names. Never use request data directly as the socket event.",
+        )
+
+    # TS-102: $.ajax({url: req.xxx}) — jQuery SSRF via user-controlled URL
+    if _JQUERY_AJAX_URL_REQ.search(raw):
+        _add(
+            "TS-102",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "$.ajax({url: req.xxx}) — user-controlled URL in jQuery ajax call enables SSRF",
+            "Hardcode the target URL or validate it against an allowlist. Never use request data as ajax url.",
+        )
     if _OBJ_DEFINE_PROP_REQ.search(raw):
         _add(
             "TS-067",

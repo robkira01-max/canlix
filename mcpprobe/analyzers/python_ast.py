@@ -228,6 +228,12 @@ _TELNET_FUNCS = frozenset({"telnetlib.Telnet", "Telnet"})
 _HTTP_CLIENT_CONN_FUNCS = frozenset(
     {"http.client.HTTPConnection", "http.client.HTTPSConnection", "HTTPConnection", "HTTPSConnection"}
 )
+# SRC-100: paramiko.Transport(user_host) — SSRF via SSH transport
+_PARAMIKO_TRANSPORT_FUNCS = frozenset({"paramiko.Transport", "Transport"})
+# SRC-101: grpc.insecure_channel(user_target) — SSRF via gRPC insecure channel
+_GRPC_CHANNEL_FUNCS = frozenset({"grpc.insecure_channel", "insecure_channel"})
+# SRC-102: pymongo.MongoClient(user_host) — SSRF via MongoDB client
+_MONGO_CLIENT_FUNCS = frozenset({"pymongo.MongoClient", "MongoClient"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1990,6 +1996,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"http.client.HTTPConnection({host_arg.id}) — user-controlled host enables SSRF",
                     "Hardcode the HTTP target host. Never allow callers to supply the connection host.",
+                )
+
+        # SRC-100: paramiko.Transport(user_host) — SSRF via SSH transport
+        if fname in _PARAMIKO_TRANSPORT_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-100",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"paramiko.Transport({host_arg.id}) — user-controlled SSH host enables SSRF",
+                    "Hardcode the SSH host in configuration. Never let callers choose the transport endpoint.",
+                )
+
+        # SRC-101: grpc.insecure_channel(user_target) — SSRF via gRPC insecure channel
+        if fname in _GRPC_CHANNEL_FUNCS and node.args and self._param_names:
+            target_arg = node.args[0]
+            if isinstance(target_arg, ast.Name) and target_arg.id in self._param_names:
+                self._add(
+                    "SRC-101",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"grpc.insecure_channel({target_arg.id}) — user-controlled target enables SSRF",
+                    "Hardcode the gRPC server address. Never allow callers to supply the channel target.",
+                )
+
+        # SRC-102: pymongo.MongoClient(user_host) — SSRF via MongoDB client
+        if fname in _MONGO_CLIENT_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-102",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pymongo.MongoClient({host_arg.id}) — user-controlled host enables SSRF",
+                    "Hardcode the MongoDB host in configuration. Never allow callers to supply the host.",
                 )
 
         self.generic_visit(node)

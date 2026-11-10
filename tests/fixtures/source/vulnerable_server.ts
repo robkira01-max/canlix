@@ -507,3 +507,18 @@ import http from "http";
 function proxyHttp(req: any): void {
   http.get(req.query.targetUrl, () => {});
 }
+
+// TS-100: res.attachment(req.query.xxx) — user-controlled Content-Disposition filename
+function downloadFile2(res: any, req: any): void {
+  res.attachment(req.query.filename);
+}
+
+// TS-101: socket.emit(req.query.xxx) — user-controlled Socket.IO event name
+function broadcastEvent(socket: any, req: any): void {
+  socket.emit(req.query.event, { data: "safe" });
+}
+
+// TS-102: $.ajax({url: req.query.xxx}) — jQuery SSRF via user-controlled URL
+function fetchData(req: any): void {
+  $.ajax({ url: req.query.endpoint, method: "GET" });
+}
