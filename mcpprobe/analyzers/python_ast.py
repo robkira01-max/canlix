@@ -197,6 +197,19 @@ _SYMLINK_FUNCS = frozenset({"os.symlink", "symlink"})
 _HARDLINK_FUNCS = frozenset({"os.link", "link"})
 # SRC-087: subprocess.Popen/run with JoinedStr (f-string) cmd — command injection without shell=True
 _POPEN_FUNCS_FSTR = frozenset({"subprocess.Popen", "subprocess.run", "subprocess.call", "Popen"})
+# SRC-088: logging.FileHandler with user-controlled path — log write path traversal
+_LOG_HANDLER_FUNCS = frozenset(
+    {
+        "logging.FileHandler",
+        "logging.handlers.RotatingFileHandler",
+        "logging.handlers.TimedRotatingFileHandler",
+        "FileHandler",
+    }
+)
+# SRC-089: os.kill(user_pid, sig) — user-controlled PID, unintended process termination / DoS
+_OS_KILL_FUNCS = frozenset({"os.kill", "os.killpg"})
+# SRC-090: tarfile.open(user_path) — user-controlled archive path, attacker chooses the archive
+_TARFILE_OPEN_FUNCS = frozenset({"tarfile.open", "tarfile.TarFile"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1797,6 +1810,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"{fname}({host_arg.id}) — user-controlled LDAP host enables SSRF and directory injection",
                     "Hardcode the LDAP server URL in configuration. Never allow callers to choose the directory host.",
+                )
+
+        # SRC-088: logging.FileHandler(user_path) — user-controlled log file (write path traversal)
+        if fname in _LOG_HANDLER_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-088",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"logging.FileHandler({path_arg.id}) — user-controlled log path enables write path traversal",
+                    "Hardcode the log file path in configuration. Never let callers supply the handler filename.",
+                )
+
+        # SRC-089: os.kill(user_pid, sig) — user-controlled PID, unintended process kill / DoS
+        if fname in _OS_KILL_FUNCS and node.args and self._param_names:
+            pid_arg = node.args[0]
+            if isinstance(pid_arg, ast.Name) and pid_arg.id in self._param_names:
+                self._add(
+                    "SRC-089",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.kill({pid_arg.id}, ...) — user-controlled PID can terminate arbitrary processes (DoS)",
+                    "Allowlist permitted PIDs or restrict kill() to processes spawned by this service.",
+                )
+
+        # SRC-090: tarfile.open(user_path) — user-controlled archive, attacker chooses archive source
+        if fname in _TARFILE_OPEN_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-090",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"tarfile.open({path_arg.id}) — user-controlled archive path; zip-slip risk on extractall()",
+                    "Validate the archive path against an allowlist before opening user-supplied archives.",
                 )
 
         self.generic_visit(node)

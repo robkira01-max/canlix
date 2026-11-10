@@ -1954,11 +1954,50 @@ def test_SRC087_passes_popen_literal_string(tmp_path):
     assert not any(f.rule_id == "SRC-087" for f in analyze_python(p))
 
 
-# ── Full fixture — all 87 rules ───────────────────────────────────────────────
+# ── SRC-088: logging.FileHandler(user_path) — write path traversal ────────────
 
 
-def test_vulnerable_fixture_has_all_eighty_seven_rules():
+def test_src_088_fires_on_filehandler_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import logging\ndef setup_log(log_path: str):\n    logging.FileHandler(log_path)\n")
+    assert any(f.rule_id == "SRC-088" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_088_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import logging\ndef setup_log():\n    logging.FileHandler('/var/log/app.log')\n")
+    assert not any(f.rule_id == "SRC-088" for f in analyze_python(p))
+
+
+# ── SRC-089: os.kill(user_pid, sig) — arbitrary process kill (DoS) ────────────
+
+
+def test_src_089_fires_on_kill_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import os, signal\ndef stop_proc(pid: int):\n    os.kill(pid, signal.SIGTERM)\n")
+    assert any(f.rule_id == "SRC-089" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_089_no_fire_on_hardcoded_pid(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import os, signal\ndef stop_proc():\n    os.kill(1234, signal.SIGTERM)\n")
+    assert not any(f.rule_id == "SRC-089" for f in analyze_python(p))
+
+
+# ── SRC-090: tarfile.open(user_path) — user-controlled archive path ───────────
+
+
+def test_src_090_fires_on_tarfile_open_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import tarfile\ndef read_archive(archive_path: str):\n    tarfile.open(archive_path)\n")
+    assert any(f.rule_id == "SRC-090" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_090_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import tarfile\ndef read_archive():\n    tarfile.open('/tmp/static.tar.gz')\n")
+    assert not any(f.rule_id == "SRC-090" for f in analyze_python(p))
+
+
+# ── Full fixture — all 90 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_ninety_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 88)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 91)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -519,6 +519,26 @@ def hard_link(src: str, dst: str) -> None:
     os.link(src, dst)
 
 
+import signal  # noqa: E402
+
+
+def open_log_file(log_path: str) -> None:
+    # SRC-088: logging.FileHandler with user-controlled path — write path traversal
+    logging.FileHandler(log_path)
+
+
+def kill_process(pid: int) -> None:
+    # SRC-089: os.kill with user-controlled PID — arbitrary process termination (DoS)
+    os.kill(pid, signal.SIGTERM)
+
+
+def open_archive(archive_path: str) -> None:
+    # SRC-090: tarfile.open with user-controlled archive path — attacker chooses archive
+    import tarfile  # noqa: PLC0415
+
+    tarfile.open(archive_path)
+
+
 import ast as stdlib_ast  # noqa: E402  (alias avoids conflict with the `ast` stdlib re-import above)
 
 

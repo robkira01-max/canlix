@@ -2047,11 +2047,66 @@ def test_TS087_passes_locals_literal_key(tmp_path):
     assert not any(f.rule_id == "TS-087" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 87 rules ───────────────────────────────────────────────
+# ── TS-088: fs.mkdir/mkdirSync(req.xxx) — arbitrary directory creation ────────
 
 
-def test_vulnerable_ts_fixture_has_all_eighty_seven_rules():
+def test_ts_088_fires_on_mkdirSync_with_req(tmp_path: Path) -> None:
+    code = "import * as fs from 'fs';\nfunction mkd(req:any){fs.mkdirSync(req.query.dir,{recursive:true});}\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-088" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_ts_088_fires_on_mkdir_with_req_params(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "import * as fs from 'fs';\nfunction mkd(req:any){fs.mkdir(req.params.dir,()=>{});}\n")
+    assert any(f.rule_id == "TS-088" for f in analyze_typescript(p))
+
+
+def test_ts_088_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "import * as fs from 'fs';\nfunction mkd(){fs.mkdirSync('/tmp/safe');}\n")
+    assert not any(f.rule_id == "TS-088" for f in analyze_typescript(p))
+
+
+# ── TS-089: execFileSync(req.xxx) — synchronous command injection ─────────────
+
+
+def test_ts_089_fires_on_execfilesync_with_req(tmp_path: Path) -> None:
+    code = (
+        "import {execFileSync} from 'child_process';\n"
+        "function run(req:any){execFileSync(req.query.binary,['--safe']);}\n"
+    )
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-089" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_089_no_fire_on_hardcoded_binary(tmp_path: Path) -> None:
+    code = "import {execFileSync} from 'child_process';\nfunction run(){execFileSync('/usr/bin/tool',['--safe']);}\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-089" for f in analyze_typescript(p))
+
+
+# ── TS-090: process.env[req.xxx] — user-controlled env variable read ──────────
+
+
+def test_ts_090_fires_on_process_env_req_key(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function getEnv(req:any){return process.env[req.query.envKey];}\n")
+    assert any(f.rule_id == "TS-090" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_ts_090_fires_on_req_body_key(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function getEnv(req:any){return process.env[req.body.name];}\n")
+    assert any(f.rule_id == "TS-090" for f in analyze_typescript(p))
+
+
+def test_ts_090_no_fire_on_fixed_key(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function getEnv(){return process.env['NODE_ENV'];}\n")
+    assert not any(f.rule_id == "TS-090" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 90 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_ninety_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 88)}
+    expected = {f"TS-{i:03d}" for i in range(1, 91)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

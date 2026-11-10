@@ -853,6 +853,30 @@ _RES_LOCALS_KEY_REQ = re.compile(
     """,
 )
 
+# TS-088: fs.mkdir / fs.mkdirSync with user-controlled path — arbitrary directory creation
+_FS_MKDIR_REQ = re.compile(
+    r"""(?x)
+    \bfs\.mkdirs?(?:Sync)?\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-089: execFileSync with user-controlled executable — synchronous command injection
+_EXECFILESYNC_REQ = re.compile(
+    r"""(?x)
+    \bexecFileSync\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-090: process.env[req.xxx] — user-controlled env variable key read (potential secret leak)
+_PROCESS_ENV_KEY_REQ = re.compile(
+    r"""(?x)
+    \bprocess\.env\s*\[\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1790,6 +1814,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.locals[req.xxx] — user-controlled property key on res.locals enables prototype pollution",
             "Use a fixed set of res.locals keys. Never let request data determine which property to set.",
+        )
+
+    # TS-088: fs.mkdir/mkdirSync(req.xxx) — user-controlled directory creation path
+    if _FS_MKDIR_REQ.search(raw):
+        _add(
+            "TS-088",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "fs.mkdir(req.xxx) — user-controlled path enables arbitrary directory creation",
+            "Validate and sanitize directory paths. Never pass request data directly to fs.mkdir.",
+        )
+
+    # TS-089: execFileSync(req.xxx) — synchronous execution with user-controlled binary
+    if _EXECFILESYNC_REQ.search(raw):
+        _add(
+            "TS-089",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "execFileSync(req.xxx) — user-controlled executable path enables OS command injection",
+            "Hardcode the executable path. Never allow callers to supply the binary to execFileSync.",
+        )
+
+    # TS-090: process.env[req.xxx] — user-controlled env key read, may expose secrets
+    if _PROCESS_ENV_KEY_REQ.search(raw):
+        _add(
+            "TS-090",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "process.env[req.xxx] — user-controlled key can read arbitrary environment variables including secrets",
+            "Use a fixed allowlist of env variable names. Never let request data choose which env var to read.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

@@ -443,3 +443,19 @@ async function rawQuery(req: any): Promise<unknown> {
 function setLocal(res: any, req: any): void {
   res.locals[req.query.key] = "value";
 }
+
+// TS-088: fs.mkdirSync with user-controlled path — arbitrary directory creation
+function createDir(req: any): void {
+  fs.mkdirSync(req.query.dir, { recursive: true });
+}
+
+// TS-089: execFileSync with user-controlled executable — synchronous command injection
+import { execFileSync } from "child_process";
+function runBinarySync(req: any): void {
+  execFileSync(req.query.binary, ["--safe"]);
+}
+
+// TS-090: process.env[req.xxx] — user-controlled env variable key read
+function getEnvVar(req: any): string | undefined {
+  return process.env[req.query.envKey];
+}
