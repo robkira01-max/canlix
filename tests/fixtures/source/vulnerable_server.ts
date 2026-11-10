@@ -397,3 +397,19 @@ function runTool2(req: any): void {
 function setCookie(res: any, req: any): void {
   res.cookie("pref", req.query.theme, { httpOnly: true });
 }
+
+// TS-079: fs.createReadStream() with user-controlled path — read path traversal
+function streamFile(req: any, res: any): void {
+  fs.createReadStream(req.query.file).pipe(res);
+}
+
+// TS-080: exec() with string concatenation including request data — command injection
+function runCat(req: any): void {
+  exec("cat " + req.query.filename);
+}
+
+// TS-081: mongoose.connect() with user-controlled URI — SSRF / credential theft
+import mongoose from "mongoose";
+async function connectDb(req: any): Promise<void> {
+  await mongoose.connect(req.query.dbUri);
+}

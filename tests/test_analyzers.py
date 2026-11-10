@@ -1828,11 +1828,53 @@ def test_SRC078_passes_check_output_no_shell(tmp_path):
     assert not any(f.rule_id == "SRC-078" for f in analyze_python(p))
 
 
-# ── Full fixture — all 78 rules ───────────────────────────────────────────────
+# ── SRC-079: configparser.read(user_path) — attacker-chosen config source ─────
 
 
-def test_vulnerable_fixture_has_all_seventy_eight_rules():
+def test_SRC079_detects_configparser_read_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import configparser\ndef load(path: str):\n    return configparser.ConfigParser().read(path)",
+    )
+    assert any(f.rule_id == "SRC-079" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC079_passes_configparser_read_literal(tmp_path):
+    p = _py(tmp_path, "import configparser\ncfg = configparser.ConfigParser()\ncfg.read('/etc/app.cfg')")
+    assert not any(f.rule_id == "SRC-079" for f in analyze_python(p))
+
+
+# ── SRC-080: os.execv(user_path, ...) — user-controlled process replacement ───
+
+
+def test_SRC080_detects_execv_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef run(exe: str):\n    os.execv(exe, [exe])")
+    assert any(f.rule_id == "SRC-080" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC080_passes_execv_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.execv('/usr/bin/ls', ['ls', '-la'])")
+    assert not any(f.rule_id == "SRC-080" for f in analyze_python(p))
+
+
+# ── SRC-081: os.rename(user_src, ...) — user-controlled file rename ───────────
+
+
+def test_SRC081_detects_rename_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef move(src: str, dst: str):\n    os.rename(src, dst)")
+    assert any(f.rule_id == "SRC-081" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC081_passes_rename_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.rename('/tmp/a', '/tmp/b')")
+    assert not any(f.rule_id == "SRC-081" for f in analyze_python(p))
+
+
+# ── Full fixture — all 81 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_eighty_one_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 79)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 82)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

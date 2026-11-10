@@ -183,6 +183,12 @@ _SHLEX_SPLIT_FUNCS = frozenset({"shlex.split", "split"})
 _MAKEDIRS_FUNCS = frozenset({"os.makedirs", "os.mkdir", "makedirs", "mkdir"})
 # SRC-078: subprocess.check_output(cmd, shell=True) with user-controlled cmd — shell injection
 _CHECK_OUTPUT_FUNCS = frozenset({"subprocess.check_output", "check_output"})
+# SRC-079: configparser.read with user-controlled path — attacker chooses config source
+_CONFIGPARSER_READ_FUNCS = frozenset({"ConfigParser.read", "RawConfigParser.read", "SafeConfigParser.read"})
+# SRC-080: os.execv / os.execvp with user-controlled executable path
+_OS_EXEC_FUNCS = frozenset({"os.execv", "os.execvp", "os.execve", "os.execvpe", "execv", "execvp"})
+# SRC-081: os.rename(user_src, user_dst) — user-controlled file rename / replacement
+_OS_RENAME_FUNCS = frozenset({"os.rename", "os.renames", "rename", "renames"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1531,6 +1537,54 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     "check_output(cmd, shell=True) with user-controlled cmd — shell injection",
                     "Remove shell=True and pass a list of arguments. Never interpolate user input into shell commands.",
+                )
+
+        # SRC-079: configparser.*Parser().read(user_path) — user-controlled config file path
+        # fname resolves to "read" only (Call in middle of chain); inspect the AST directly.
+        if (
+            node.args
+            and self._param_names
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "read"
+            and isinstance(node.func.value, ast.Call)
+            and isinstance(node.func.value.func, ast.Attribute)
+            and node.func.value.func.attr in {"ConfigParser", "RawConfigParser", "SafeConfigParser"}
+        ):
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-079",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ConfigParser().read({path_arg.id}) — user-controlled config path, attacker chooses config source",
+                    "Hardcode the config file path. Never let callers specify configuration sources.",
+                )
+
+        # SRC-080: os.execv(user_path, ...) — user-controlled executable path
+        if fname in _OS_EXEC_FUNCS and node.args and self._param_names:
+            prog_arg = node.args[0]
+            if isinstance(prog_arg, ast.Name) and prog_arg.id in self._param_names:
+                self._add(
+                    "SRC-080",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.execv({prog_arg.id}, ...) — user-controlled executable path, process replacement",
+                    "Allowlist executable paths. Never let callers control the program passed to os.exec*.",
+                )
+
+        # SRC-081: os.rename(user_src, user_dst) — user-controlled file rename / replacement
+        if fname in _OS_RENAME_FUNCS and node.args and self._param_names:
+            src_arg = node.args[0]
+            if isinstance(src_arg, ast.Name) and src_arg.id in self._param_names:
+                self._add(
+                    "SRC-081",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"os.rename({src_arg.id}, ...) — user-controlled source path enables arbitrary file replacement",
+                    "Resolve both paths against a fixed base directory before renaming.",
                 )
 
         # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple

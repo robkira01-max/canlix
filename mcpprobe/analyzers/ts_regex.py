@@ -777,6 +777,30 @@ _COOKIE_VALUE_REQ = re.compile(
     """,
 )
 
+# TS-079: fs.createReadStream(req.xxx) — user-controlled stream read path
+_CREATE_READ_STREAM_REQ = re.compile(
+    r"""(?x)
+    \bfs\.createReadStream\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-080: exec("..." + req.xxx) — string concatenation in exec call
+_EXEC_CONCAT_REQ = re.compile(
+    r"""(?x)
+    \b(?:child_process\.exec|(?<![A-Za-z0-9_$])exec)\s*\(
+    [^)]*\+\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-081: mongoose.connect(req.xxx) / new MongoClient(req.xxx) — user-controlled DB URI
+_MONGO_CONNECT_REQ = re.compile(
+    r"""(?x)
+    (?:\bmongoose\.connect|new\s+MongoClient)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1624,6 +1648,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.cookie(name, req.xxx) — user-controlled cookie value enables session fixation and header injection",
             "Validate and sanitise the cookie value. Never set cookies directly from request data.",
+        )
+
+    # TS-079: fs.createReadStream(req.xxx) — user-controlled stream read path
+    if _CREATE_READ_STREAM_REQ.search(raw):
+        _add(
+            "TS-079",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "fs.createReadStream path from request — user-controlled path enables read path traversal",
+            "Resolve the path against a fixed base directory and validate it stays within that directory.",
+        )
+
+    # TS-080: exec("..." + req.xxx) — string concatenation in exec call
+    if _EXEC_CONCAT_REQ.search(raw):
+        _add(
+            "TS-080",
+            Severity.HIGH,
+            Confidence.HIGH,
+            'exec("..." + req.xxx) — string concatenation in exec enables command injection',
+            "Remove exec(). Use child_process.spawn with a fixed command and an allowlisted argument list.",
+        )
+
+    # TS-081: mongoose.connect(req.xxx) / new MongoClient(req.xxx) — user-controlled DB URI
+    if _MONGO_CONNECT_REQ.search(raw):
+        _add(
+            "TS-081",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "mongoose.connect/MongoClient(req.xxx) — user-controlled DB URI enables SSRF and credential theft",
+            "Hardcode the DB URI in environment variables. Never let request data determine the database host.",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection

@@ -484,3 +484,21 @@ def create_user_dir(path: str) -> None:
 def capture_output(cmd: str) -> bytes:
     # SRC-078: subprocess.check_output(cmd, shell=True) with user-controlled cmd
     return subprocess.check_output(cmd, shell=True)
+
+
+import configparser  # noqa: E402
+
+
+def load_user_config(config_path: str) -> configparser.ConfigParser:
+    # SRC-079: user-controlled config file path — attacker chooses config source
+    return configparser.ConfigParser().read(config_path)
+
+
+def exec_program(exe: str, argv: list) -> None:
+    # SRC-080: os.execv with user-controlled executable path — process replacement
+    os.execv(exe, argv)
+
+
+def move_file(src: str, dst: str) -> None:
+    # SRC-081: os.rename with user-controlled source path — arbitrary file replacement
+    os.rename(src, dst)

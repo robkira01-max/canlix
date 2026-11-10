@@ -1885,11 +1885,65 @@ def test_TS078_passes_cookie_literal_value(tmp_path):
     assert not any(f.rule_id == "TS-078" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 78 rules ───────────────────────────────────────────────
+# ── TS-079: fs.createReadStream(req.xxx) — read path traversal ───────────────
 
 
-def test_vulnerable_ts_fixture_has_all_seventy_eight_rules():
+def test_TS079_detects_createReadStream_req(tmp_path):
+    p = _ts(tmp_path, "fs.createReadStream(req.query.file).pipe(res);")
+    assert any(f.rule_id == "TS-079" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS079_detects_createReadStream_body(tmp_path):
+    p = _ts(tmp_path, "fs.createReadStream(req.body.path);")
+    assert any(f.rule_id == "TS-079" for f in analyze_typescript(p))
+
+
+def test_TS079_passes_createReadStream_literal(tmp_path):
+    p = _ts(tmp_path, 'fs.createReadStream("/static/logo.png");')
+    assert not any(f.rule_id == "TS-079" for f in analyze_typescript(p))
+
+
+# ── TS-080: exec("..." + req.xxx) — string concat in exec ────────────────────
+
+
+def test_TS080_detects_exec_concat_req(tmp_path):
+    p = _ts(tmp_path, 'exec("cat " + req.query.filename);')
+    assert any(f.rule_id == "TS-080" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS080_detects_child_process_exec_concat(tmp_path):
+    p = _ts(tmp_path, 'child_process.exec("ls " + req.body.dir);')
+    assert any(f.rule_id == "TS-080" for f in analyze_typescript(p))
+
+
+def test_TS080_passes_exec_no_concat_req(tmp_path):
+    p = _ts(tmp_path, 'exec("ls -la /tmp");')
+    assert not any(f.rule_id == "TS-080" for f in analyze_typescript(p))
+
+
+# ── TS-081: mongoose.connect(req.xxx) — user-controlled DB URI ───────────────
+
+
+def test_TS081_detects_mongoose_connect_req(tmp_path):
+    p = _ts(tmp_path, "mongoose.connect(req.query.dbUri);")
+    assert any(f.rule_id == "TS-081" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS081_detects_MongoClient_req(tmp_path):
+    p = _ts(tmp_path, "new MongoClient(req.body.uri);")
+    assert any(f.rule_id == "TS-081" for f in analyze_typescript(p))
+
+
+def test_TS081_passes_mongoose_literal(tmp_path):
+    p = _ts(tmp_path, 'mongoose.connect("mongodb://localhost:27017/mydb");')
+    assert not any(f.rule_id == "TS-081" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 81 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_eighty_one_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 79)}
+    expected = {f"TS-{i:03d}" for i in range(1, 82)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
