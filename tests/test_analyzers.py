@@ -1424,11 +1424,50 @@ def test_SRC051_passes_thread_target_literal_func(tmp_path):
     assert not any(f.rule_id == "SRC-051" for f in analyze_python(p))
 
 
-# ── Full fixture — all 51 rules ───────────────────────────────────────────────
+# ── SRC-052: getattr(obj, param) — user-controlled attribute access ───────────
 
 
-def test_vulnerable_fixture_has_all_fifty_one_rules():
+def test_SRC052_detects_getattr_param(tmp_path):
+    p = _py(tmp_path, "def call(obj, method: str):\n    return getattr(obj, method)()")
+    assert any(f.rule_id == "SRC-052" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC052_passes_getattr_literal(tmp_path):
+    p = _py(tmp_path, "getattr(obj, 'run')")
+    assert not any(f.rule_id == "SRC-052" for f in analyze_python(p))
+
+
+# ── SRC-053: os.environ.update(param) — environment injection ─────────────────
+
+
+def test_SRC053_detects_environ_update_param(tmp_path):
+    p = _py(tmp_path, "import os\ndef inject(env_data: dict):\n    os.environ.update(env_data)")
+    assert any(f.rule_id == "SRC-053" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC053_passes_environ_update_literal(tmp_path):
+    p = _py(tmp_path, "import os\nos.environ.update({'KEY': 'value'})")
+    assert not any(f.rule_id == "SRC-053" for f in analyze_python(p))
+
+
+# ── SRC-054: xmlrpc.client.ServerProxy(param) — SSRF via XML-RPC ─────────────
+
+
+def test_SRC054_detects_xmlrpc_param_url(tmp_path):
+    p = _py(tmp_path, "import xmlrpc.client\ndef rpc(url: str):\n    xmlrpc.client.ServerProxy(url)")
+    assert any(f.rule_id == "SRC-054" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC054_passes_xmlrpc_literal_url(tmp_path):
+    p = _py(tmp_path, "import xmlrpc.client\nxmlrpc.client.ServerProxy('http://internal.example.com')")
+    assert not any(f.rule_id == "SRC-054" for f in analyze_python(p))
+
+
+# ── Full fixture — all 54 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_fifty_four_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 52)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 55)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -256,3 +256,19 @@ function shutdown(req: any): void {
 function redirectUser(req: any): void {
   window.location = req.query.returnUrl;
 }
+
+// TS-052: document.getElementById with user-controlled ID from request
+function highlightSection(req: any): void {
+  document.getElementById(req.query.section)!.classList.add("highlight");
+}
+
+// TS-053: fetch with template literal URL from request data — SSRF
+async function proxyRequest(req: any): Promise<Response> {
+  return fetch(`/api/data/${req.query.resource}`);
+}
+
+// TS-054: localStorage.getItem("token") used as a trusted auth value
+function getAuthHeader(): string {
+  const token = localStorage.getItem("token");
+  return `Bearer ${token}`;
+}

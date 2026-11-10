@@ -310,3 +310,21 @@ def run_in_thread(callback: callable):
     # SRC-051: user-controlled callable in Thread target — arbitrary code execution
     t = threading.Thread(target=callback)
     t.start()
+
+
+import xmlrpc.client  # noqa: E402
+
+
+def get_model_attr(obj: object, method: str):
+    # SRC-052: getattr with user-controlled name — arbitrary attribute access
+    return getattr(obj, method)
+
+
+def apply_env(env_updates: dict):
+    # SRC-053: os.environ.update with user-controlled dict — environment injection
+    os.environ.update(env_updates)
+
+
+def call_xml_rpc(url: str):
+    # SRC-054: xmlrpc SSRF via user-controlled URL
+    return xmlrpc.client.ServerProxy(url)

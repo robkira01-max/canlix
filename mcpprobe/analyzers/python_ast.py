@@ -144,6 +144,11 @@ _EXTRACTALL_PARENTS = frozenset({"zipfile.ZipFile", "tarfile.open", "tarfile.Tar
 _CTYPES_LOAD_FUNCS = frozenset({"ctypes.CDLL", "ctypes.cdll.LoadLibrary", "ctypes.WinDLL", "ctypes.OleDLL"})
 # SRC-051: threading.Thread with user-controlled target — arbitrary callable execution
 _THREAD_FUNCS = frozenset({"threading.Thread", "Thread"})
+# SRC-052: getattr with user-controlled attribute name — arbitrary attribute access
+# SRC-053: os.environ.update/setdefault with user-controlled dict — environment injection
+_ENV_UPDATE_FUNCS = frozenset({"os.environ.update", "os.putenv"})
+# SRC-054: xmlrpc.client.ServerProxy with user-controlled URL — SSRF via XML-RPC
+_XMLRPC_FUNCS = frozenset({"xmlrpc.client.ServerProxy", "xmlrpc.client.Transport", "ServerProxy"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1230,6 +1235,46 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"Thread(target={target_kw.value.id}) — user-controlled callable executed in a new thread",
                     "Never pass user-supplied callables to Thread(target=). Use a fixed, allowlisted function.",
+                )
+
+        # SRC-052: getattr(obj, param) — user-controlled attribute name exposes arbitrary attribute access
+        if fname == "getattr" and len(node.args) >= 2 and self._param_names:
+            attr_arg = node.args[1]
+            if isinstance(attr_arg, ast.Name) and attr_arg.id in self._param_names:
+                self._add(
+                    "SRC-052",
+                    Severity.HIGH,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"getattr(obj, {attr_arg.id}) — user-controlled attribute name allows accessing "
+                    "private attributes or dunder methods",
+                    "Allowlist permitted attribute names before calling getattr().",
+                )
+
+        # SRC-053: os.environ.update(param) — user-controlled dict overwrites environment variables
+        if fname in _ENV_UPDATE_FUNCS and node.args and self._param_names:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Name) and first_arg.id in self._param_names:
+                self._add(
+                    "SRC-053",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}({first_arg.id}) — user-controlled data overwrites process environment variables",
+                    "Never update os.environ from untrusted input. Environment variables affect the whole process.",
+                )
+
+        # SRC-054: xmlrpc.client.ServerProxy with user-controlled URL — SSRF via XML-RPC
+        if fname in _XMLRPC_FUNCS and node.args and self._param_names:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-054",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"xmlrpc.client.ServerProxy({url_arg.id}) — user-controlled URL allows SSRF via XML-RPC",
+                    "Validate the URL against an allowlist of permitted hosts before creating a ServerProxy.",
                 )
 
         self.generic_visit(node)

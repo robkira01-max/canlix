@@ -1419,11 +1419,60 @@ def test_TS051_passes_window_location_literal(tmp_path):
     assert not any(f.rule_id == "TS-051" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 51 rules ───────────────────────────────────────────────
+# ── TS-052: document.getElementById with request data ────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_fifty_one_rules():
+def test_TS052_detects_getElementById_req(tmp_path):
+    p = _ts(tmp_path, "document.getElementById(req.query.section).classList.add('x');")
+    assert any(f.rule_id == "TS-052" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS052_passes_getElementById_literal(tmp_path):
+    p = _ts(tmp_path, 'document.getElementById("main").classList.add("active");')
+    assert not any(f.rule_id == "TS-052" for f in analyze_typescript(p))
+
+
+# ── TS-053: fetch with template literal URL from request data ─────────────────
+
+
+def test_TS053_detects_fetch_template_req(tmp_path):
+    p = _ts(tmp_path, "fetch(`/api/data/${req.query.resource}`);")
+    assert any(f.rule_id == "TS-053" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS053_detects_axios_template_req(tmp_path):
+    p = _ts(tmp_path, "axios.get(`/internal/${req.params.path}`);")
+    assert any(f.rule_id == "TS-053" for f in analyze_typescript(p))
+
+
+def test_TS053_passes_fetch_literal_url(tmp_path):
+    p = _ts(tmp_path, 'fetch("/api/data");')
+    assert not any(f.rule_id == "TS-053" for f in analyze_typescript(p))
+
+
+# ── TS-054: localStorage.getItem("token") as auth source ─────────────────────
+
+
+def test_TS054_detects_localStorage_token(tmp_path):
+    p = _ts(tmp_path, 'const t = localStorage.getItem("token");')
+    assert any(f.rule_id == "TS-054" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS054_detects_localStorage_session(tmp_path):
+    p = _ts(tmp_path, "const s = localStorage.getItem('session');")
+    assert any(f.rule_id == "TS-054" for f in analyze_typescript(p))
+
+
+def test_TS054_passes_localStorage_non_sensitive(tmp_path):
+    p = _ts(tmp_path, 'const pref = localStorage.getItem("theme");')
+    assert not any(f.rule_id == "TS-054" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 54 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_fifty_four_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 52)}
+    expected = {f"TS-{i:03d}" for i in range(1, 55)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

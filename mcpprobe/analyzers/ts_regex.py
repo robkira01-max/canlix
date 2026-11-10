@@ -542,6 +542,38 @@ _SEND_FILE_FROM_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
+# ---------------------------------------------------------------------------
+
+_DOM_ID_INJECT = re.compile(
+    r"""(?x)
+    document\.getElementById\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-053: fetch / axios with template literal URL containing request data — SSRF
+# ---------------------------------------------------------------------------
+
+_FETCH_TEMPLATE_REQ = re.compile(
+    r"""(?x)
+    \b(?:fetch|axios\.(?:get|post|put|delete|patch|request))\s*\(
+    \s*`[^`]*\$\{req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*\}
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-054: localStorage.getItem() used as a trusted data source for security decisions
+# ---------------------------------------------------------------------------
+
+_LOCAL_STORAGE_TRUST = re.compile(
+    r"""(?x)
+    \blocalStorage\.getItem\s*\(\s*["'`](?:token|auth|session|user|role|permission|credential)[^"'`]*["'`]
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # TS-049: setTimeout / setInterval with a variable (non-literal) as the callback
 # ---------------------------------------------------------------------------
 
@@ -1176,6 +1208,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.sendFile/download with request data — user-controlled path allows reading any file",
             "Validate the path against an allowlist or serve from a fixed directory using path.basename().",
+        )
+
+    # TS-052: document.getElementById(req.xxx) — DOM injection via user-controlled element ID
+    if _DOM_ID_INJECT.search(raw):
+        _add(
+            "TS-052",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "document.getElementById(req.xxx) — user-controlled ID can target unexpected DOM elements",
+            "Validate or allowlist element IDs. Never use request data to select DOM nodes.",
+        )
+
+    # TS-053: fetch/axios with template literal URL built from request data — SSRF
+    if _FETCH_TEMPLATE_REQ.search(raw):
+        _add(
+            "TS-053",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fetch/axios URL built from request data — user-controlled path enables SSRF or path confusion",
+            "Validate the URL path against an allowlist. Never interpolate request data directly into URLs.",
+        )
+
+    # TS-054: localStorage.getItem("token") used as a trusted auth source — insecure
+    if _LOCAL_STORAGE_TRUST.search(raw):
+        _add(
+            "TS-054",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "localStorage.getItem('token') used as a security-sensitive value — localStorage is not secure storage",
+            "Use httpOnly cookies for auth tokens. localStorage is readable by any JS on the page (XSS risk).",
         )
 
     # TS-049: setTimeout/setInterval with a variable callback — potential code injection
