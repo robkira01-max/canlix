@@ -2193,11 +2193,50 @@ def test_ts_096_no_fire_on_hardcoded_size(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-096" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 96 rules ───────────────────────────────────────────────
+# ── TS-097: Handlebars.compile(req.xxx) — SSTI ───────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_ninety_six_rules():
+def test_ts_097_fires_on_handlebars_compile_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){return Handlebars.compile(req.query.tmpl);}\n")
+    assert any(f.rule_id == "TS-097" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_097_no_fire_on_literal_template(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){return Handlebars.compile("Hello {{name}}");}\n')
+    assert not any(f.rule_id == "TS-097" for f in analyze_typescript(p))
+
+
+# ── TS-098: fs.unlink(req.xxx) — user-controlled file deletion ───────────────
+
+
+def test_ts_098_fires_on_fs_unlink_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){fs.unlink(req.query.file, ()=>{});}\n")
+    assert any(f.rule_id == "TS-098" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_098_no_fire_on_hardcoded_path(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){fs.unlink("/tmp/safe.txt", ()=>{});}\n')
+    assert not any(f.rule_id == "TS-098" for f in analyze_typescript(p))
+
+
+# ── TS-099: http.get(req.xxx) — SSRF via Node.js http module ─────────────────
+
+
+def test_ts_099_fires_on_http_get_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){http.get(req.query.url, ()=>{});}\n")
+    assert any(f.rule_id == "TS-099" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_099_no_fire_on_hardcoded_url(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){http.get("https://api.example.com/data", ()=>{});}\n')
+    assert not any(f.rule_id == "TS-099" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 99 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_ninety_nine_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 97)}
+    expected = {f"TS-{i:03d}" for i in range(1, 100)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

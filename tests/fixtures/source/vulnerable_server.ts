@@ -490,3 +490,20 @@ function getCollection(req: any): any {
 function allocBuffer(req: any): Buffer {
   return Buffer.allocUnsafe(req.query.size);
 }
+
+// TS-097: Handlebars.compile(req.query.xxx) — SSTI via user-controlled template
+import Handlebars from "handlebars";
+function compileTemplate(req: any): HandlebarsTemplateDelegate {
+  return Handlebars.compile(req.query.template);
+}
+
+// TS-098: fs.unlink(req.query.xxx) — user-controlled file deletion
+function deleteFile(req: any): void {
+  fs.unlink(req.query.file, () => {});
+}
+
+// TS-099: http.get(req.query.url) — SSRF via Node.js http module
+import http from "http";
+function proxyHttp(req: any): void {
+  http.get(req.query.targetUrl, () => {});
+}

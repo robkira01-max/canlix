@@ -2071,11 +2071,50 @@ def test_src_096_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-096" for f in analyze_python(p))
 
 
-# ── Full fixture — all 96 rules ───────────────────────────────────────────────
+# ── SRC-097: nntplib.NNTP(user_host) — SSRF via NNTP ────────────────────────
 
 
-def test_vulnerable_fixture_has_all_ninety_six_rules():
+def test_src_097_fires_on_nntp_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import nntplib\ndef fetch_news(host: str):\n    nntplib.NNTP(host)\n")
+    assert any(f.rule_id == "SRC-097" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_097_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import nntplib\ndef fetch_news():\n    nntplib.NNTP('news.example.com')\n")
+    assert not any(f.rule_id == "SRC-097" for f in analyze_python(p))
+
+
+# ── SRC-098: telnetlib.Telnet(user_host) — cleartext protocol + SSRF ─────────
+
+
+def test_src_098_fires_on_telnet_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import telnetlib\ndef open_shell(host: str):\n    telnetlib.Telnet(host)\n")
+    assert any(f.rule_id == "SRC-098" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_098_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import telnetlib\ndef open_shell():\n    telnetlib.Telnet('10.0.0.1')\n")
+    assert not any(f.rule_id == "SRC-098" for f in analyze_python(p))
+
+
+# ── SRC-099: http.client.HTTPConnection(user_host) — SSRF via stdlib HTTP ────
+
+
+def test_src_099_fires_on_http_connection_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import http.client\ndef call(host: str):\n    http.client.HTTPConnection(host)\n")
+    assert any(f.rule_id == "SRC-099" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_099_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import http.client\ndef call():\n    http.client.HTTPConnection('api.example.com')\n")
+    assert not any(f.rule_id == "SRC-099" for f in analyze_python(p))
+
+
+# ── Full fixture — all 99 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_ninety_nine_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 97)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 100)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

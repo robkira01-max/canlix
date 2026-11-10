@@ -220,6 +220,14 @@ _CHOWN_FUNCS = frozenset({"os.chown", "os.lchown"})
 _IMAP_FUNCS = frozenset({"imaplib.IMAP4", "imaplib.IMAP4_SSL", "imaplib.IMAP4_stream", "IMAP4"})
 # SRC-096: poplib.POP3(user_host) — SSRF via user-controlled POP3 server
 _POP3_FUNCS = frozenset({"poplib.POP3", "poplib.POP3_SSL", "POP3"})
+# SRC-097: nntplib.NNTP(user_host) — SSRF via user-controlled NNTP server
+_NNTP_FUNCS = frozenset({"nntplib.NNTP", "nntplib.NNTP_SSL", "NNTP"})
+# SRC-098: telnetlib.Telnet(user_host) — SSRF via user-controlled Telnet host
+_TELNET_FUNCS = frozenset({"telnetlib.Telnet", "Telnet"})
+# SRC-099: http.client.HTTPConnection(user_host) — SSRF via stdlib HTTP client
+_HTTP_CLIENT_CONN_FUNCS = frozenset(
+    {"http.client.HTTPConnection", "http.client.HTTPSConnection", "HTTPConnection", "HTTPSConnection"}
+)
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1943,6 +1951,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"poplib.POP3({host_arg.id}) — user-controlled POP3 host enables SSRF",
                     "Hardcode the POP3 host in configuration. Never allow callers to supply the mail server address.",
+                )
+
+        # SRC-097: nntplib.NNTP(user_host) — SSRF via user-controlled NNTP server
+        if fname in _NNTP_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-097",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"nntplib.NNTP({host_arg.id}) — user-controlled NNTP host enables SSRF",
+                    "Hardcode the NNTP host in configuration. Never allow callers to supply the news server address.",
+                )
+
+        # SRC-098: telnetlib.Telnet(user_host) — SSRF via user-controlled Telnet host
+        if fname in _TELNET_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-098",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"telnetlib.Telnet({host_arg.id}) — user-controlled Telnet host; cleartext protocol + SSRF",
+                    "Avoid Telnet entirely (deprecated). Never allow callers to choose the Telnet endpoint.",
+                )
+
+        # SRC-099: http.client.HTTPConnection(user_host) — SSRF via stdlib HTTP client
+        if fname in _HTTP_CLIENT_CONN_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-099",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"http.client.HTTPConnection({host_arg.id}) — user-controlled host enables SSRF",
+                    "Hardcode the HTTP target host. Never allow callers to supply the connection host.",
                 )
 
         self.generic_visit(node)

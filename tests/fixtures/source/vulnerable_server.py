@@ -590,3 +590,23 @@ def safe_parse(data: str) -> object:
 def run_pipeline(cmd: str) -> None:
     # SRC-087: Popen with f-string — arg injection without shell=True
     subprocess.Popen(f"/usr/local/bin/tool --input {cmd}")
+
+
+import http.client  # noqa: E402
+import nntplib  # noqa: E402
+import telnetlib  # noqa: E402
+
+
+def fetch_nntp(host: str) -> nntplib.NNTP:
+    # SRC-097: nntplib.NNTP with user-controlled host — SSRF via NNTP
+    return nntplib.NNTP(host)
+
+
+def open_telnet(host: str) -> telnetlib.Telnet:
+    # SRC-098: telnetlib.Telnet with user-controlled host — cleartext protocol + SSRF
+    return telnetlib.Telnet(host)
+
+
+def make_http_conn(host: str) -> http.client.HTTPConnection:
+    # SRC-099: http.client.HTTPConnection with user-controlled host — SSRF via stdlib HTTP
+    return http.client.HTTPConnection(host)

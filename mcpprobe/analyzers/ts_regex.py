@@ -925,6 +925,30 @@ _BUFFER_ALLOC_REQ = re.compile(
     """,
 )
 
+# TS-097: Handlebars.compile(req.xxx) — SSTI via user-controlled Handlebars template
+_HANDLEBARS_COMPILE_REQ = re.compile(
+    r"""(?x)
+    \bHandlebars\.compile\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-098: fs.unlink/unlinkSync(req.xxx) — user-controlled file deletion
+_FS_UNLINK_REQ = re.compile(
+    r"""(?x)
+    \bfs\.unlink(?:Sync)?\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-099: http.get/request(req.xxx) — SSRF via Node.js stdlib http module
+_HTTP_MODULE_REQ = re.compile(
+    r"""(?x)
+    \bhttp(?:s)?\.(?:get|request)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -1952,6 +1976,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "Buffer.allocUnsafe(req.xxx) — user-controlled buffer size can cause out-of-memory DoS",
             "Cap allocation size to a sane maximum. Never pass raw request data to Buffer.allocUnsafe.",
+        )
+
+    # TS-097: Handlebars.compile(req.xxx) — SSTI via user-controlled template
+    if _HANDLEBARS_COMPILE_REQ.search(raw):
+        _add(
+            "TS-097",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Handlebars.compile(req.xxx) — user-controlled template enables server-side template injection",
+            "Pre-compile templates at startup from trusted sources. Never compile user-supplied strings.",
+        )
+
+    # TS-098: fs.unlink/unlinkSync(req.xxx) — user-controlled path allows arbitrary file deletion
+    if _FS_UNLINK_REQ.search(raw):
+        _add(
+            "TS-098",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "fs.unlink(req.xxx) — user-controlled path allows arbitrary file deletion",
+            "Resolve path against a fixed base directory and validate it stays within that directory.",
+        )
+
+    # TS-099: http.get/request(req.xxx) — SSRF via Node.js stdlib http module
+    if _HTTP_MODULE_REQ.search(raw):
+        _add(
+            "TS-099",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "http.get/request(req.xxx) — user-controlled URL enables SSRF via Node.js http module",
+            "Hardcode the target host. Never pass request data as the URL to http.get() or http.request().",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection
