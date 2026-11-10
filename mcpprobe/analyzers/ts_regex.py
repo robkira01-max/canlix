@@ -542,6 +542,39 @@ _SEND_FILE_FROM_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-055: crypto.randomBytes(userSize) — user-controlled allocation size, DoS risk
+# ---------------------------------------------------------------------------
+
+_RANDOM_BYTES_REQ = re.compile(
+    r"""(?x)
+    \bcrypto\.randomBytes\s*\(\s*
+    (?:Number|parseInt|parseFloat)?\s*\(?\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-056: res.download() with user-controlled path — path traversal
+# ---------------------------------------------------------------------------
+
+_DOWNLOAD_FROM_REQ = re.compile(
+    r"""(?x)
+    \bres\.download\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-057: child_process.exec / exec() with direct request variable (not template literal)
+# ---------------------------------------------------------------------------
+
+_EXEC_VAR_REQ = re.compile(
+    r"""(?x)
+    \b(?:child_process\.exec|(?<![A-Za-z0-9_$])exec)\s*\(
+    \s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -1208,6 +1241,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "res.sendFile/download with request data — user-controlled path allows reading any file",
             "Validate the path against an allowlist or serve from a fixed directory using path.basename().",
+        )
+
+    # TS-055: crypto.randomBytes with user-controlled size — DoS via allocation
+    if _RANDOM_BYTES_REQ.search(raw):
+        _add(
+            "TS-055",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "crypto.randomBytes(req.xxx) — user-controlled size enables denial of service via large allocation",
+            "Cap the size to a sane maximum (e.g. ≤ 64) before passing to randomBytes().",
+        )
+
+    # TS-056: res.download() with request data — path traversal
+    if _DOWNLOAD_FROM_REQ.search(raw):
+        _add(
+            "TS-056",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "res.download(req.xxx) — user-controlled path allows downloading arbitrary server files",
+            "Resolve the path against a fixed base directory and validate it stays within that directory.",
+        )
+
+    # TS-057: exec(req.query.cmd) — direct exec with request variable (command injection)
+    if _EXEC_VAR_REQ.search(raw):
+        _add(
+            "TS-057",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "exec(req.xxx) — user-controlled command string executes arbitrary shell commands",
+            "Use execFile() with an args array and shell: false. Never pass request data to exec().",
         )
 
     # TS-052: document.getElementById(req.xxx) — DOM injection via user-controlled element ID

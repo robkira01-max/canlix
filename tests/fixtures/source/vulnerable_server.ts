@@ -272,3 +272,18 @@ function getAuthHeader(): string {
   const token = localStorage.getItem("token");
   return `Bearer ${token}`;
 }
+
+// TS-055: crypto.randomBytes with user-controlled size — DoS risk
+function generateNonce(req: any): Buffer {
+  return crypto.randomBytes(Number(req.query.size));
+}
+
+// TS-056: res.download() with user-controlled path
+function downloadFile(res: any, req: any): void {
+  res.download(req.query.file);
+}
+
+// TS-057: exec() with direct request variable — command injection
+function runCommand(req: any): void {
+  exec(req.query.cmd);
+}

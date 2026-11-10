@@ -1463,11 +1463,58 @@ def test_SRC054_passes_xmlrpc_literal_url(tmp_path):
     assert not any(f.rule_id == "SRC-054" for f in analyze_python(p))
 
 
-# ── Full fixture — all 54 rules ───────────────────────────────────────────────
+# ── SRC-055: render_template_string(param) — Flask SSTI ──────────────────────
 
 
-def test_vulnerable_fixture_has_all_fifty_four_rules():
+def test_SRC055_detects_render_template_string_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "from flask import render_template_string\n"
+        "def view(template: str):\n"
+        "    return render_template_string(template)",
+    )
+    assert any(f.rule_id == "SRC-055" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_SRC055_passes_render_template_string_literal(tmp_path):
+    p = _py(tmp_path, "from flask import render_template_string\nrender_template_string('<h1>Hello</h1>')")
+    assert not any(f.rule_id == "SRC-055" for f in analyze_python(p))
+
+
+# ── SRC-056: Process(target=param) — user-controlled subprocess ───────────────
+
+
+def test_SRC056_detects_Process_target_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import multiprocessing\ndef run(callback):\n    multiprocessing.Process(target=callback).start()",
+    )
+    assert any(f.rule_id == "SRC-056" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC056_passes_Process_target_literal(tmp_path):
+    p = _py(tmp_path, "import multiprocessing\ndef worker(): pass\nmultiprocessing.Process(target=worker).start()")
+    assert not any(f.rule_id == "SRC-056" for f in analyze_python(p))
+
+
+# ── SRC-057: webbrowser.open(param) — open redirect in OS browser ─────────────
+
+
+def test_SRC057_detects_webbrowser_open_param(tmp_path):
+    p = _py(tmp_path, "import webbrowser\ndef browse(url: str):\n    webbrowser.open(url)")
+    assert any(f.rule_id == "SRC-057" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC057_passes_webbrowser_open_literal(tmp_path):
+    p = _py(tmp_path, "import webbrowser\nwebbrowser.open('https://example.com')")
+    assert not any(f.rule_id == "SRC-057" for f in analyze_python(p))
+
+
+# ── Full fixture — all 57 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_fifty_seven_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 55)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 58)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

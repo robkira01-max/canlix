@@ -328,3 +328,25 @@ def apply_env(env_updates: dict):
 def call_xml_rpc(url: str):
     # SRC-054: xmlrpc SSRF via user-controlled URL
     return xmlrpc.client.ServerProxy(url)
+
+
+import multiprocessing  # noqa: E402
+import webbrowser  # noqa: E402
+
+from flask import render_template_string  # type: ignore[import-untyped]  # noqa: E402
+
+
+def render_user_template(template: str) -> str:
+    # SRC-055: Flask SSTI — user-supplied template string executed by Jinja2
+    return render_template_string(template)
+
+
+def run_in_process(callback: callable) -> None:
+    # SRC-056: user-controlled callable launched as a separate process
+    p = multiprocessing.Process(target=callback)
+    p.start()
+
+
+def open_url_in_browser(url: str) -> None:
+    # SRC-057: user-controlled URL opened in OS browser — open redirect / phishing
+    webbrowser.open(url)

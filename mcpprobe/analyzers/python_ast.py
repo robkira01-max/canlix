@@ -149,6 +149,12 @@ _THREAD_FUNCS = frozenset({"threading.Thread", "Thread"})
 _ENV_UPDATE_FUNCS = frozenset({"os.environ.update", "os.putenv"})
 # SRC-054: xmlrpc.client.ServerProxy with user-controlled URL — SSRF via XML-RPC
 _XMLRPC_FUNCS = frozenset({"xmlrpc.client.ServerProxy", "xmlrpc.client.Transport", "ServerProxy"})
+# SRC-055: Flask render_template_string with user-controlled template — SSTI
+_RENDER_TEMPLATE_STRING_FUNCS = frozenset({"render_template_string", "flask.render_template_string"})
+# SRC-056: multiprocessing.Process with user-controlled target — arbitrary subprocess
+_PROCESS_FUNCS = frozenset({"multiprocessing.Process", "Process"})
+# SRC-057: webbrowser.open with user-controlled URL — open redirect in OS browser
+_WEBBROWSER_FUNCS = frozenset({"webbrowser.open", "webbrowser.open_new", "webbrowser.open_new_tab"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1275,6 +1281,47 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"xmlrpc.client.ServerProxy({url_arg.id}) — user-controlled URL allows SSRF via XML-RPC",
                     "Validate the URL against an allowlist of permitted hosts before creating a ServerProxy.",
+                )
+
+        # SRC-055: render_template_string(param) — Flask SSTI via user-controlled template string
+        if fname in _RENDER_TEMPLATE_STRING_FUNCS and node.args and self._param_names:
+            tmpl_arg = node.args[0]
+            if isinstance(tmpl_arg, ast.Name) and tmpl_arg.id in self._param_names:
+                self._add(
+                    "SRC-055",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"render_template_string({tmpl_arg.id}) — user-controlled template enables SSTI "
+                    "(arbitrary code execution via Jinja2)",
+                    "Never render user-supplied strings as templates. Use render_template() with static files.",
+                )
+
+        # SRC-056: multiprocessing.Process(target=param) — user-controlled callable in subprocess
+        if fname in _PROCESS_FUNCS and self._param_names:
+            target_kw = next((kw for kw in node.keywords if kw.arg == "target"), None)
+            if target_kw and isinstance(target_kw.value, ast.Name) and target_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-056",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Process(target={target_kw.value.id}) — user-controlled callable launched as a subprocess",
+                    "Never pass user-supplied callables to Process(target=). Use a fixed, allowlisted function.",
+                )
+
+        # SRC-057: webbrowser.open(param) — user-controlled URL opens OS browser (open redirect)
+        if fname in _WEBBROWSER_FUNCS and node.args and self._param_names:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-057",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"webbrowser.open({url_arg.id}) — user-controlled URL opens the OS browser "
+                    "(open redirect / phishing risk)",
+                    "Validate the URL against an allowlist before calling webbrowser.open().",
                 )
 
         self.generic_visit(node)

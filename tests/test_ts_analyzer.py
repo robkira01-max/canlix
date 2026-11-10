@@ -1468,11 +1468,60 @@ def test_TS054_passes_localStorage_non_sensitive(tmp_path):
     assert not any(f.rule_id == "TS-054" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 54 rules ───────────────────────────────────────────────
+# ── TS-055: crypto.randomBytes(req.xxx) — DoS via large allocation ───────────
 
 
-def test_vulnerable_ts_fixture_has_all_fifty_four_rules():
+def test_TS055_detects_randomBytes_req_query(tmp_path):
+    p = _ts(tmp_path, "crypto.randomBytes(Number(req.query.size));")
+    assert any(f.rule_id == "TS-055" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS055_passes_randomBytes_literal(tmp_path):
+    p = _ts(tmp_path, "crypto.randomBytes(32);")
+    assert not any(f.rule_id == "TS-055" for f in analyze_typescript(p))
+
+
+# ── TS-056: res.download(req.xxx) — path traversal via Express download ───────
+
+
+def test_TS056_detects_download_req_query(tmp_path):
+    p = _ts(tmp_path, "res.download(req.query.file);")
+    assert any(f.rule_id == "TS-056" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS056_detects_download_req_params(tmp_path):
+    p = _ts(tmp_path, "res.download(req.params.filename);")
+    assert any(f.rule_id == "TS-056" for f in analyze_typescript(p))
+
+
+def test_TS056_passes_download_literal(tmp_path):
+    p = _ts(tmp_path, 'res.download("/files/report.pdf");')
+    assert not any(f.rule_id == "TS-056" for f in analyze_typescript(p))
+
+
+# ── TS-057: exec(req.query.cmd) — direct command injection ───────────────────
+
+
+def test_TS057_detects_exec_req_query(tmp_path):
+    p = _ts(tmp_path, "exec(req.query.cmd);")
+    assert any(f.rule_id == "TS-057" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_TS057_detects_child_process_exec_req(tmp_path):
+    p = _ts(tmp_path, "child_process.exec(req.body.command);")
+    assert any(f.rule_id == "TS-057" for f in analyze_typescript(p))
+
+
+def test_TS057_passes_exec_literal(tmp_path):
+    p = _ts(tmp_path, 'exec("ls -la");')
+    assert not any(f.rule_id == "TS-057" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 57 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_fifty_seven_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 55)}
+    expected = {f"TS-{i:03d}" for i in range(1, 58)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
