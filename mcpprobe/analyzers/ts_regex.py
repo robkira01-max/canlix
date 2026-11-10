@@ -419,6 +419,45 @@ _PATH_JOIN_LITERAL_SAFE = re.compile(
     r"""\bpath\.(?:join|resolve)\s*\(\s*["'`__][^,]+,\s*["'`]"""  # all literal args
 )
 
+# ---------------------------------------------------------------------------
+# TS-031: sensitive value stored in localStorage / sessionStorage
+# ---------------------------------------------------------------------------
+
+_LOCAL_STORAGE_SENSITIVE = re.compile(
+    r"""(?x)
+    (?:localStorage|sessionStorage)\.setItem\s*\(\s*["']
+    (?:token|secret|password|passwd|api_?key|private_?key|
+       auth_?token|access_?token|session_?id|jwt|credentials?)
+    ["']""",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# TS-032: hardcoded JWT secret — string literal as key in jwt.sign / jwt.verify
+# ---------------------------------------------------------------------------
+
+_JWT_HARDCODED_SECRET = re.compile(
+    r"""(?x)
+    (?:jwt|jsonwebtoken)\.(?:sign|verify)\s*\(\s*
+    \w[^,]*,\s*          # first argument (payload or token) + comma
+    ["'][^"']{8,}["']    # second argument is a string literal of ≥ 8 chars
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-033: DOM XSS — innerHTML / outerHTML / document.write with variable input
+# ---------------------------------------------------------------------------
+
+_INNER_HTML_ASSIGN = re.compile(
+    r"""(?x)
+    \.innerHTML\s*\+?=\s*(?!["'`])   # .innerHTML = variable  or  .innerHTML += variable
+    | \.outerHTML\s*\+?=\s*(?!["'`])
+    | \bdocument\.write\s*\(\s*[A-Za-z_$]   # document.write(variable)
+    | \bdocument\.writeln\s*\(\s*[A-Za-z_$]
+    """,
+)
+_INNER_HTML_LITERAL_SAFE = re.compile(r"""\.(?:inner|outer)HTML\s*\+?=\s*["'`]""")
+
 
 def analyze_typescript(path: Path) -> list[SourceFinding]:
     """Scan a TypeScript/JavaScript file for security issues. Returns all findings."""
@@ -774,6 +813,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.MEDIUM,
             "assert used for access control — assertions can be disabled in production builds",
             "Replace assert with an explicit if/throw. Use middleware guards, not assertions, for auth checks.",
+        )
+
+    # TS-031: sensitive value in localStorage/sessionStorage — XSS-accessible
+    if _LOCAL_STORAGE_SENSITIVE.search(raw):
+        _add(
+            "TS-031",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "Sensitive value stored in localStorage/sessionStorage — readable by any JS on the page",
+            "Store tokens in memory or httpOnly cookies. Never put secrets in Web Storage.",
+        )
+
+    # TS-032: hardcoded JWT secret
+    if _JWT_HARDCODED_SECRET.search(raw):
+        _add(
+            "TS-032",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Hardcoded JWT secret in jwt.sign/verify — key material must not be in source code",
+            "Load the JWT secret from process.env.JWT_SECRET. Never hardcode cryptographic secrets.",
+        )
+
+    # TS-033: DOM XSS via innerHTML / document.write with variable
+    if _INNER_HTML_ASSIGN.search(raw) and not _INNER_HTML_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-033",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "innerHTML/outerHTML/document.write with variable input — DOM-based XSS risk",
+            "Use element.textContent instead of innerHTML. If HTML is needed, sanitise with DOMPurify.",
         )
 
     return result

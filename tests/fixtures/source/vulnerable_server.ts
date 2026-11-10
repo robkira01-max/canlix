@@ -151,3 +151,19 @@ function hashPassword(password: string): string {
 function adminRoute(user: any): void {
   assert(user.isAuthenticated);
 }
+
+// TS-031: sensitive data stored in localStorage
+function cacheToken(token: string): void {
+  localStorage.setItem("token", token);
+}
+
+// TS-032: hardcoded JWT secret
+import jwt from "jsonwebtoken";
+function signToken(payload: object): string {
+  return jwt.sign(payload, "hardcoded_jwt_secret_key_12345");
+}
+
+// TS-033: DOM XSS via innerHTML assignment
+function displayMessage(msg: string): void {
+  document.getElementById("output")!.innerHTML = msg;
+}

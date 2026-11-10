@@ -1051,11 +1051,65 @@ def test_TS030_fixture_fires_on_vulnerable_server():
     assert any(f.rule_id == "TS-030" for f in findings)
 
 
-# ── Full fixture — all 30 rules ───────────────────────────────────────────────
+# ── TS-031: sensitive data in localStorage ────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_thirty_rules():
+def test_TS031_detects_token_in_local_storage(tmp_path):
+    p = _ts(tmp_path, 'localStorage.setItem("token", tok);')
+    assert any(f.rule_id == "TS-031" for f in analyze_typescript(p))
+
+
+def test_TS031_detects_password_in_session_storage(tmp_path):
+    p = _ts(tmp_path, 'sessionStorage.setItem("password", pwd);')
+    assert any(f.rule_id == "TS-031" for f in analyze_typescript(p))
+
+
+def test_TS031_passes_non_sensitive_key(tmp_path):
+    p = _ts(tmp_path, 'localStorage.setItem("theme", "dark");')
+    assert not any(f.rule_id == "TS-031" for f in analyze_typescript(p))
+
+
+# ── TS-032: hardcoded JWT secret ──────────────────────────────────────────────
+
+
+def test_TS032_detects_jwt_sign_literal_secret(tmp_path):
+    p = _ts(tmp_path, 'jwt.sign(payload, "super_secret_key_123456");')
+    assert any(f.rule_id == "TS-032" for f in analyze_typescript(p))
+
+
+def test_TS032_detects_jsonwebtoken_verify_literal(tmp_path):
+    p = _ts(tmp_path, 'jsonwebtoken.verify(tok, "my_hardcoded_secret_key");')
+    assert any(f.rule_id == "TS-032" for f in analyze_typescript(p))
+
+
+def test_TS032_passes_env_secret(tmp_path):
+    p = _ts(tmp_path, "jwt.sign(payload, process.env.JWT_SECRET);")
+    assert not any(f.rule_id == "TS-032" for f in analyze_typescript(p))
+
+
+# ── TS-033: DOM XSS via innerHTML ─────────────────────────────────────────────
+
+
+def test_TS033_detects_inner_html_variable(tmp_path):
+    p = _ts(tmp_path, "el.innerHTML = userInput;")
+    assert any(f.rule_id == "TS-033" for f in analyze_typescript(p))
+
+
+def test_TS033_detects_document_write_variable(tmp_path):
+    p = _ts(tmp_path, "document.write(response);")
+    assert any(f.rule_id == "TS-033" for f in analyze_typescript(p))
+
+
+def test_TS033_passes_literal_html(tmp_path):
+    p = _ts(tmp_path, 'el.innerHTML = "<p>static</p>";')
+    assert not any(f.rule_id == "TS-033" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 33 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_thirty_three_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 31)}
+    expected = {f"TS-{i:03d}" for i in range(1, 34)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

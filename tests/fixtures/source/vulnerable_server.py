@@ -181,3 +181,21 @@ def hash_password(password: str) -> str:
 def check_admin(user):
     # SRC-030: assert used for access control
     assert user.is_authenticated
+
+
+import tempfile  # noqa: E402
+
+
+def create_temp(prefix: str) -> str:
+    # SRC-031: TOCTOU race — mktemp() returns a name without opening the file
+    return tempfile.mktemp(prefix=prefix)
+
+
+def sign_token(payload: dict) -> str:
+    # SRC-032: hardcoded JWT secret
+    return jwt.encode(payload, "super_secret_key_hardcoded", algorithm="HS256")
+
+
+def create_ssl_ctx() -> ssl.SSLContext:
+    # SRC-033: deprecated TLS protocol
+    return ssl.SSLContext(ssl.PROTOCOL_TLSv1)

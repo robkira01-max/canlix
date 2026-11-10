@@ -120,6 +120,12 @@ _CORS_MIDDLEWARE_FUNCS = frozenset(
 # SRC-028: insecure random seed — random.seed() with a fixed/constant value
 # A fixed seed makes the PRNG sequence fully predictable.
 _FIXED_SEED_TYPES = (int, float, str, bytes)
+# SRC-031: insecure temporary file — mktemp() exposes a TOCTOU race condition
+_TEMPFILE_UNSAFE_FUNCS = frozenset({"tempfile.mktemp"})
+# SRC-032: hardcoded JWT secret — jwt.encode/decode with a string literal as key
+_JWT_SIGN_FUNCS = frozenset({"jwt.encode", "jwt.decode", "jose.jwt.encode", "jose.jwt.decode"})
+# SRC-033: deprecated TLS protocol constants (SSLv2, SSLv3, TLSv1.0, TLSv1.1)
+_WEAK_TLS_PROTOCOLS = frozenset({"PROTOCOL_SSLv2", "PROTOCOL_SSLv3", "PROTOCOL_TLSv1", "PROTOCOL_TLSv1_1"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -887,6 +893,43 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"{fname}({sec_name}) — fast hash algorithms are not suitable for password storage",
                     "Use bcrypt, argon2-cffi, or hashlib.scrypt for password hashing. Never use SHA/MD5.",
+                )
+
+        # SRC-031: tempfile.mktemp() — TOCTOU race between name creation and file open
+        if fname in _TEMPFILE_UNSAFE_FUNCS:
+            self._add(
+                "SRC-031",
+                Severity.MEDIUM,
+                Confidence.HIGH,
+                node.lineno,
+                "tempfile.mktemp() has a TOCTOU race — another process can create the file between name and open",
+                "Use tempfile.mkstemp() or tempfile.NamedTemporaryFile() which atomically create the file.",
+            )
+
+        # SRC-032: hardcoded JWT secret — string literal as the key argument
+        if fname in _JWT_SIGN_FUNCS and len(node.args) >= 2:
+            key_arg = node.args[1]
+            if isinstance(key_arg, ast.Constant) and isinstance(key_arg.value, str):
+                self._add(
+                    "SRC-032",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Hardcoded JWT secret in {fname}() — key material must not be in source code",
+                    "Load the JWT secret from os.environ. Never hardcode cryptographic secrets.",
+                )
+
+        # SRC-033: weak TLS protocol — SSLContext with a deprecated protocol constant
+        if fname == "ssl.SSLContext" and node.args:
+            proto = node.args[0]
+            if isinstance(proto, ast.Attribute) and proto.attr in _WEAK_TLS_PROTOCOLS:
+                self._add(
+                    "SRC-033",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ssl.SSLContext(ssl.{proto.attr}) uses a deprecated protocol vulnerable to known attacks",
+                    "Use ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT) with minimum_version=ssl.TLSVersion.TLSv1_2.",
                 )
 
         self.generic_visit(node)

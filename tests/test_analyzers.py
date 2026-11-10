@@ -1083,11 +1083,58 @@ def test_SRC030_fixture_fires_on_vulnerable_server():
     assert any(f.rule_id == "SRC-030" for f in findings)
 
 
-# ── Full fixture — all 30 rules ───────────────────────────────────────────────
+# ── SRC-031: insecure tempfile ────────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_thirty_rules():
+def test_SRC031_detects_mktemp(tmp_path):
+    p = _py(tmp_path, "import tempfile\ndef f(x):\n    return tempfile.mktemp(prefix=x)")
+    assert any(f.rule_id == "SRC-031" for f in analyze_python(p))
+
+
+def test_SRC031_passes_mkstemp(tmp_path):
+    p = _py(tmp_path, "import tempfile\ndef f():\n    fd, path = tempfile.mkstemp()\n    return path")
+    assert not any(f.rule_id == "SRC-031" for f in analyze_python(p))
+
+
+# ── SRC-032: hardcoded JWT secret ─────────────────────────────────────────────
+
+
+def test_SRC032_detects_jwt_encode_literal_key(tmp_path):
+    code = 'import jwt\ndef f(payload):\n    return jwt.encode(payload, "s3cr3t_key_12345")'
+    assert any(f.rule_id == "SRC-032" for f in analyze_python(_py(tmp_path, code)))
+
+
+def test_SRC032_passes_env_key(tmp_path):
+    p = _py(
+        tmp_path,
+        "import jwt, os\ndef f(payload):\n    return jwt.encode(payload, os.environ['JWT_SECRET'])",
+    )
+    assert not any(f.rule_id == "SRC-032" for f in analyze_python(p))
+
+
+# ── SRC-033: weak TLS protocol ────────────────────────────────────────────────
+
+
+def test_SRC033_detects_protocol_tls1(tmp_path):
+    p = _py(tmp_path, "import ssl\nctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1)")
+    assert any(f.rule_id == "SRC-033" for f in analyze_python(p))
+
+
+def test_SRC033_detects_protocol_sslv3(tmp_path):
+    p = _py(tmp_path, "import ssl\nctx = ssl.SSLContext(ssl.PROTOCOL_SSLv3)")
+    assert any(f.rule_id == "SRC-033" for f in analyze_python(p))
+
+
+def test_SRC033_passes_tls_client(tmp_path):
+    p = _py(tmp_path, "import ssl\nctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)")
+    assert not any(f.rule_id == "SRC-033" for f in analyze_python(p))
+
+
+# ── Full fixture — all 33 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_thirty_three_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 31)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 34)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
