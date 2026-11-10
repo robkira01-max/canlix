@@ -1728,11 +1728,65 @@ def test_TS069_passes_writeFileSync_literal(tmp_path):
     assert not any(f.rule_id == "TS-069" for f in analyze_typescript(p))
 
 
-# ── Full fixture — all 69 rules ───────────────────────────────────────────────
+# ── TS-070: res.set(req.xxx, ...) — CRLF injection ───────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_sixty_nine_rules():
+def test_TS070_detects_res_set_req(tmp_path):
+    p = _ts(tmp_path, "res.set(req.query.name, 'value');")
+    assert any(f.rule_id == "TS-070" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS070_detects_res_header_req(tmp_path):
+    p = _ts(tmp_path, "res.header(req.body.key, 'x');")
+    assert any(f.rule_id == "TS-070" for f in analyze_typescript(p))
+
+
+def test_TS070_passes_res_set_literal(tmp_path):
+    p = _ts(tmp_path, 'res.set("Content-Type", "application/json");')
+    assert not any(f.rule_id == "TS-070" for f in analyze_typescript(p))
+
+
+# ── TS-071: new Worker(req.xxx) — arbitrary code load ────────────────────────
+
+
+def test_TS071_detects_new_worker_req(tmp_path):
+    p = _ts(tmp_path, "new Worker(req.query.script);")
+    assert any(f.rule_id == "TS-071" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_TS071_detects_new_worker_params(tmp_path):
+    p = _ts(tmp_path, "new Worker(req.params.url);")
+    assert any(f.rule_id == "TS-071" for f in analyze_typescript(p))
+
+
+def test_TS071_passes_new_worker_literal(tmp_path):
+    p = _ts(tmp_path, 'new Worker("./worker.js");')
+    assert not any(f.rule_id == "TS-071" for f in analyze_typescript(p))
+
+
+# ── TS-072: xhr.open("METHOD", req.xxx) — SSRF via XHR ───────────────────────
+
+
+def test_TS072_detects_xhr_open_req(tmp_path):
+    p = _ts(tmp_path, 'xhr.open("GET", req.query.url);')
+    assert any(f.rule_id == "TS-072" and f.severity == Severity.MEDIUM for f in analyze_typescript(p))
+
+
+def test_TS072_detects_xhr_open_post_req(tmp_path):
+    p = _ts(tmp_path, 'xhr.open("POST", req.body.endpoint);')
+    assert any(f.rule_id == "TS-072" for f in analyze_typescript(p))
+
+
+def test_TS072_passes_xhr_open_literal(tmp_path):
+    p = _ts(tmp_path, 'xhr.open("GET", "https://api.example.com/data");')
+    assert not any(f.rule_id == "TS-072" for f in analyze_typescript(p))
+
+
+# ── Full fixture — all 72 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_seventy_two_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 70)}
+    expected = {f"TS-{i:03d}" for i in range(1, 73)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

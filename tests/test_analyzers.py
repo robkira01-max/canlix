@@ -1690,11 +1690,63 @@ def test_SRC069_passes_subprocess_executable_literal(tmp_path):
     assert not any(f.rule_id == "SRC-069" for f in analyze_python(p))
 
 
-# ── Full fixture — all 69 rules ───────────────────────────────────────────────
+# ── SRC-070: subprocess.getoutput(user_cmd) — shell injection ────────────────
 
 
-def test_vulnerable_fixture_has_all_sixty_nine_rules():
+def test_SRC070_detects_getoutput_param(tmp_path):
+    p = _py(tmp_path, "import subprocess\ndef run(cmd: str):\n    return subprocess.getoutput(cmd)")
+    assert any(f.rule_id == "SRC-070" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC070_detects_getstatusoutput_param(tmp_path):
+    p = _py(tmp_path, "import subprocess\ndef run(cmd: str):\n    return subprocess.getstatusoutput(cmd)")
+    assert any(f.rule_id == "SRC-070" for f in analyze_python(p))
+
+
+def test_SRC070_passes_getoutput_literal(tmp_path):
+    p = _py(tmp_path, "import subprocess\nsubprocess.getoutput('ls -la')")
+    assert not any(f.rule_id == "SRC-070" for f in analyze_python(p))
+
+
+# ── SRC-071: logging.basicConfig(filename=user_path) — write path traversal ──
+
+
+def test_SRC071_detects_basicConfig_filename_param(tmp_path):
+    p = _py(
+        tmp_path,
+        "import logging\ndef configure(log_file: str):\n    logging.basicConfig(filename=log_file)",
+    )
+    assert any(f.rule_id == "SRC-071" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_SRC071_passes_basicConfig_literal_filename(tmp_path):
+    p = _py(tmp_path, "import logging\nlogging.basicConfig(filename='/var/log/app.log')")
+    assert not any(f.rule_id == "SRC-071" for f in analyze_python(p))
+
+
+# ── SRC-072: send_from_directory(user_dir, ...) — directory escape ────────────
+
+
+def test_SRC072_detects_send_from_directory_param(tmp_path):
+    code = (
+        "from flask import send_from_directory\n"
+        "def serve(directory: str, name: str):\n"
+        "    return send_from_directory(directory, name)"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-072" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_SRC072_passes_send_from_directory_literal(tmp_path):
+    p = _py(tmp_path, "from flask import send_from_directory\nsend_from_directory('/static', 'logo.png')")
+    assert not any(f.rule_id == "SRC-072" for f in analyze_python(p))
+
+
+# ── Full fixture — all 72 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_seventy_two_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 70)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 73)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

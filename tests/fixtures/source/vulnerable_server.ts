@@ -351,3 +351,19 @@ function encryptUserAlgo(req: any, key: Buffer, iv: Buffer): void {
 function saveFile(req: any, data: Buffer): void {
   fs.writeFileSync(req.query.path, data);
 }
+
+// TS-070: res.set() with user-controlled header name — CRLF injection
+function setHeader(res: any, req: any): void {
+  res.set(req.query.headerName, "value");
+}
+
+// TS-071: new Worker() with user-controlled script URL — arbitrary code load
+function launchWorker(req: any): Worker {
+  return new Worker(req.query.scriptUrl);
+}
+
+// TS-072: xhr.open() with user-controlled URL — SSRF via XHR
+function xhrRequest(req: any): void {
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", req.query.url);
+}

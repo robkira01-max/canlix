@@ -173,6 +173,10 @@ _ASYNC_SHELL_FUNCS = frozenset({"asyncio.create_subprocess_shell", "create_subpr
 _SOCKET_CONNECT_FUNCS = frozenset({"socket.create_connection", "create_connection"})
 # SRC-068: hashlib.pbkdf2_hmac with user-controlled iteration count — DoS via CPU exhaustion
 # SRC-069: subprocess.Popen / subprocess.run with user-controlled `executable` kwarg
+# SRC-070: subprocess.getoutput / getstatusoutput with user-controlled cmd — shell injection
+_GETOUTPUT_FUNCS = frozenset({"subprocess.getoutput", "subprocess.getstatusoutput", "getoutput", "getstatusoutput"})
+# SRC-072: send_from_directory with user-controlled directory path — directory escape
+_SEND_FROM_DIR_FUNCS = frozenset({"send_from_directory", "flask.send_from_directory"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -1389,6 +1393,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"{fname}({url_arg.id}) — user-controlled URL enables SSRF via urllib",
                     "Validate the URL against an allowlist of permitted hosts before making the request.",
+                )
+
+        # SRC-070: subprocess.getoutput(cmd) with user-controlled cmd — shell injection
+        if fname in _GETOUTPUT_FUNCS and node.args and self._param_names:
+            cmd_arg = node.args[0]
+            if self._has_param_in_expr(cmd_arg):
+                self._add(
+                    "SRC-070",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    "subprocess.getoutput() with user-controlled command — arbitrary shell command execution",
+                    "Use subprocess.run() with shell=False and an args list. getoutput() runs commands via shell.",
+                )
+
+        # SRC-071: logging.basicConfig(filename=user_path) — log file path control
+        if fname == "logging.basicConfig" and self._param_names:
+            fn_kw = next((k for k in node.keywords if k.arg == "filename"), None)
+            if fn_kw and isinstance(fn_kw.value, ast.Name) and fn_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-071",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"logging.basicConfig(filename={fn_kw.value.id}) — user controls the log file path",
+                    "Hardcode the log file path in configuration. Never allow callers to control the log destination.",
+                )
+
+        # SRC-072: send_from_directory(user_dir, filename) — user-controlled base directory
+        if fname in _SEND_FROM_DIR_FUNCS and node.args and self._param_names:
+            dir_arg = node.args[0]
+            if isinstance(dir_arg, ast.Name) and dir_arg.id in self._param_names:
+                self._add(
+                    "SRC-072",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"send_from_directory({dir_arg.id}, ...) — user-controlled base dir allows serving any file",
+                    "Hardcode the base directory. Only the filename argument should ever come from user input.",
                 )
 
         # SRC-067: socket.create_connection((host, port)) — user-controlled host in address tuple

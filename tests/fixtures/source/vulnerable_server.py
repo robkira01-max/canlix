@@ -431,3 +431,21 @@ def kdf_stretch(password: str, salt: bytes, iterations: int) -> bytes:
 def run_user_exe(exe: str) -> None:
     # SRC-069: subprocess executable= kwarg override — binary hijack
     subprocess.run(["dummy"], executable=exe)
+
+
+from flask import send_from_directory  # noqa: E402
+
+
+def shell_output(cmd: str) -> str:
+    # SRC-070: subprocess.getoutput with user-controlled command — shell injection
+    return subprocess.getoutput(cmd)
+
+
+def configure_logging(log_file: str) -> None:
+    # SRC-071: user-controlled log file path — write path traversal
+    logging.basicConfig(filename=log_file)
+
+
+def serve_dir(directory: str, filename: str):
+    # SRC-072: user-controlled base directory in send_from_directory
+    return send_from_directory(directory, filename)

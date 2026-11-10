@@ -698,6 +698,37 @@ _WRITE_FILE_SYNC_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-070: res.set(req.xxx, ...) — user-controlled response header name injection
+# ---------------------------------------------------------------------------
+
+_RES_SET_HEADER_REQ = re.compile(
+    r"""(?x)
+    \bres\.(?:set|header)\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-071: new Worker(req.xxx) — user-controlled Web Worker script URL
+# ---------------------------------------------------------------------------
+
+_NEW_WORKER_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Worker\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-072: XMLHttpRequest.open("METHOD", req.xxx) — SSRF via XHR
+# ---------------------------------------------------------------------------
+
+_XHR_OPEN_REQ = re.compile(
+    r"""(?x)
+    \.open\s*\(\s*["'](?:GET|POST|PUT|DELETE|PATCH|HEAD)["']\s*,\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -1454,6 +1485,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new vm.Script(req.xxx) — user-controlled code compiled as a VM script; vm is NOT a sandbox",
             "Never compile user-supplied code. Use a safe DSL or allowlisted template engine instead.",
+        )
+
+    # TS-070: res.set(req.xxx, ...) — user-controlled response header name injection
+    if _RES_SET_HEADER_REQ.search(raw):
+        _add(
+            "TS-070",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "res.set(req.xxx, ...) — user-controlled header name enables CRLF / response-splitting injection",
+            "Allowlist permitted header names. Never write raw request data to response header names.",
+        )
+
+    # TS-071: new Worker(req.xxx) — user-controlled Web Worker script URL
+    if _NEW_WORKER_REQ.search(raw):
+        _add(
+            "TS-071",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Worker(req.xxx) — user-controlled script URL loads arbitrary code as a Web Worker",
+            "Hardcode the Worker script URL or validate it against an allowlist.",
+        )
+
+    # TS-072: xhr.open("METHOD", req.xxx) — SSRF via XHR
+    if _XHR_OPEN_REQ.search(raw):
+        _add(
+            "TS-072",
+            Severity.MEDIUM,
+            Confidence.HIGH,
+            "xhr.open(method, req.xxx) — user-controlled URL in XMLHttpRequest enables SSRF",
+            "Validate the URL against an allowlist of permitted hosts before calling xhr.open().",
         )
 
     # TS-067: Object.defineProperty(obj, req.xxx, ...) — property name injection
