@@ -609,8 +609,55 @@ def test_TS015_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 15 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_ts_fixture_has_all_fifteen_rules():
+# ── TS-016: JWT algorithm confusion ──────────────────────────────────────────
+
+
+def test_TS016_detects_algorithms_none(tmp_path):
+    p = _ts(tmp_path, "const opts = { algorithms: ['none'] };")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-016" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_TS016_detects_algorithms_none_double_quote(tmp_path):
+    p = _ts(tmp_path, 'const opts = { algorithms: ["none"] };')
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-016" for f in findings)
+
+
+def test_TS016_detects_verify_signature_false(tmp_path):
+    p = _ts(tmp_path, "const opts = { verify_signature: false };")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-016" for f in findings)
+
+
+def test_TS016_detects_ignoreExpiration_true(tmp_path):
+    p = _ts(tmp_path, "const opts = { ignoreExpiration: true };")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-016" for f in findings)
+
+
+def test_TS016_passes_valid_algorithm(tmp_path):
+    p = _ts(tmp_path, "const opts = { algorithms: ['HS256'] };")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-016" for f in findings)
+
+
+def test_TS016_passes_ignoreExpiration_false(tmp_path):
+    p = _ts(tmp_path, "const opts = { ignoreExpiration: false };")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-016" for f in findings)
+
+
+def test_TS016_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-016" for f in findings)
+
+
+# ── Full fixture — all 16 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_sixteen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"TS-{i:03d}" for i in range(1, 16)}
+    expected = {f"TS-{i:03d}" for i in range(1, 17)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

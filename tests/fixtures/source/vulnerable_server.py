@@ -7,6 +7,7 @@ import random
 import ssl
 import subprocess
 
+import jwt  # noqa: F401
 import requests
 import yaml
 
@@ -79,6 +80,11 @@ stored_token = "abc"
 user_token = "xyz"
 if stored_token == user_token:
     pass
+
+
+def decode_jwt_insecure(token: str) -> dict:
+    # SRC-016: JWT decoded with algorithms=['none'] — auth bypass risk
+    return jwt.decode(token, algorithms=["none"])
 
 
 def redirect(url: str) -> str:  # noqa: F811 — shadowed intentionally for test fixture

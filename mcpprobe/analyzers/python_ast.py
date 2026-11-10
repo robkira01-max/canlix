@@ -389,6 +389,39 @@ class _Visitor(ast.NodeVisitor):
                     "Validate the redirect URL against an allowlist. Never redirect to a raw user-supplied value.",
                 )
 
+        # SRC-016: JWT algorithm confusion or disabled verification
+        if fname in ("jwt.decode", "jose.jwt.decode", "python_jose.jwt.decode"):
+            for kw in node.keywords:
+                if kw.arg == "algorithms" and isinstance(kw.value, ast.List):
+                    for elt in kw.value.elts:
+                        if isinstance(elt, ast.Constant) and str(elt.value).lower() == "none":
+                            self._add(
+                                "SRC-016",
+                                Severity.HIGH,
+                                Confidence.HIGH,
+                                node.lineno,
+                                "JWT decoded with algorithms=['none'] — allows unsigned tokens (auth bypass)",
+                                "Specify a strong algorithm explicitly: algorithms=['HS256'] or ['RS256'].",
+                            )
+                            break
+                elif kw.arg == "options" and isinstance(kw.value, ast.Dict):
+                    for k, v in zip(kw.value.keys, kw.value.values):
+                        if (
+                            isinstance(k, ast.Constant)
+                            and k.value == "verify_signature"
+                            and isinstance(v, ast.Constant)
+                            and v.value is False
+                        ):
+                            self._add(
+                                "SRC-016",
+                                Severity.HIGH,
+                                Confidence.HIGH,
+                                node.lineno,
+                                "JWT signature verification disabled — tokens accepted without cryptographic check",
+                                "Remove options={'verify_signature': False}. Always verify JWT signatures.",
+                            )
+                            break
+
         # SRC-012: weak hash algorithm — MD5 or SHA-1
         if fname in ("hashlib.md5", "hashlib.sha1"):
             self._add(

@@ -73,6 +73,9 @@ function verifyToken(storedToken: string, userToken: string): boolean {
   return storedToken === userToken;
 }
 
+// TS-016: JWT algorithm confusion — algorithms: ['none'] (HIGH)
+const jwtOptions = { algorithms: ["none"] };
+
 // TS-015: open redirect — res.redirect with variable URL (MEDIUM)
 function handleRedirect(res: any, url: string): void {
   res.redirect(url);

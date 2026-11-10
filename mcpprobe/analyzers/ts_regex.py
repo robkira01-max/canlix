@@ -104,6 +104,19 @@ _TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
 _TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
 
 # ---------------------------------------------------------------------------
+# TS-016: JWT algorithm confusion or disabled verification
+# ---------------------------------------------------------------------------
+
+_JWT_ALGO_NONE = re.compile(
+    r"""(?x)
+    algorithms\s*:\s*\[[^\]]*["']none["'][^\]]*\]  # algorithms: ['none'] or ["none"]
+    | verify_signature\s*:\s*false\b                 # verify_signature: false
+    | ignoreExpiration\s*:\s*true\b                  # ignoreExpiration: true (weakens JWT security)
+    """,
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # TS-015: open redirect — location / res.redirect with a non-literal URL
 # ---------------------------------------------------------------------------
 
@@ -377,6 +390,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "TLS certificate verification disabled — allows MITM attacks",
             "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
+        )
+
+    # TS-016: JWT algorithm confusion or disabled verification
+    if _JWT_ALGO_NONE.search(raw):
+        _add(
+            "TS-016",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "JWT security weakened — 'none' algorithm or disabled verification allows auth bypass",
+            "Use algorithms=['HS256'] or ['RS256']. Never set verify_signature: false in production.",
         )
 
     # TS-015: open redirect — location / res.redirect with a non-literal URL

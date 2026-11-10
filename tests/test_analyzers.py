@@ -637,8 +637,61 @@ def test_SRC015_fixture_fires_on_vulnerable_server():
 # ── Full fixture — all 15 rules ───────────────────────────────────────────────
 
 
-def test_vulnerable_fixture_has_all_fifteen_rules():
+# ── SRC-016: JWT algorithm confusion ─────────────────────────────────────────
+
+
+def test_SRC016_detects_algorithms_none(tmp_path):
+    p = _py(tmp_path, 'import jwt\ndef decode(tok):\n    return jwt.decode(tok, algorithms=["none"])')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-016" and f.severity == Severity.HIGH for f in findings)
+
+
+def test_SRC016_detects_verify_signature_false(tmp_path):
+    p = _py(
+        tmp_path,
+        'import jwt\ndef decode(tok):\n    return jwt.decode(tok, options={"verify_signature": False})',
+    )
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-016" for f in findings)
+
+
+def test_SRC016_detects_algorithms_none_uppercase(tmp_path):
+    p = _py(tmp_path, 'import jwt\ndef decode(tok):\n    return jwt.decode(tok, algorithms=["None"])')
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-016" for f in findings)
+
+
+def test_SRC016_passes_valid_algorithm(tmp_path):
+    p = _py(tmp_path, 'import jwt\ndef decode(tok, secret):\n    return jwt.decode(tok, secret, algorithms=["HS256"])')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-016" for f in findings)
+
+
+def test_SRC016_passes_verify_signature_true(tmp_path):
+    p = _py(
+        tmp_path,
+        'import jwt\ndef decode(tok):\n    return jwt.decode(tok, options={"verify_signature": True})',
+    )
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-016" for f in findings)
+
+
+def test_SRC016_passes_non_jwt_decode(tmp_path):
+    p = _py(tmp_path, 'import base64\nbase64.decode("data")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-016" for f in findings)
+
+
+def test_SRC016_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-016" for f in findings)
+
+
+# ── Full fixture — all 16 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_sixteen_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 16)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 17)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
