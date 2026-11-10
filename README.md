@@ -7,43 +7,42 @@ Scan your Claude Code, Cursor, or VS Code MCP configurations in seconds — no a
 ```
 $ mcpprobe scan
 
-╭──────────────────────────────────────────────────────────────────────────────╮
-│ MCPProbe  ·  2 server(s) scanned  ·  6 finding(s)  ·  Score 76/100  ·  2 ms  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────────────────────╮
+│ MCPProbe  ·  3 server(s) scanned  ·  4 finding(s)  ·  Score 72/100  ·  3 ms │
+╰─────────────────────────────────────────────────────────────────────────────╯
+
+HIGH (1)
+ Rule       Server       Message                                       Conf.
+ ─────────────────────────────────────────────────────────────────────────────
+ NET-001    analytics    HTTP transport sends data unencrypted         HIGH
 
 MEDIUM (2)
-  Rule       Server        Message                                   Confidence
- ──────────────────────────────────────────────────────────────────────────────
-  EXEC-001   deepfake-db   Command 'mcp-server-sqlite' uses a        HIGH
-                           relative path — vulnerable to PATH hijacking
-  EXEC-001   osint-db      Command 'mcp-server-sqlite' uses a        HIGH
-                           relative path — vulnerable to PATH hijacking
+ EXEC-001   sqlite-db    Command 'mcp-server-sqlite' uses a            HIGH
+                         relative path — vulnerable to PATH hijacking
+ EXEC-004   code-tools   npx -y without version pin — supply chain     MEDIUM
+                         risk
 
-LOW (4)
-  PERM-003   deepfake-db   MCP server accesses a user-level database  MEDIUM
-  NET-004    deepfake-db   MCP server has unrestricted access to DB   LOW
-  PERM-003   osint-db      MCP server accesses a user-level database  MEDIUM
-  NET-004    osint-db      MCP server has unrestricted access to DB   LOW
+LOW (1)
+ PERM-003   sqlite-db    MCP server accesses a user-level database     MEDIUM
 ```
 
 ---
 
 ## Why MCPProbe
 
-[MCP](https://modelcontextprotocol.io) is the standard way AI agents connect to tools and data. Every MCP server you install runs code on your machine with access to your files, databases, and network.
+[MCP](https://modelcontextprotocol.io) is the standard that connects AI agents to your tools, files, and databases. Every MCP server you install runs code on your machine — and most developers have several installed.
 
 **MCPProbe gives you visibility before something goes wrong.**
 
 | | MCPProbe | Snyk Agent Scan |
 |---|---|---|
-| Stdio transport | ✅ | ✅ |
-| HTTP / SSE transport | ✅ | ❌ |
-| Source code analysis (M2) | ✅ | ❌ |
-| Active security testing (M3) | ✅ | ❌ |
-| Runtime behavior analysis (M3) | ✅ | ❌ |
-| Local-first, no account | ✅ | ❌ |
-| Zero data upload by default | ✅ | ❌ |
-| Open source (MIT) | ✅ | ⚠️ partial |
+| Config scanning (stdio / HTTP / SSE) | ✅ | stdio only |
+| Source code analysis (Python AST) | ✅ | ❌ |
+| Active live server probing | ✅ | ❌ |
+| Prompt-injection detection | ✅ | ❌ |
+| Local-first, zero data upload | ✅ | ❌ |
+| CI/CD JSON output + exit codes | ✅ | ✅ |
+| Open source (MIT) | ✅ | partial |
 
 ---
 
@@ -53,11 +52,13 @@ LOW (4)
 pip install mcpprobe
 ```
 
-Requires Python 3.10+.
+Requires Python 3.10+. No external dependencies beyond `typer` and `rich`.
 
 ---
 
-## Usage
+## Three commands
+
+### `scan` — static config analysis
 
 ```bash
 # Auto-detect Claude Code, Cursor and VS Code configs
@@ -66,12 +67,54 @@ mcpprobe scan
 # Scan a specific config file
 mcpprobe scan --config path/to/mcp-config.json
 
-# JSON output for CI/CD pipelines
-mcpprobe scan --output json
+# JSON output for CI/CD — exits 1 if HIGH or above
+mcpprobe scan --output json --fail-on HIGH
 
-# Fail the pipeline on HIGH or above
-mcpprobe scan --fail-on HIGH
+# Skip source code analysis
+mcpprobe scan --no-source
 ```
+
+Auto-detects configs from:
+- **Claude Code** — `~/.claude.json`, `.claude/settings.json`
+- **Cursor** — `~/.cursor/mcp.json`, `.cursor/mcp.json`
+- **VS Code / Copilot** — `.vscode/mcp.json`, `.vscode/settings.json`
+
+---
+
+### `analyze` — Python source code analysis
+
+```bash
+# Scan a single file
+mcpprobe analyze server.py
+
+# Scan a whole project directory
+mcpprobe analyze ./my-mcp-server/
+
+# JSON output
+mcpprobe analyze server.py --output json
+```
+
+Detects hardcoded secrets, `eval()`/`exec()`, `shell=True`, `os.system()`, `pickle.loads()`, and `yaml.load()` without `Loader=` — all via Python's built-in `ast` module, zero external dependencies.
+
+---
+
+### `probe` — active live server testing
+
+```bash
+# Probe an HTTP MCP server
+mcpprobe probe https://my-server.example.com/mcp
+
+# Probe a server from your config by name
+mcpprobe probe my-server-name
+
+# Enable active tool-call probes (use only on servers you own)
+mcpprobe probe https://my-server.example.com/mcp --active
+
+# JSON output
+mcpprobe probe https://my-server.example.com/mcp --output json
+```
+
+Connects to a live MCP server, enumerates its tools and resources, and runs passive + optional active security probes. Detects prompt-injection in tool descriptions, dangerous execution tools, and unrestricted filesystem parameters — without sending tool calls by default.
 
 ---
 
@@ -82,95 +125,135 @@ mcpprobe scan --fail-on HIGH
   run: |
     pip install mcpprobe
     mcpprobe scan --output json --fail-on HIGH
+
+- name: Analyze MCP server source
+  run: mcpprobe analyze ./src --output json --fail-on CRITICAL
 ```
 
----
-
-## What MCPProbe checks (20 rules)
-
-### Secrets
-| Rule | Description | Severity |
-|---|---|---|
-| SEC-001 | API key in plain text in env block | CRITICAL |
-| SEC-002 | Secret passed as a CLI argument | CRITICAL |
-| SEC-003 | Env variable name suggests it holds a secret | HIGH |
-| SEC-004 | Non-empty env values in a git-tracked config | MEDIUM |
-
-### Execution
-| Rule | Description | Severity |
-|---|---|---|
-| EXEC-001 | Relative command — vulnerable to PATH hijacking | MEDIUM |
-| EXEC-002 | Shell interpreter as MCP entry point | HIGH |
-| EXEC-003 | Shell `-c` flag enables arbitrary command injection | HIGH |
-| EXEC-004 | `npx -y` without version pin — supply chain risk | MEDIUM |
-| EXEC-005 | `uvx`/`pipx` without version pin | MEDIUM |
-
-### Network
-| Rule | Description | Severity |
-|---|---|---|
-| NET-001 | Unencrypted HTTP transport | HIGH |
-| NET-002 | Remote URL — data may leave your machine | MEDIUM |
-| NET-003 | Remote server with no authentication headers | MEDIUM |
-| NET-004 | Sensitive path in args (DB, secrets dir) | LOW |
-| NET-005 | TLS verification explicitly disabled | HIGH |
-
-### Permissions
-| Rule | Description | Severity |
-|---|---|---|
-| PERM-001 | Access to broad filesystem path (`/`, `/home`, `/etc`) | HIGH |
-| PERM-002 | Server name suggests elevated capabilities | LOW |
-| PERM-003 | Unrestricted access to user-level database | LOW |
-
-### Configuration
-| Rule | Description | Severity |
-|---|---|---|
-| CFG-001 | No command and no URL — misconfigured server | MEDIUM |
-| CFG-002 | HTTP/SSE transport without URL | LOW |
-| CFG-004 | Both command and URL set — ambiguous | LOW |
-| CFG-005 | Duplicate server name across config files | LOW |
+`mcpprobe` exits `0` on clean, `1` if a finding meets or exceeds `--fail-on`, `2` on config errors.
 
 ---
 
-## Supported editors
+## Complete rule reference
 
-| Editor | Config location |
+### Config rules (21) — `mcpprobe scan`
+
+#### Secrets
+| Rule | Severity | Description |
+|---|---|---|
+| SEC-001 | CRITICAL | API key or token in plain text in `env` block |
+| SEC-002 | CRITICAL | Secret value passed as a CLI argument |
+| SEC-003 | HIGH | Env variable name suggests it holds a secret |
+| SEC-004 | MEDIUM | Non-empty env values in a git-tracked config |
+
+#### Execution
+| Rule | Severity | Description |
+|---|---|---|
+| EXEC-001 | MEDIUM | Relative command path — vulnerable to PATH hijacking |
+| EXEC-002 | HIGH | Shell interpreter (`bash`, `sh`, `zsh`) as MCP entry point |
+| EXEC-003 | HIGH | Shell `-c` flag enables arbitrary command injection |
+| EXEC-004 | MEDIUM | `npx -y` without version pin — supply chain risk |
+| EXEC-005 | MEDIUM | `uvx`/`pipx` without version pin |
+
+#### Network
+| Rule | Severity | Description |
+|---|---|---|
+| NET-001 | HIGH | Unencrypted HTTP transport |
+| NET-002 | MEDIUM | Remote URL — data leaves your machine |
+| NET-003 | MEDIUM | Remote server with no authentication headers |
+| NET-004 | LOW | Sensitive path in args (DB, secrets directory) |
+| NET-005 | HIGH | TLS verification explicitly disabled |
+
+#### Permissions
+| Rule | Severity | Description |
+|---|---|---|
+| PERM-001 | HIGH | Access to broad filesystem path (`/`, `/home`, `/etc`) |
+| PERM-002 | LOW | Server name suggests elevated capabilities |
+| PERM-003 | LOW | Unrestricted access to user-level database |
+
+#### Configuration
+| Rule | Severity | Description |
+|---|---|---|
+| CFG-001 | MEDIUM | No command and no URL — misconfigured server |
+| CFG-002 | LOW | HTTP/SSE transport without URL |
+| CFG-003 | LOW | Unrecognised transport type |
+| CFG-004 | LOW | Both command and URL set — ambiguous |
+| CFG-005 | LOW | Duplicate server name across config files |
+
+---
+
+### Source rules (6) — `mcpprobe analyze`
+
+| Rule | Severity | Description |
+|---|---|---|
+| SRC-001 | CRITICAL / HIGH | Hardcoded API key or token (`sk-`, `ghp_`, `AKIA…`) / secret variable name |
+| SRC-002 | HIGH | `eval()` or `exec()` — arbitrary code execution |
+| SRC-003 | HIGH | `subprocess.run(shell=True)` — command injection |
+| SRC-004 | HIGH | `os.system()` / `os.popen()` — command injection |
+| SRC-005 | MEDIUM | `pickle.loads()` — unsafe deserialization of untrusted data |
+| SRC-006 | MEDIUM | `yaml.load()` without `Loader=` — arbitrary Python execution |
+
+---
+
+### Probe rules (7) — `mcpprobe probe`
+
+#### Passive (always run — no tool calls)
+| Rule | Severity | Description |
+|---|---|---|
+| PROBE-001 | CRITICAL | Prompt-injection pattern in a tool description |
+| PROBE-002 | HIGH | Tool name or description suggests arbitrary command execution |
+| PROBE-003 | MEDIUM | Filesystem tool with unconstrained `path` parameter |
+| PROBE-004 | HIGH | Input schema has a `code`, `command`, `script`, or `eval` parameter |
+| PROBE-005 | INFO | Server exposes >15 tools — large attack surface |
+
+#### Active (opt-in with `--active`)
+| Rule | Severity | Description |
+|---|---|---|
+| PROBE-010 | CRITICAL / HIGH | Path traversal succeeds (`../../../../etc/passwd`) |
+| PROBE-011 | MEDIUM | Error message leaks an internal filesystem path |
+
+---
+
+## Scoring
+
+Every scan produces a **0–100 score** (100 = clean):
+
+| Severity | Deduction |
 |---|---|
-| **Claude Code** | `~/.claude.json`, `.claude/settings.json` |
-| **Cursor** | `~/.cursor/mcp.json`, `.cursor/mcp.json` |
-| **VS Code / Copilot** | `.vscode/mcp.json`, `.vscode/settings.json` |
-| **Custom** | `mcpprobe scan --config your-file.json` |
+| CRITICAL | −40 |
+| HIGH | −20 |
+| MEDIUM | −8 |
+| LOW | −2 |
+| INFO | 0 |
 
----
-
-## Roadmap
-
-- **M1** (now) — Static config scanner, 20 rules, Claude + Cursor + VS Code
-- **M2** — Source code analysis (Python + TypeScript AST), Semgrep rules
-- **M3** — Active security testing on live MCP servers (stdio + HTTP + SSE)
-- **M4** — Runtime behavior analyzer
-- **M5** — SaaS dashboard (multi-project, history, alerts)
+The floor is 0. The exit code is always based on `--fail-on`, not the score.
 
 ---
 
 ## Contributing
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/mcpprobe
+git clone https://github.com/robkira01-max/mcpprobe
 cd mcpprobe
 pip install -e ".[dev]"
 pytest tests/ -v
+ruff check .
 ```
 
-New rules go in `mcpprobe/rules/`. Each rule is a `@rule`-decorated function that takes an `MCPServer` and returns `Finding | None`. Add a test in `tests/test_rules.py`.
+**New config rule** → add to `mcpprobe/rules/<category>.py`, return `Finding | None`, add a test in `tests/test_rules.py`.
+
+**New source rule** → extend `_Visitor` in `mcpprobe/analyzers/python_ast.py`, add a test in `tests/test_analyzers.py`.
+
+**New probe rule** → add to `mcpprobe/probes/metadata.py` (passive) or `mcpprobe/probes/active.py` (active), add a test in `tests/test_probes.py`.
 
 ---
 
 ## License
 
-MIT
+MIT © 2026 robkira01-max
 
 ---
 
 ## Disclaimer
 
-MCPProbe identifies potential security issues in MCP configurations. A passing scan does not guarantee security. Review all findings in context. Run active tests (M3) only on servers you own or have explicit permission to test.
+MCPProbe identifies potential security issues in MCP configurations, source files, and live servers. A passing scan does not guarantee security — review all findings in context. Run active probes (`--active`) only on servers you own or have explicit written permission to test.
