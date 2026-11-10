@@ -825,3 +825,85 @@ def test_vulnerable_ts_fixture_has_all_twentyone_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 22)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-022: SSTI ─────────────────────────────────────────────────────────────
+
+
+def test_TS022_detects_ejs_render_variable(tmp_path):
+    p = _ts(tmp_path, "const html = ejs.render(template, context);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-022" for f in findings)
+
+
+def test_TS022_detects_handlebars_compile_variable(tmp_path):
+    p = _ts(tmp_path, "const tmpl = Handlebars.compile(templateStr);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-022" for f in findings)
+
+
+def test_TS022_passes_ejs_render_literal(tmp_path):
+    p = _ts(tmp_path, 'const html = ejs.render("<h1>Hello</h1>", {});')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-022" for f in findings)
+
+
+def test_TS022_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-022" for f in findings)
+
+
+# ── TS-023: ReDoS ────────────────────────────────────────────────────────────
+
+
+def test_TS023_detects_new_RegExp_variable(tmp_path):
+    p = _ts(tmp_path, "const rx = new RegExp(pattern);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-023" for f in findings)
+
+
+def test_TS023_passes_new_RegExp_literal(tmp_path):
+    p = _ts(tmp_path, 'const rx = new RegExp("[a-z]+");')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-023" for f in findings)
+
+
+def test_TS023_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-023" for f in findings)
+
+
+# ── TS-024: sensitive data in logs ───────────────────────────────────────────
+
+
+def test_TS024_detects_console_log_password(tmp_path):
+    p = _ts(tmp_path, "console.log('Login attempt', password);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-024" for f in findings)
+
+
+def test_TS024_detects_logger_info_token(tmp_path):
+    p = _ts(tmp_path, "logger.info('Got token:', authToken);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-024" for f in findings)
+
+
+def test_TS024_passes_non_sensitive_log(tmp_path):
+    p = _ts(tmp_path, "console.log('User logged in:', username);")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-024" for f in findings)
+
+
+def test_TS024_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-024" for f in findings)
+
+
+# ── Full fixture — all 24 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_twentyfour_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 25)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

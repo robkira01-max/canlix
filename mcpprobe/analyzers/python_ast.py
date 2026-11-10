@@ -117,6 +117,50 @@ _CORS_MIDDLEWARE_FUNCS = frozenset(
         "app.add_middleware",
     }
 )
+# SRC-022: server-side template injection — Template constructed from user input
+_TEMPLATE_RENDER_FUNCS = frozenset(
+    {
+        "Template",
+        "jinja2.Template",
+        "mako.template.Template",
+        "string.Template",
+        "env.get_template",
+        "jinja2.Environment.get_template",
+    }
+)
+# SRC-023: user-controlled regex — re.compile/search/match/fullmatch with param from func args
+_REGEX_COMPILE_FUNCS = frozenset(
+    {
+        "re.compile",
+        "re.search",
+        "re.match",
+        "re.fullmatch",
+        "re.findall",
+        "re.finditer",
+        "re.sub",
+        "re.split",
+    }
+)
+# SRC-024: sensitive data logged — logging call with security-sensitive keyword in format string
+_LOG_FUNCS = frozenset(
+    {
+        "logging.debug",
+        "logging.info",
+        "logging.warning",
+        "logging.error",
+        "logging.critical",
+        "logger.debug",
+        "logger.info",
+        "logger.warning",
+        "logger.error",
+        "logger.critical",
+        "log.debug",
+        "log.info",
+        "log.warning",
+        "log.error",
+        "log.critical",
+    }
+)
 # SRC-018: XML parsers vulnerable to entity expansion (XXE)
 # Includes both full module paths and common import-alias forms (import ET as ET, etc.)
 _XML_PARSE_FUNCS = frozenset(
@@ -634,6 +678,52 @@ class _Visitor(ast.NodeVisitor):
                                 "Restrict allowed origins to a known allowlist. Wildcard + credentials = auth bypass.",
                             )
                             break
+
+        # SRC-022: SSTI — Template/jinja2.Template constructed from a function parameter
+        if fname in _TEMPLATE_RENDER_FUNCS and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Name) and first_arg.id in self._param_names:
+                self._add(
+                    "SRC-022",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}() constructed from user-controlled input — allows server-side template injection",
+                    "Never render user-supplied strings as templates. Use a fixed template with safe context vars.",
+                )
+
+        # SRC-023: ReDoS — re.compile/search with user-controlled pattern
+        if fname in _REGEX_COMPILE_FUNCS and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Name) and first_arg.id in self._param_names:
+                self._add(
+                    "SRC-023",
+                    Severity.MEDIUM,
+                    Confidence.MEDIUM,
+                    node.lineno,
+                    f"{fname}() called with user-controlled pattern — catastrophic backtracking (ReDoS) risk",
+                    "Reject user-supplied patterns. If needed, enforce a length/complexity limit and use a timeout.",
+                )
+
+        # SRC-024: sensitive data logged — first arg is an f-string referencing a security-sensitive name
+        if fname in _LOG_FUNCS and node.args:
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.JoinedStr):
+                for val in first_arg.values:
+                    if (
+                        isinstance(val, ast.FormattedValue)
+                        and isinstance(val.value, ast.Name)
+                        and _is_security_name(val.value.id)
+                    ):
+                        self._add(
+                            "SRC-024",
+                            Severity.MEDIUM,
+                            Confidence.MEDIUM,
+                            node.lineno,
+                            f"Sensitive value '{val.value.id}' logged — credentials or tokens may appear in log files",
+                            "Redact or mask secrets before logging. Never log raw tokens, passwords, or keys.",
+                        )
+                        break
 
         self.generic_visit(node)
 

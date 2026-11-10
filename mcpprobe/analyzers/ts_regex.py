@@ -299,6 +299,48 @@ _CORS_WILDCARD = re.compile(
 )
 
 
+# ---------------------------------------------------------------------------
+# TS-022: SSTI — template engine called with user-supplied template string
+# ---------------------------------------------------------------------------
+
+_SSTI_TEMPLATE = re.compile(
+    r"""(?x)
+    \bejs\.render\s*\(\s*[A-Za-z_$]              # ejs.render(variable
+    | \bhandlebars\.compile\s*\(\s*[A-Za-z_$]     # handlebars.compile(variable
+    | \bHandlebars\.compile\s*\(\s*[A-Za-z_$]     # Handlebars.compile(variable
+    | \bnunjucks\.renderString\s*\(\s*[A-Za-z_$]  # nunjucks.renderString(variable
+    | \bpug\.render\s*\(\s*[A-Za-z_$]             # pug.render(variable
+    """,
+)
+_SSTI_LITERAL_SAFE = re.compile(r"""ejs\.render\s*\(\s*["'`]|\.compile\s*\(\s*["'`]""")
+
+# ---------------------------------------------------------------------------
+# TS-023: ReDoS — new RegExp() with a non-literal pattern
+# ---------------------------------------------------------------------------
+
+_REDOS_REGEXP = re.compile(
+    r"""(?x)
+    \bnew\s+RegExp\s*\(\s*[A-Za-z_$]   # new RegExp(variable
+    """,
+)
+_REDOS_LITERAL_SAFE = re.compile(r"""\bnew\s+RegExp\s*\(\s*["'`/]""")
+
+# ---------------------------------------------------------------------------
+# TS-024: sensitive data in console.log / logger calls
+# ---------------------------------------------------------------------------
+
+_LOG_CALL = re.compile(
+    r"""(?x)
+    \bconsole\.(?:log|debug|info|warn|error)\s*\(   # console.log(
+    | \blogger\.(?:log|debug|info|warn|error)\s*\(   # logger.log(
+    | \bwinston\.(?:log|debug|info|warn|error)\s*\(  # winston.log(
+    """,
+)
+_LOG_SENSITIVE_NAME = re.compile(
+    r"""(?i)(?:token|secret|password|passwd|api_?key|private_?key|auth_?key|otp|pin|session_?id)\b"""
+)
+
+
 def analyze_typescript(path: Path) -> list[SourceFinding]:
     """Scan a TypeScript/JavaScript file for security issues. Returns all findings."""
     try:
@@ -563,6 +605,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "CORS wildcard origin (*) — any website can make cross-origin requests to this endpoint",
             "Restrict allowed origins to a known allowlist. Wildcard + credentials = auth bypass risk.",
+        )
+
+    # TS-022: SSTI — template engine rendered with user-supplied string
+    if _SSTI_TEMPLATE.search(raw) and not _SSTI_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-022",
+            Severity.HIGH,
+            Confidence.MEDIUM,
+            "Template engine called with a variable — server-side template injection (SSTI) risk",
+            "Use a fixed template path/string. Never pass user-supplied content as the template itself.",
+        )
+
+    # TS-023: ReDoS — user-controlled pattern passed to new RegExp()
+    if _REDOS_REGEXP.search(raw) and not _REDOS_LITERAL_SAFE.search(raw):
+        _add(
+            "TS-023",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "new RegExp(variable) — user-controlled regex pattern can cause catastrophic backtracking (ReDoS)",
+            "Reject user-supplied patterns. If needed, validate complexity and enforce a timeout.",
+        )
+
+    # TS-024: sensitive variable name passed to console.log / logger
+    if _LOG_CALL.search(raw) and _LOG_SENSITIVE_NAME.search(raw):
+        _add(
+            "TS-024",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "Sensitive value passed to a logger — credentials or tokens may appear in log files",
+            "Redact or mask secrets before logging. Never log raw tokens, passwords, or keys.",
         )
 
     return result

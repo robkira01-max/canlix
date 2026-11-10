@@ -4,6 +4,7 @@ import hashlib
 import os
 import pickle
 import random
+import re
 import ssl
 import subprocess
 import xml.etree.ElementTree as ET
@@ -126,3 +127,24 @@ def encrypt_data(plaintext: bytes):
 def configure_cors(app):
     # SRC-021: CORS wildcard
     app.add_middleware("CORSMiddleware", allow_origins=["*"])
+
+
+import jinja2  # noqa: E402, F401
+
+
+def render_template(template_str: str):
+    # SRC-022: SSTI — user-supplied template string
+    return jinja2.Template(template_str).render()
+
+
+def filter_items(pattern: str, items: list):
+    # SRC-023: ReDoS — user-controlled regex pattern
+    return [x for x in items if re.search(pattern, x)]
+
+
+import logging  # noqa: E402
+
+
+def process_login(password: str):
+    # SRC-024: sensitive value logged
+    logging.info(f"Login attempt with password={password}")

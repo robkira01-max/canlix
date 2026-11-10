@@ -105,3 +105,19 @@ function encryptData(plaintext: Buffer): Buffer {
 
 // TS-021: CORS wildcard — any origin allowed
 const corsOptions = { "Access-Control-Allow-Origin": "*" };
+
+// TS-022: SSTI — ejs.render with user-controlled template string
+import ejs from "ejs";
+function renderTemplate(template: string): string {
+  return ejs.render(template, {});
+}
+
+// TS-023: ReDoS — new RegExp with user-controlled pattern
+function filterItems(pattern: string, items: string[]): string[] {
+  return items.filter((x) => new RegExp(pattern).test(x));
+}
+
+// TS-024: sensitive value logged
+function logLogin(password: string): void {
+  console.log("Login attempt", password);
+}

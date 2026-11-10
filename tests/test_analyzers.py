@@ -860,3 +860,76 @@ def test_vulnerable_fixture_has_all_twentyone_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 22)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-022: SSTI ─────────────────────────────────────────────────────────────
+
+
+def test_SRC022_detects_jinja2_Template_from_param(tmp_path):
+    p = _py(tmp_path, "import jinja2\ndef render(tpl: str):\n    return jinja2.Template(tpl).render()")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-022" for f in findings)
+
+
+def test_SRC022_passes_literal_template(tmp_path):
+    p = _py(tmp_path, 'import jinja2\njinja2.Template("Hello {{ name }}")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-022" for f in findings)
+
+
+def test_SRC022_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-022" for f in findings)
+
+
+# ── SRC-023: ReDoS ───────────────────────────────────────────────────────────
+
+
+def test_SRC023_detects_re_search_param(tmp_path):
+    p = _py(tmp_path, "import re\ndef filter_items(pattern: str, items):\n    return re.search(pattern, items)")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-023" for f in findings)
+
+
+def test_SRC023_passes_literal_pattern(tmp_path):
+    p = _py(tmp_path, 'import re\nre.search(r"[a-z]+", text)')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-023" for f in findings)
+
+
+def test_SRC023_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-023" for f in findings)
+
+
+# ── SRC-024: sensitive data in logs ──────────────────────────────────────────
+
+
+def test_SRC024_detects_logging_password(tmp_path):
+    p = _py(
+        tmp_path,
+        "import logging\ndef login(password: str):\n    logging.info(f'Login with password={password}')",
+    )
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-024" for f in findings)
+
+
+def test_SRC024_passes_non_sensitive_log(tmp_path):
+    p = _py(tmp_path, "import logging\nlogging.info(f'User {username} logged in')")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-024" for f in findings)
+
+
+def test_SRC024_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-024" for f in findings)
+
+
+# ── Full fixture — all 24 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_twentyfour_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 25)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
