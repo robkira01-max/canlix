@@ -70,3 +70,9 @@ ssl._create_unverified_context()
 
 # SRC-012: weak hash algorithm
 hashlib.md5(b"data")
+
+# SRC-013: non-constant-time comparison on a secret
+stored_token = "abc"
+user_token = "xyz"
+if stored_token == user_token:
+    pass

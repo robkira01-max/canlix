@@ -104,6 +104,29 @@ _TLS_REJECT_FALSE = re.compile(r"\brejectUnauthorized\s*:\s*false\b")
 _TLS_ENV_ZERO = re.compile(r"""NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0["']?""")
 
 # ---------------------------------------------------------------------------
+# TS-013: timing-safe comparison — === / !== with security-sensitive names
+# ---------------------------------------------------------------------------
+
+# Security variable names relevant for timing-attack detection.
+# No leading \b so camelCase suffixes (storedToken, userPassword) are matched;
+# trailing \b prevents matching tokenizer, protocol, etc.
+_TS_SEC_VAR_TIMING = re.compile(
+    r"""(?i)(?:token|secret|password|passwd|nonce|salt|api_?key|auth_?key|private_?key|otp|pin|session_?token)\b"""
+)
+# Any equality/inequality operator: == === != !==
+# Pattern: one char from [!=] followed by 1-2 '=' chars  =>  matches ==, ===, !=, !==
+_TS_EQ_OP = re.compile(r"[!=]={1,2}")
+# Lines where one side of the comparison is a literal/null/undefined/true/false — these are benign
+_TS_LITERAL_SIDE = re.compile(
+    r"""(?x)
+    # equality op immediately before a literal/null/undefined/true/false (rhs)
+    [!=]={1,2}\s*(?:["'`\d]|null\b|undefined\b|true\b|false\b)
+    # equality op immediately after a literal/null/undefined/true/false (lhs)
+    | (?:["'`\d]|null\b|undefined\b|true\b|false\b)\s*[!=]={1,2}
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-010: insecure PRNG — Math.random() in a security-sensitive context
 # ---------------------------------------------------------------------------
 
@@ -320,6 +343,16 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "TLS certificate verification disabled — allows MITM attacks",
             "Remove rejectUnauthorized: false. Never set NODE_TLS_REJECT_UNAUTHORIZED=0 in production.",
+        )
+
+    # TS-013: timing-safe comparison — ==, ===, !=, !== used on a security-sensitive name vs non-literal
+    if _TS_EQ_OP.search(raw) and _TS_SEC_VAR_TIMING.search(raw) and not _TS_LITERAL_SIDE.search(raw):
+        _add(
+            "TS-013",
+            Severity.MEDIUM,
+            Confidence.MEDIUM,
+            "Non-constant-time comparison on a security-sensitive name — vulnerable to timing attacks",
+            "Use crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) to prevent timing-based secret leakage.",
         )
 
     # TS-010: insecure PRNG — Math.random() used in a security-sensitive context

@@ -177,23 +177,10 @@ def test_clean_ts_fixture_has_no_findings():
     assert len(findings) == 0, [f.message for f in findings]
 
 
-def test_vulnerable_ts_fixture_has_all_twelve_rules():
+def test_vulnerable_ts_fixture_has_first_twelve_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
-    expected = {
-        "TS-001",
-        "TS-002",
-        "TS-003",
-        "TS-004",
-        "TS-005",
-        "TS-006",
-        "TS-007",
-        "TS-008",
-        "TS-009",
-        "TS-010",
-        "TS-011",
-        "TS-012",
-    }
+    expected = {f"TS-{i:03d}" for i in range(1, 13)}
     assert expected.issubset(rule_ids)
 
 
@@ -473,3 +460,63 @@ def test_TS012_passes_createHash_sha3(tmp_path):
 def test_TS012_fixture_fires_on_vulnerable_server():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     assert any(f.rule_id == "TS-012" for f in findings)
+
+
+# ── TS-013: non-constant-time comparison ─────────────────────────────────────
+
+
+def test_TS013_detects_strict_eq_on_token(tmp_path):
+    p = _ts(tmp_path, "if (storedToken === userToken) { return true; }")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-013" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_TS013_detects_strict_neq_on_password(tmp_path):
+    p = _ts(tmp_path, "if (password !== expectedPassword) { throw new Error(); }")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-013" for f in findings)
+
+
+def test_TS013_detects_loose_eq_on_secret(tmp_path):
+    p = _ts(tmp_path, "const ok = (secret == stored);")
+    findings = analyze_typescript(p)
+    assert any(f.rule_id == "TS-013" for f in findings)
+
+
+def test_TS013_passes_comparison_against_string_literal(tmp_path):
+    p = _ts(tmp_path, 'if (token === "") { throw new Error("empty"); }')
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-013" for f in findings)
+
+
+def test_TS013_passes_comparison_against_null(tmp_path):
+    p = _ts(tmp_path, "if (token === null) { return false; }")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-013" for f in findings)
+
+
+def test_TS013_passes_comparison_against_undefined(tmp_path):
+    p = _ts(tmp_path, "if (token === undefined) { return false; }")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-013" for f in findings)
+
+
+def test_TS013_passes_non_security_name_eq(tmp_path):
+    p = _ts(tmp_path, "if (statusCode === 200) { return true; }")
+    findings = analyze_typescript(p)
+    assert not any(f.rule_id == "TS-013" for f in findings)
+
+
+def test_TS013_fixture_fires_on_vulnerable_server():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    assert any(f.rule_id == "TS-013" for f in findings)
+
+
+# ── Full fixture — all 13 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_ts_fixture_has_all_thirteen_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 14)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

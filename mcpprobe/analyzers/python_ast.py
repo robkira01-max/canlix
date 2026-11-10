@@ -218,6 +218,27 @@ class _Visitor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def visit_Compare(self, node: ast.Compare) -> None:
+        # SRC-013: timing-safe comparison — == or != with a security-sensitive name
+        # Only fire when neither side is a constant (literal comparisons like `== ""` are benign)
+        for op in node.ops:
+            if isinstance(op, (ast.Eq, ast.NotEq)):
+                operands = [node.left] + node.comparators
+                if any(isinstance(o, ast.Constant) for o in operands):
+                    continue
+                for operand in operands:
+                    if isinstance(operand, ast.Name) and _is_security_name(operand.id):
+                        self._add(
+                            "SRC-013",
+                            Severity.MEDIUM,
+                            Confidence.MEDIUM,
+                            node.lineno,
+                            f"Non-constant-time comparison on '{operand.id}' — vulnerable to timing attacks",
+                            "Use hmac.compare_digest(a, b) for secret/token comparisons to prevent timing attacks.",
+                        )
+                        break
+        self.generic_visit(node)
+
     def visit_Return(self, node: ast.Return) -> None:
         # SRC-010: random.* returned from a security-sensitive function
         if (

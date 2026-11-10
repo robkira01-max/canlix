@@ -162,23 +162,10 @@ def test_clean_fixture_has_no_findings():
     assert len(findings) == 0
 
 
-def test_vulnerable_fixture_has_all_twelve_rules():
+def test_vulnerable_fixture_has_first_twelve_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {
-        "SRC-001",
-        "SRC-002",
-        "SRC-003",
-        "SRC-004",
-        "SRC-005",
-        "SRC-006",
-        "SRC-007",
-        "SRC-008",
-        "SRC-009",
-        "SRC-010",
-        "SRC-011",
-        "SRC-012",
-    }
+    expected = {f"SRC-{i:03d}" for i in range(1, 13)}
     assert expected.issubset(rule_ids)
 
 
@@ -504,3 +491,58 @@ def test_SRC012_passes_hashlib_new_sha256(tmp_path):
 def test_SRC012_fixture_fires_on_vulnerable_server():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     assert any(f.rule_id == "SRC-012" for f in findings)
+
+
+# ── SRC-013: non-constant-time comparison ────────────────────────────────────
+
+
+def test_SRC013_detects_eq_on_token(tmp_path):
+    p = _py(tmp_path, "def check(stored_token, user_token):\n    return stored_token == user_token")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-013" and f.severity == Severity.MEDIUM for f in findings)
+
+
+def test_SRC013_detects_neq_on_password(tmp_path):
+    p = _py(tmp_path, "def ok(password, expected):\n    return password != expected")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-013" for f in findings)
+
+
+def test_SRC013_detects_eq_on_secret(tmp_path):
+    p = _py(tmp_path, "if api_secret == received_secret:\n    pass")
+    findings = analyze_python(p)
+    assert any(f.rule_id == "SRC-013" for f in findings)
+
+
+def test_SRC013_passes_comparison_against_string_literal(tmp_path):
+    # Comparing a token to "" is a defensive check, not a timing attack
+    p = _py(tmp_path, 'if token == "":\n    raise ValueError("empty")')
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-013" for f in findings)
+
+
+def test_SRC013_passes_comparison_against_none(tmp_path):
+    p = _py(tmp_path, "if token == None:\n    raise ValueError")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-013" for f in findings)
+
+
+def test_SRC013_passes_non_security_name_eq(tmp_path):
+    p = _py(tmp_path, "if status == result:\n    pass")
+    findings = analyze_python(p)
+    assert not any(f.rule_id == "SRC-013" for f in findings)
+
+
+def test_SRC013_fixture_fires_on_vulnerable_server():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    assert any(f.rule_id == "SRC-013" for f in findings)
+
+
+# ── Full fixture — all 13 rules ───────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_thirteen_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 14)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

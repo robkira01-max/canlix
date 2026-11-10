@@ -64,3 +64,8 @@ const tlsOptions = { rejectUnauthorized: false };
 // TS-012: weak hash algorithm (MEDIUM)
 import crypto from "crypto";
 const hash = crypto.createHash("md5").update("data").digest("hex");
+
+// TS-013: non-constant-time comparison on a secret token (MEDIUM)
+function verifyToken(storedToken: string, userToken: string): boolean {
+  return storedToken === userToken;
+}
