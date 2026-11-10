@@ -973,6 +973,30 @@ _JQUERY_AJAX_URL_REQ = re.compile(
     """,
 )
 
+# TS-103: redis.createClient({url: req.xxx}) — SSRF via user-controlled Redis URL
+_REDIS_CREATE_CLIENT_REQ = re.compile(
+    r"""(?x)
+    \bcreateClient\s*\(\s*\{[^}]*\burl\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-104: amqplib.connect(req.xxx) — SSRF via user-controlled RabbitMQ URL
+_AMQPLIB_CONNECT_REQ = re.compile(
+    r"""(?x)
+    \bamqplib(?:\.node)?\s*\.\s*connect\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-105: pg.connect(req.xxx) / new pg.Client(...) — SSRF via PostgreSQL connection string
+_PG_CONNECT_REQ = re.compile(
+    r"""(?x)
+    \bpg\.connect\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2063,6 +2087,37 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             "$.ajax({url: req.xxx}) — user-controlled URL in jQuery ajax call enables SSRF",
             "Hardcode the target URL or validate it against an allowlist. Never use request data as ajax url.",
         )
+
+    # TS-103: redis.createClient({url: req.xxx}) — SSRF via user-controlled Redis URL
+    if _REDIS_CREATE_CLIENT_REQ.search(raw):
+        _add(
+            "TS-103",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "createClient({url: req.xxx}) — user-controlled Redis URL enables SSRF",
+            "Hardcode the Redis URL in configuration. Never allow request data to set the connection URL.",
+        )
+
+    # TS-104: amqplib.connect(req.xxx) — SSRF via user-controlled RabbitMQ URL
+    if _AMQPLIB_CONNECT_REQ.search(raw):
+        _add(
+            "TS-104",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "amqplib.connect(req.xxx) — user-controlled URL enables SSRF via RabbitMQ",
+            "Hardcode the AMQP broker URL. Never allow callers to supply the connection target.",
+        )
+
+    # TS-105: pg.connect(req.xxx) — SSRF via user-controlled PostgreSQL connection string
+    if _PG_CONNECT_REQ.search(raw):
+        _add(
+            "TS-105",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "pg.connect(req.xxx) — user-controlled connection string enables SSRF via PostgreSQL",
+            "Hardcode the database connection string. Never allow request data to set it.",
+        )
+
     if _OBJ_DEFINE_PROP_REQ.search(raw):
         _add(
             "TS-067",

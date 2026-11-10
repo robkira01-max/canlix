@@ -612,9 +612,12 @@ def make_http_conn(host: str) -> http.client.HTTPConnection:
     return http.client.HTTPConnection(host)
 
 
+import etcd3  # noqa: E402
 import grpc  # noqa: E402
 import paramiko  # noqa: E402
+import pika  # noqa: E402
 import pymongo  # noqa: E402
+from kazoo.client import KazooClient  # noqa: E402
 
 
 def open_ssh_transport(host: str) -> paramiko.Transport:
@@ -630,3 +633,18 @@ def open_grpc_channel(target: str):
 def open_mongo_client(host: str) -> pymongo.MongoClient:
     # SRC-102: pymongo.MongoClient with user-controlled host — SSRF via MongoDB client
     return pymongo.MongoClient(host)
+
+
+def amqp_connect(host: str) -> pika.ConnectionParameters:
+    # SRC-103: pika.ConnectionParameters with user-controlled host — SSRF via AMQP
+    return pika.ConnectionParameters(host)
+
+
+def zk_connect(hosts: str) -> KazooClient:
+    # SRC-104: KazooClient with user-controlled hosts — SSRF via ZooKeeper
+    return KazooClient(hosts)
+
+
+def etcd_connect(host: str):
+    # SRC-105: etcd3.client with user-controlled host — SSRF via etcd
+    return etcd3.client(host)

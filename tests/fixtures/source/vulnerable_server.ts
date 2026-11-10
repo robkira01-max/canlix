@@ -522,3 +522,21 @@ function broadcastEvent(socket: any, req: any): void {
 function fetchData(req: any): void {
   $.ajax({ url: req.query.endpoint, method: "GET" });
 }
+
+// TS-103: redis.createClient({url: req.query.xxx}) — SSRF via user-controlled Redis URL
+import { createClient } from "redis";
+function connectRedis(req: any): void {
+  createClient({ url: req.query.redisUrl });
+}
+
+// TS-104: amqplib.connect(req.query.xxx) — SSRF via user-controlled RabbitMQ URL
+import amqplib from "amqplib";
+async function connectAmqp(req: any): Promise<void> {
+  await amqplib.connect(req.query.brokerUrl);
+}
+
+// TS-105: pg.connect(req.query.xxx) — SSRF via user-controlled PostgreSQL connection string
+import pg from "pg";
+async function connectPg(req: any): Promise<void> {
+  await pg.connect(req.query.connStr);
+}

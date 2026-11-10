@@ -234,6 +234,12 @@ _PARAMIKO_TRANSPORT_FUNCS = frozenset({"paramiko.Transport", "Transport"})
 _GRPC_CHANNEL_FUNCS = frozenset({"grpc.insecure_channel", "insecure_channel"})
 # SRC-102: pymongo.MongoClient(user_host) — SSRF via MongoDB client
 _MONGO_CLIENT_FUNCS = frozenset({"pymongo.MongoClient", "MongoClient"})
+# SRC-103: pika.ConnectionParameters(user_host) — SSRF via AMQP/RabbitMQ
+_PIKA_CONN_FUNCS = frozenset({"pika.ConnectionParameters", "ConnectionParameters"})
+# SRC-104: kazoo.client.KazooClient(user_hosts) — SSRF via ZooKeeper
+_KAZOO_CLIENT_FUNCS = frozenset({"kazoo.client.KazooClient", "KazooClient"})
+# SRC-105: etcd3.client(user_host) — SSRF via etcd
+_ETCD_CLIENT_FUNCS = frozenset({"etcd3.client", "etcd3.Etcd3Client", "Etcd3Client"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2035,6 +2041,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"pymongo.MongoClient({host_arg.id}) — user-controlled host enables SSRF",
                     "Hardcode the MongoDB host in configuration. Never allow callers to supply the host.",
+                )
+
+        # SRC-103: pika.ConnectionParameters(user_host) — SSRF via AMQP/RabbitMQ
+        if fname in _PIKA_CONN_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-103",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pika.ConnectionParameters({host_arg.id}) — user-controlled AMQP host enables SSRF",
+                    "Hardcode the RabbitMQ host in configuration. Never allow callers to supply the broker.",
+                )
+
+        # SRC-104: kazoo.client.KazooClient(user_hosts) — SSRF via ZooKeeper
+        if fname in _KAZOO_CLIENT_FUNCS and node.args and self._param_names:
+            hosts_arg = node.args[0]
+            if isinstance(hosts_arg, ast.Name) and hosts_arg.id in self._param_names:
+                self._add(
+                    "SRC-104",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"KazooClient({hosts_arg.id}) — user-controlled ZooKeeper hosts enables SSRF",
+                    "Hardcode the ZooKeeper ensemble address. Never allow callers to supply the hosts.",
+                )
+
+        # SRC-105: etcd3.client(user_host) — SSRF via etcd
+        if fname in _ETCD_CLIENT_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-105",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"etcd3.client({host_arg.id}) — user-controlled etcd host enables SSRF",
+                    "Hardcode the etcd endpoint in configuration. Never allow callers to supply the host.",
                 )
 
         self.generic_visit(node)

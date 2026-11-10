@@ -2149,11 +2149,52 @@ def test_src_102_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-102" for f in analyze_python(p))
 
 
-# ── Full fixture — all 102 rules ──────────────────────────────────────────────
+# ── SRC-103: pika.ConnectionParameters(user_host) — SSRF via AMQP ────────────
 
 
-def test_vulnerable_fixture_has_all_one_hundred_two_rules():
+def test_src_103_fires_on_pika_conn_params_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pika\ndef connect(host: str):\n    pika.ConnectionParameters(host)\n")
+    assert any(f.rule_id == "SRC-103" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_103_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import pika\ndef connect():\n    pika.ConnectionParameters('rabbitmq.example.com')\n")
+    assert not any(f.rule_id == "SRC-103" for f in analyze_python(p))
+
+
+# ── SRC-104: KazooClient(user_hosts) — SSRF via ZooKeeper ────────────────────
+
+
+def test_src_104_fires_on_kazoo_client_with_param(tmp_path: Path) -> None:
+    code = "from kazoo.client import KazooClient\ndef connect(hosts: str):\n    KazooClient(hosts)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-104" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_104_no_fire_on_hardcoded_hosts(tmp_path: Path) -> None:
+    code = "from kazoo.client import KazooClient\ndef connect():\n    KazooClient('zk1:2181')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-104" for f in analyze_python(p))
+
+
+# ── SRC-105: etcd3.client(user_host) — SSRF via etcd ─────────────────────────
+
+
+def test_src_105_fires_on_etcd3_client_with_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import etcd3\ndef connect(host: str):\n    etcd3.client(host)\n")
+    assert any(f.rule_id == "SRC-105" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_105_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import etcd3\ndef connect():\n    etcd3.client('etcd.example.com')\n")
+    assert not any(f.rule_id == "SRC-105" for f in analyze_python(p))
+
+
+# ── Full fixture — all 105 rules ──────────────────────────────────────────────
+
+
+def test_vulnerable_fixture_has_all_one_hundred_five_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
-    expected = {f"SRC-{i:03d}" for i in range(1, 103)}
+    expected = {f"SRC-{i:03d}" for i in range(1, 106)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
