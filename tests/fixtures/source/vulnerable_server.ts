@@ -641,3 +641,21 @@ import * as nats from "nats";
 async function natsConnect(req: any): Promise<void> {
   await nats.connect(req.query.natsServer);
 }
+
+// TS-124: new InfluxDB({ url: req.query.xxx }) — InfluxDB URL SSRF
+import { InfluxDB } from "@influxdata/influxdb-client";
+function getInfluxClient(req: any): InfluxDB {
+  return new InfluxDB({ url: req.query.influxUrl });
+}
+
+// TS-125: neo4j.driver(req.query.xxx) — Neo4j URI SSRF
+import neo4j from "neo4j-driver";
+function getNeo4jDriver(req: any) {
+  return neo4j.driver(req.query.neo4jUri);
+}
+
+// TS-126: new ClickHouse({ host: req.query.xxx }) — ClickHouse host SSRF
+import { ClickHouse } from "clickhouse";
+function getClickHouseClient(req: any): ClickHouse {
+  return new ClickHouse({ host: req.query.chHost });
+}

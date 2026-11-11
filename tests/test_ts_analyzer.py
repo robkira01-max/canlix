@@ -2586,3 +2586,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_three_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 124)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-124: new InfluxDB({ url: req.xxx }) — InfluxDB URL SSRF ───────────────
+
+
+def test_ts_124_fires_on_influxdb_url_req(tmp_path: Path) -> None:
+    code = "const c = new InfluxDB({ url: req.query.influxUrl });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-124" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_124_no_fire_on_hardcoded_influxdb_url(tmp_path: Path) -> None:
+    code = "const c = new InfluxDB({ url: 'http://localhost:8086' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-124" for f in analyze_typescript(p))
+
+
+# ── TS-125: neo4j.driver(req.xxx) — Neo4j URI SSRF ───────────────────────────
+
+
+def test_ts_125_fires_on_neo4j_driver_req(tmp_path: Path) -> None:
+    code = "const d = neo4j.driver(req.query.neo4jUri);\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-125" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_125_no_fire_on_hardcoded_neo4j_uri(tmp_path: Path) -> None:
+    code = "const d = neo4j.driver('bolt://localhost:7687');\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-125" for f in analyze_typescript(p))
+
+
+# ── TS-126: new ClickHouse({ host: req.xxx }) — ClickHouse host SSRF ─────────
+
+
+def test_ts_126_fires_on_clickhouse_host_req(tmp_path: Path) -> None:
+    code = "const ch = new ClickHouse({ host: req.query.chHost });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-126" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_126_no_fire_on_hardcoded_clickhouse_host(tmp_path: Path) -> None:
+    code = "const ch = new ClickHouse({ host: 'localhost' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-126" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_six_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 127)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

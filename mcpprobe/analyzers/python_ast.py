@@ -282,6 +282,18 @@ _KAFKA_FUNCS = frozenset(
 )
 # SRC-123: celery.Celery(broker=url) — SSRF via user-controlled Celery broker URL
 _CELERY_FUNCS = frozenset({"celery.Celery", "Celery"})
+# SRC-124: influxdb_client.InfluxDBClient(url=url) — SSRF via user-controlled InfluxDB URL
+_INFLUXDB_CLIENT_FUNCS = frozenset(
+    {"influxdb_client.InfluxDBClient", "InfluxDBClient", "influxdb.DataFrameClient", "influxdb.InfluxDBClient"}
+)
+# SRC-125: clickhouse_driver.Client(host) — SSRF via user-controlled ClickHouse host
+_CLICKHOUSE_CLIENT_FUNCS = frozenset(
+    {"clickhouse_driver.Client", "clickhouse.Client", "clickhouse_connect.get_client", "Client"}
+)
+# SRC-126: neo4j.GraphDatabase.driver(url) — SSRF via user-controlled Neo4j URI
+_NEO4J_DRIVER_FUNCS = frozenset(
+    {"neo4j.GraphDatabase.driver", "neo4j.AsyncGraphDatabase.driver", "GraphDatabase.driver"}
+)
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2357,6 +2369,63 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"Celery(broker={broker_kw.value.id}) — user-controlled broker URL enables SSRF",
                     "Hardcode the Celery broker URL. Never accept broker URLs from user input.",
+                )
+
+        # SRC-124: influxdb_client.InfluxDBClient(url=url) — SSRF via user-controlled InfluxDB URL
+        if fname in _INFLUXDB_CLIENT_FUNCS and self._param_names:
+            url_kw = next((kw for kw in node.keywords if kw.arg == "url"), None)
+            if url_kw and isinstance(url_kw.value, ast.Name) and url_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-124",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"InfluxDBClient(url={url_kw.value.id}) — user-controlled InfluxDB URL enables SSRF",
+                    "Hardcode the InfluxDB URL. Never accept time-series DB URLs from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-124",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"InfluxDBClient({node.args[0].id}) — user-controlled InfluxDB URL enables SSRF",
+                    "Hardcode the InfluxDB URL. Never accept time-series DB URLs from user input.",
+                )
+
+        # SRC-125: clickhouse_driver.Client(host) — SSRF via user-controlled ClickHouse host
+        if fname in _CLICKHOUSE_CLIENT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-125",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ClickHouseClient(host={host_kw.value.id}) — user-controlled host enables SSRF",
+                    "Hardcode the ClickHouse host. Never accept database hosts from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-125",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ClickHouseClient({node.args[0].id}) — user-controlled host enables SSRF",
+                    "Hardcode the ClickHouse host. Never accept database hosts from user input.",
+                )
+
+        # SRC-126: neo4j.GraphDatabase.driver(url) — SSRF via user-controlled Neo4j URI
+        if fname in _NEO4J_DRIVER_FUNCS and node.args and self._param_names:
+            uri_arg = node.args[0]
+            if isinstance(uri_arg, ast.Name) and uri_arg.id in self._param_names:
+                self._add(
+                    "SRC-126",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"GraphDatabase.driver({uri_arg.id}) — user-controlled Neo4j URI enables SSRF",
+                    "Hardcode the Neo4j URI. Never accept graph database URIs from user input.",
                 )
 
         self.generic_visit(node)

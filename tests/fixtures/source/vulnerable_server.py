@@ -767,3 +767,23 @@ def get_kafka_producer(bootstrap_servers: str):
 def get_celery_app(broker: str):
     # SRC-123: Celery with user-controlled broker URL — SSRF
     return celery.Celery(broker=broker)
+
+
+import clickhouse_driver  # noqa: E402
+import influxdb_client  # noqa: E402
+import neo4j  # noqa: E402
+
+
+def get_influx_client(url: str):
+    # SRC-124: InfluxDBClient with user-controlled URL — SSRF
+    return influxdb_client.InfluxDBClient(url=url)
+
+
+def get_clickhouse_client(host: str):
+    # SRC-125: clickhouse_driver.Client with user-controlled host — SSRF
+    return clickhouse_driver.Client(host=host)
+
+
+def get_neo4j_driver(uri: str):
+    # SRC-126: GraphDatabase.driver with user-controlled URI — SSRF
+    return neo4j.GraphDatabase.driver(uri)

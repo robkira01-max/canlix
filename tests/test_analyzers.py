@@ -2482,3 +2482,55 @@ def test_vulnerable_fixture_has_all_one_hundred_twenty_three_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 124)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-124: InfluxDBClient(url=url) — InfluxDB SSRF ─────────────────────────
+
+
+def test_src_124_fires_on_influx_client_url_param(tmp_path: Path) -> None:
+    code = "import influxdb_client\ndef connect(url: str):\n    return influxdb_client.InfluxDBClient(url=url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-124" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_124_no_fire_on_hardcoded_influx_url(tmp_path: Path) -> None:
+    code = "import influxdb_client\ndef connect():\n    return influxdb_client.InfluxDBClient(url='http://localhost:8086')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-124" for f in analyze_python(p))
+
+
+# ── SRC-125: clickhouse_driver.Client(host=host) — ClickHouse SSRF ───────────
+
+
+def test_src_125_fires_on_clickhouse_host_param(tmp_path: Path) -> None:
+    code = "import clickhouse_driver\ndef connect(host: str):\n    return clickhouse_driver.Client(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-125" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_125_no_fire_on_hardcoded_clickhouse_host(tmp_path: Path) -> None:
+    code = "import clickhouse_driver\ndef connect():\n    return clickhouse_driver.Client(host='localhost')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-125" for f in analyze_python(p))
+
+
+# ── SRC-126: neo4j.GraphDatabase.driver(uri) — Neo4j SSRF ────────────────────
+
+
+def test_src_126_fires_on_neo4j_driver_param(tmp_path: Path) -> None:
+    code = "import neo4j\ndef connect(uri: str):\n    return neo4j.GraphDatabase.driver(uri)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-126" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_126_no_fire_on_hardcoded_neo4j_uri(tmp_path: Path) -> None:
+    code = "import neo4j\ndef connect():\n    return neo4j.GraphDatabase.driver('bolt://localhost:7687')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-126" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_twenty_six_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 127)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

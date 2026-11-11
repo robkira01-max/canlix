@@ -1149,6 +1149,36 @@ _NATS_CONNECT_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-124: new InfluxDB({ url: req.xxx }) — SSRF via user-controlled InfluxDB URL
+# ---------------------------------------------------------------------------
+
+_INFLUXDB_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+InfluxDB\s*\(\s*\{[^}]*\burl\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-125: neo4j.driver(req.xxx) — SSRF via user-controlled Neo4j URI
+# ---------------------------------------------------------------------------
+
+_NEO4J_DRIVER_REQ = re.compile(
+    r"""(?x)
+    \bneo4j\.driver\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-126: new ClickHouse({ host: req.xxx }) — SSRF via user-controlled ClickHouse host
+# ---------------------------------------------------------------------------
+
+_CLICKHOUSE_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+ClickHouse\s*\(\s*\{[^}]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2444,6 +2474,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "nats.connect(req.xxx) — user-controlled NATS server URL enables SSRF",
             "Hardcode the NATS server URL. Never accept server addresses from request data.",
+        )
+    # TS-124: new InfluxDB({ url: req.xxx }) — SSRF via user-controlled InfluxDB URL
+    if _INFLUXDB_URL_REQ.search(raw):
+        _add(
+            "TS-124",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new InfluxDB({url: req.xxx}) — user-controlled InfluxDB URL enables SSRF",
+            "Hardcode the InfluxDB URL. Never accept time-series DB URLs from request data.",
+        )
+    # TS-125: neo4j.driver(req.xxx) — SSRF via user-controlled Neo4j URI
+    if _NEO4J_DRIVER_REQ.search(raw):
+        _add(
+            "TS-125",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "neo4j.driver(req.xxx) — user-controlled Neo4j URI enables SSRF",
+            "Hardcode the Neo4j URI. Never accept graph database URIs from request data.",
+        )
+    # TS-126: new ClickHouse({ host: req.xxx }) — SSRF via user-controlled ClickHouse host
+    if _CLICKHOUSE_HOST_REQ.search(raw):
+        _add(
+            "TS-126",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new ClickHouse({host: req.xxx}) — user-controlled ClickHouse host enables SSRF",
+            "Hardcode the ClickHouse host. Never accept database hosts from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):
