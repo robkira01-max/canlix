@@ -300,6 +300,14 @@ _WEAVIATE_CLIENT_FUNCS = frozenset({"weaviate.Client", "weaviate.connect_to_cust
 _QDRANT_CLIENT_FUNCS = frozenset({"qdrant_client.QdrantClient", "QdrantClient"})
 # SRC-129: chromadb.HttpClient(host=host) — SSRF via user-controlled ChromaDB host
 _CHROMADB_CLIENT_FUNCS = frozenset({"chromadb.HttpClient", "chromadb.AsyncHttpClient", "HttpClient"})
+# SRC-130: openai.OpenAI(base_url=url) — SSRF / API key exfiltration via user-controlled base URL
+_OPENAI_CLIENT_FUNCS = frozenset({"openai.OpenAI", "openai.AsyncOpenAI", "OpenAI", "AsyncOpenAI"})
+# SRC-131: anthropic.Anthropic(base_url=url) — SSRF via user-controlled Anthropic base URL
+_ANTHROPIC_CLIENT_FUNCS = frozenset({"anthropic.Anthropic", "anthropic.AsyncAnthropic", "Anthropic", "AsyncAnthropic"})
+# SRC-132: pymilvus.connections.connect(host=host) — SSRF via user-controlled Milvus host
+_MILVUS_CONNECT_FUNCS = frozenset(
+    {"pymilvus.connections.connect", "connections.connect", "MilvusClient", "pymilvus.MilvusClient"}
+)
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2480,6 +2488,56 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"chromadb.HttpClient(host={host_kw.value.id}) — user-controlled host enables SSRF",
                     "Hardcode the ChromaDB host. Never accept vector DB hosts from user input.",
+                )
+
+        # SRC-130: openai.OpenAI(base_url=url) — SSRF / key exfil via user-controlled base URL
+        if fname in _OPENAI_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-130",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"OpenAI(base_url={bu_kw.value.id}) — user-controlled base URL routes API calls"
+                    " to attacker server (API key exfiltration)",
+                    "Hardcode the OpenAI base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-131: anthropic.Anthropic(base_url=url) — SSRF / key exfil via user-controlled base URL
+        if fname in _ANTHROPIC_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-131",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Anthropic(base_url={bu_kw.value.id}) — user-controlled base URL routes API"
+                    " calls to attacker server (API key exfiltration)",
+                    "Hardcode the Anthropic base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-132: pymilvus.connections.connect(host=host) — SSRF via user-controlled Milvus host
+        if fname in _MILVUS_CONNECT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg in ("host", "uri")), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-132",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"MilvusClient({host_kw.arg}={host_kw.value.id}) — user-controlled host enables SSRF",
+                    "Hardcode the Milvus host. Never accept vector DB hosts from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-132",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"MilvusClient({node.args[0].id}) — user-controlled host enables SSRF",
+                    "Hardcode the Milvus host. Never accept vector DB hosts from user input.",
                 )
 
         self.generic_visit(node)

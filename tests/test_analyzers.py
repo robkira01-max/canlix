@@ -2586,3 +2586,55 @@ def test_vulnerable_fixture_has_all_one_hundred_twenty_nine_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 130)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-130: OpenAI(base_url=url) — API key exfiltration SSRF ────────────────
+
+
+def test_src_130_fires_on_openai_base_url_param(tmp_path: Path) -> None:
+    code = "import openai\ndef client(base_url: str):\n    return openai.OpenAI(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-130" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_130_no_fire_on_hardcoded_openai_base(tmp_path: Path) -> None:
+    code = "import openai\ndef client():\n    return openai.OpenAI(base_url='https://api.openai.com/v1')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-130" for f in analyze_python(p))
+
+
+# ── SRC-131: Anthropic(base_url=url) — API key exfiltration SSRF ─────────────
+
+
+def test_src_131_fires_on_anthropic_base_url_param(tmp_path: Path) -> None:
+    code = "import anthropic\ndef client(base_url: str):\n    return anthropic.Anthropic(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-131" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_131_no_fire_on_hardcoded_anthropic_base(tmp_path: Path) -> None:
+    code = "import anthropic\ndef client():\n    return anthropic.Anthropic(base_url='https://api.anthropic.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-131" for f in analyze_python(p))
+
+
+# ── SRC-132: pymilvus.MilvusClient(host=host) — Milvus SSRF ──────────────────
+
+
+def test_src_132_fires_on_milvus_host_param(tmp_path: Path) -> None:
+    code = "import pymilvus\ndef connect(host: str):\n    return pymilvus.MilvusClient(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-132" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_132_no_fire_on_hardcoded_milvus_host(tmp_path: Path) -> None:
+    code = "import pymilvus\ndef connect():\n    return pymilvus.MilvusClient(host='localhost')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-132" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_thirty_two_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 133)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

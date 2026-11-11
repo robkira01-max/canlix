@@ -677,3 +677,21 @@ import { ChromaClient } from "chromadb";
 function getChromaClient(req: any): ChromaClient {
   return new ChromaClient({ path: req.query.chromaPath });
 }
+
+// TS-130: new OpenAI({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import OpenAI from "openai";
+function getOpenAIClient(req: any): OpenAI {
+  return new OpenAI({ baseURL: req.query.openaiBase });
+}
+
+// TS-131: new Anthropic({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import Anthropic from "@anthropic-ai/sdk";
+function getAnthropicClient(req: any): Anthropic {
+  return new Anthropic({ baseURL: req.query.anthropicBase });
+}
+
+// TS-132: new MilvusClient({ address: req.query.xxx }) -- Milvus SSRF
+import { MilvusClient } from "@zilliz/milvus2-sdk-node";
+function getMilvusClient(req: any): MilvusClient {
+  return new MilvusClient({ address: req.query.milvusAddr });
+}

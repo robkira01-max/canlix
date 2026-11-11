@@ -2690,3 +2690,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_nine_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 130)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-130: new OpenAI({ baseURL: req.xxx }) — API key exfiltration SSRF ─────
+
+
+def test_ts_130_fires_on_openai_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new OpenAI({ baseURL: req.query.openaiBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-130" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_130_no_fire_on_hardcoded_openai_base(tmp_path: Path) -> None:
+    code = "const c = new OpenAI({ baseURL: 'https://api.openai.com/v1' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-130" for f in analyze_typescript(p))
+
+
+# ── TS-131: new Anthropic({ baseURL: req.xxx }) — API key exfiltration SSRF ──
+
+
+def test_ts_131_fires_on_anthropic_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new Anthropic({ baseURL: req.query.anthropicBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-131" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_131_no_fire_on_hardcoded_anthropic_base(tmp_path: Path) -> None:
+    code = "const c = new Anthropic({ baseURL: 'https://api.anthropic.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-131" for f in analyze_typescript(p))
+
+
+# ── TS-132: new MilvusClient({ address: req.xxx }) — Milvus SSRF ─────────────
+
+
+def test_ts_132_fires_on_milvus_address_req(tmp_path: Path) -> None:
+    code = "const m = new MilvusClient({ address: req.query.milvusAddr });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-132" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_132_no_fire_on_hardcoded_milvus_address(tmp_path: Path) -> None:
+    code = "const m = new MilvusClient({ address: 'localhost:19530' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-132" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_thirty_two_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 133)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

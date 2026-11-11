@@ -807,3 +807,23 @@ def get_qdrant_client(host: str):
 def get_chroma_client(host: str):
     # SRC-129: chromadb.HttpClient with user-controlled host — SSRF
     return chromadb.HttpClient(host=host)
+
+
+import anthropic  # noqa: E402
+import openai  # noqa: E402
+import pymilvus  # noqa: E402
+
+
+def get_openai_client(base_url: str):
+    # SRC-130: OpenAI with user-controlled base_url — API key exfiltration / SSRF
+    return openai.OpenAI(base_url=base_url)
+
+
+def get_anthropic_client(base_url: str):
+    # SRC-131: Anthropic with user-controlled base_url — API key exfiltration / SSRF
+    return anthropic.Anthropic(base_url=base_url)
+
+
+def get_milvus_client(host: str):
+    # SRC-132: MilvusClient with user-controlled host — SSRF
+    return pymilvus.MilvusClient(host=host)

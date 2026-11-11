@@ -1210,6 +1210,36 @@ _CHROMA_PATH_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-130: new OpenAI({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+# ---------------------------------------------------------------------------
+
+_OPENAI_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+OpenAI\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-131: new Anthropic({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+# ---------------------------------------------------------------------------
+
+_ANTHROPIC_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Anthropic\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-132: new MilvusClient({ address: req.xxx }) -- Milvus vector DB SSRF
+# ---------------------------------------------------------------------------
+
+_MILVUS_ADDRESS_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+MilvusClient\s*\(\s*\{[^}]*\baddress\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2559,6 +2589,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new ChromaClient({path: req.xxx}) -- user-controlled ChromaDB path enables SSRF",
             "Hardcode the ChromaDB path. Never accept vector DB paths from request data.",
+        )
+    # TS-130: new OpenAI({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _OPENAI_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-130",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new OpenAI({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key to attacker",
+            "Hardcode the OpenAI base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-131: new Anthropic({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _ANTHROPIC_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-131",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new Anthropic({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key to attacker",
+            "Hardcode the Anthropic base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-132: new MilvusClient({ address: req.xxx }) -- Milvus SSRF
+    if _MILVUS_ADDRESS_REQ.search(raw):
+        _add(
+            "TS-132",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new MilvusClient({address: req.xxx}) -- user-controlled Milvus address enables SSRF",
+            "Hardcode the Milvus address. Never accept vector DB addresses from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):
