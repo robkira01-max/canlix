@@ -3048,3 +3048,58 @@ def test_vulnerable_fixture_has_all_one_hundred_fifty_three_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 154)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-154: ollama.Client(host=param) — Ollama SSRF / prompt exfil ──────────
+
+
+def test_src_154_fires_on_ollama_host_param(tmp_path: Path) -> None:
+    code = "import ollama\ndef client(host: str):\n    return ollama.Client(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-154" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_154_no_fire_on_hardcoded_ollama_host(tmp_path: Path) -> None:
+    code = "import ollama\ndef client():\n    return ollama.Client(host='http://localhost:11434')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-154" for f in analyze_python(p))
+
+
+# ── SRC-155: AzureOpenAI(azure_endpoint=param) — API key exfiltration ────────
+
+
+def test_src_155_fires_on_azure_openai_endpoint_param(tmp_path: Path) -> None:
+    code = (
+        "import openai\ndef client(azure_endpoint: str):\n"
+        "    return openai.AzureOpenAI(azure_endpoint=azure_endpoint)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-155" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_155_no_fire_on_hardcoded_azure_openai_endpoint(tmp_path: Path) -> None:
+    code = "import openai\ndef client():\n    return openai.AzureOpenAI(azure_endpoint='https://my.openai.azure.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-155" for f in analyze_python(p))
+
+
+# ── SRC-156: sentry_sdk.init(dsn=param) — error-report exfiltration ──────────
+
+
+def test_src_156_fires_on_sentry_dsn_param(tmp_path: Path) -> None:
+    code = "import sentry_sdk\ndef setup(dsn: str):\n    sentry_sdk.init(dsn=dsn)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-156" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_156_no_fire_on_hardcoded_sentry_dsn(tmp_path: Path) -> None:
+    code = "import sentry_sdk\ndef setup():\n    sentry_sdk.init(dsn='https://key@o0.ingest.sentry.io/0')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-156" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_fifty_six_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 157)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

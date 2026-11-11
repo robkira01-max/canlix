@@ -1452,6 +1452,36 @@ _INFLUXDB_URL_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-154: new Ollama({ host: req.xxx }) -- Ollama LLM server SSRF / prompt exfil
+# ---------------------------------------------------------------------------
+
+_OLLAMA_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Ollama\s*\(\s*\{[^}]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-155: Sentry.init({ dsn: req.xxx }) -- error-report exfil via user DSN
+# ---------------------------------------------------------------------------
+
+_SENTRY_DSN_REQ = re.compile(
+    r"""(?x)
+    \bSentry\s*\.\s*init\s*\(\s*\{[^}]*\bdsn\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-156: new StatsD({ host: req.xxx }) -- metrics exfil / UDP SSRF (hot-shots)
+# ---------------------------------------------------------------------------
+
+_STATSD_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+StatsD\s*\(\s*\{[^}]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -3018,6 +3048,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new InfluxDB({url: req.xxx}) -- user-controlled InfluxDB URL enables SSRF and token exfiltration",
             "Hardcode the InfluxDB URL. Never accept time-series DB URLs from request data.",
+        )
+    # TS-154: new Ollama({ host: req.xxx }) -- Ollama LLM server SSRF / prompt exfil
+    if _OLLAMA_HOST_REQ.search(raw):
+        _add(
+            "TS-154",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Ollama({host: req.xxx}) -- user-controlled Ollama host routes prompts to attacker server",
+            "Hardcode the Ollama server URL. Never accept LLM server hosts from request data.",
+        )
+    # TS-155: Sentry.init({ dsn: req.xxx }) -- error-report exfil via user DSN
+    if _SENTRY_DSN_REQ.search(raw):
+        _add(
+            "TS-155",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "Sentry.init({dsn: req.xxx}) -- user-controlled DSN sends error reports to attacker server",
+            "Hardcode the Sentry DSN in configuration. Never accept telemetry DSNs from request data.",
+        )
+    # TS-156: new StatsD({ host: req.xxx }) -- metrics exfil / UDP SSRF
+    if _STATSD_HOST_REQ.search(raw):
+        _add(
+            "TS-156",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new StatsD({host: req.xxx}) -- user-controlled StatsD host exfiltrates metrics via UDP",
+            "Hardcode the StatsD host. Never accept metrics hosts from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

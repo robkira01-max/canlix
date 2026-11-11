@@ -821,3 +821,21 @@ import { InfluxDB } from "@influxdata/influxdb-client";
 function getInfluxClient(req: any): InfluxDB {
   return new InfluxDB({ url: req.params.influxUrl });
 }
+
+// TS-154: new Ollama({ host: req.query.xxx }) -- Ollama LLM server SSRF
+import { Ollama } from "ollama";
+function getOllamaClient(req: any): Ollama {
+  return new Ollama({ host: req.query.ollamaHost });
+}
+
+// TS-155: Sentry.init({ dsn: req.query.xxx }) -- error-report exfil
+import * as Sentry from "@sentry/node";
+function initSentry(req: any) {
+  Sentry.init({ dsn: req.body.sentryDsn });
+}
+
+// TS-156: new StatsD({ host: req.query.xxx }) -- metrics exfil / UDP SSRF
+import StatsD from "hot-shots";
+function getStatsClient(req: any): StatsD {
+  return new StatsD({ host: req.params.statsdHost });
+}

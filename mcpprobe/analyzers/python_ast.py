@@ -396,6 +396,12 @@ _PYMEMCACHE_CLIENT_FUNCS = frozenset(
 )
 # SRC-153: consul.Consul(host=param) — SSRF via user-controlled Consul agent host
 _CONSUL_CLIENT_FUNCS = frozenset({"consul.Consul", "Consul"})
+# SRC-154: ollama.Client(host=param) — SSRF / prompt exfil via user-controlled Ollama server
+_OLLAMA_CLIENT_FUNCS = frozenset({"ollama.Client", "ollama.AsyncClient", "Ollama"})
+# SRC-155: openai.AzureOpenAI(azure_endpoint=param) — API key exfil via user-controlled Azure endpoint
+_AZURE_OPENAI_FUNCS = frozenset({"openai.AzureOpenAI", "openai.AsyncAzureOpenAI", "AzureOpenAI", "AsyncAzureOpenAI"})
+# SRC-156: sentry_sdk.init(dsn=param) — error-report exfil via user-controlled Sentry DSN
+_SENTRY_INIT_FUNCS = frozenset({"sentry_sdk.init"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2974,6 +2980,48 @@ class _Visitor(ast.NodeVisitor):
                     f"consul.Consul(host={h_kw.value.id}) — user-controlled Consul agent host"
                     " enables SSRF and service-discovery poisoning",
                     "Hardcode the Consul agent address. Never accept it from user input.",
+                )
+
+        # SRC-154: ollama.Client(host=param) — SSRF / prompt exfil via user-controlled Ollama server
+        if fname in _OLLAMA_CLIENT_FUNCS and self._param_names:
+            h_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if h_kw and isinstance(h_kw.value, ast.Name) and h_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-154",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ollama.Client(host={h_kw.value.id}) — user-controlled Ollama host routes"
+                    " prompts and completions to an attacker-chosen server (SSRF / data exfil)",
+                    "Hardcode the Ollama server URL. Never accept LLM server hosts from user input.",
+                )
+
+        # SRC-155: openai.AzureOpenAI(azure_endpoint=param) — API key exfil via user-controlled endpoint
+        if fname in _AZURE_OPENAI_FUNCS and self._param_names:
+            ep_kw = next((kw for kw in node.keywords if kw.arg == "azure_endpoint"), None)
+            if ep_kw and isinstance(ep_kw.value, ast.Name) and ep_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-155",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"AzureOpenAI(azure_endpoint={ep_kw.value.id}) — user-controlled endpoint routes"
+                    " API calls to attacker server (API key exfiltration)",
+                    "Hardcode the Azure OpenAI endpoint. Never accept AI API endpoints from user input.",
+                )
+
+        # SRC-156: sentry_sdk.init(dsn=param) — error-report exfil via user-controlled Sentry DSN
+        if fname in _SENTRY_INIT_FUNCS and self._param_names:
+            dsn_kw = next((kw for kw in node.keywords if kw.arg == "dsn"), None)
+            if dsn_kw and isinstance(dsn_kw.value, ast.Name) and dsn_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-156",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"sentry_sdk.init(dsn={dsn_kw.value.id}) — user-controlled DSN sends error"
+                    " reports (stack traces, local variables, PII) to an attacker-chosen server",
+                    "Hardcode the Sentry DSN in configuration. Never accept telemetry DSNs from user input.",
                 )
 
         self.generic_visit(node)

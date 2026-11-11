@@ -966,3 +966,22 @@ def get_memcache_client(server: str):
 def get_consul_client(host: str):
     # SRC-153: consul.Consul with user-controlled host — SSRF / service-discovery poisoning
     return consul.Consul(host=host)
+
+
+import ollama  # noqa: E402
+import sentry_sdk  # noqa: E402
+
+
+def get_ollama_client(host: str):
+    # SRC-154: ollama.Client with user-controlled host — SSRF / prompt exfiltration
+    return ollama.Client(host=host)
+
+
+def get_azure_openai_client(azure_endpoint: str):
+    # SRC-155: AzureOpenAI with user-controlled azure_endpoint — API key exfiltration
+    return openai.AzureOpenAI(azure_endpoint=azure_endpoint)
+
+
+def init_sentry(dsn: str):
+    # SRC-156: sentry_sdk.init with user-controlled DSN — error-report exfiltration
+    sentry_sdk.init(dsn=dsn)

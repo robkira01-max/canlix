@@ -3106,3 +3106,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_three_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 154)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-154: new Ollama({ host: req.xxx }) — Ollama SSRF / prompt exfil ───────
+
+
+def test_ts_154_fires_on_ollama_host_req(tmp_path: Path) -> None:
+    code = "const o = new Ollama({ host: req.query.ollamaHost });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-154" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_154_no_fire_on_hardcoded_ollama_host(tmp_path: Path) -> None:
+    code = "const o = new Ollama({ host: 'http://localhost:11434' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-154" for f in analyze_typescript(p))
+
+
+# ── TS-155: Sentry.init({ dsn: req.xxx }) — error-report exfil ───────────────
+
+
+def test_ts_155_fires_on_sentry_dsn_req(tmp_path: Path) -> None:
+    code = "Sentry.init({ dsn: req.body.sentryDsn });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-155" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_155_no_fire_on_hardcoded_sentry_dsn(tmp_path: Path) -> None:
+    code = "Sentry.init({ dsn: 'https://key@o0.ingest.sentry.io/0' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-155" for f in analyze_typescript(p))
+
+
+# ── TS-156: new StatsD({ host: req.xxx }) — metrics exfil / UDP SSRF ─────────
+
+
+def test_ts_156_fires_on_statsd_host_req(tmp_path: Path) -> None:
+    code = "const sd = new StatsD({ host: req.params.statsdHost });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-156" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_156_no_fire_on_hardcoded_statsd_host(tmp_path: Path) -> None:
+    code = "const sd = new StatsD({ host: 'statsd.internal' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-156" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_six_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 157)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
