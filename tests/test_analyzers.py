@@ -2745,3 +2745,61 @@ def test_vulnerable_fixture_has_all_one_hundred_thirty_eight_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 139)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-139: voyageai.Client(base_url=url) — API key exfiltration SSRF ───────
+
+
+def test_src_139_fires_on_voyage_base_url_param(tmp_path: Path) -> None:
+    code = "import voyageai\ndef client(base_url: str):\n    return voyageai.Client(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-139" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_139_no_fire_on_hardcoded_voyage_base(tmp_path: Path) -> None:
+    code = "import voyageai\ndef client():\n    return voyageai.Client(base_url='https://api.voyageai.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-139" for f in analyze_python(p))
+
+
+# ── SRC-140: azure.ai.inference.ChatCompletionsClient(endpoint=url) — SSRF ───
+
+
+def test_src_140_fires_on_azure_inference_endpoint_param(tmp_path: Path) -> None:
+    code = (
+        "import azure.ai.inference\ndef client(endpoint: str):\n"
+        "    return azure.ai.inference.ChatCompletionsClient(endpoint=endpoint)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-140" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_140_no_fire_on_hardcoded_azure_endpoint(tmp_path: Path) -> None:
+    code = (
+        "import azure.ai.inference\ndef client():\n"
+        "    return azure.ai.inference.ChatCompletionsClient(endpoint='https://my.openai.azure.com')\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-140" for f in analyze_python(p))
+
+
+# ── SRC-141: ai21.AI21Client(api_host=url) — API key exfiltration SSRF ───────
+
+
+def test_src_141_fires_on_ai21_api_host_param(tmp_path: Path) -> None:
+    code = "import ai21\ndef client(api_host: str):\n    return ai21.AI21Client(api_host=api_host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-141" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_141_no_fire_on_hardcoded_ai21_host(tmp_path: Path) -> None:
+    code = "import ai21\ndef client():\n    return ai21.AI21Client(api_host='https://api.ai21.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-141" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_forty_one_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 142)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

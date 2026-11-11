@@ -731,3 +731,21 @@ import { HuggingFaceInference } from "@huggingface/inference";
 function getHFInferenceClient(req: any): HuggingFaceInference {
   return new HuggingFaceInference({ baseURL: req.params.hfBase });
 }
+
+// TS-139: new VoyageAI({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import VoyageAI from "voyageai";
+function getVoyageClient(req: any): VoyageAI {
+  return new VoyageAI({ baseURL: req.query.voyageBase });
+}
+
+// TS-140: new AzureOpenAI({ endpoint: req.query.xxx }) -- API key exfiltration SSRF
+import { AzureOpenAI } from "openai";
+function getAzureOpenAIClient(req: any): AzureOpenAI {
+  return new AzureOpenAI({ endpoint: req.body.azureEndpoint });
+}
+
+// TS-141: new AI21({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import AI21 from "ai21";
+function getAI21Client(req: any): AI21 {
+  return new AI21({ baseURL: req.params.ai21Base });
+}

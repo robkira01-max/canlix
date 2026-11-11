@@ -2846,3 +2846,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_thirty_eight_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 139)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-139: new VoyageAI({ baseURL: req.xxx }) — API key exfiltration ────────
+
+
+def test_ts_139_fires_on_voyage_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new VoyageAI({ baseURL: req.query.voyageBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-139" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_139_no_fire_on_hardcoded_voyage_base(tmp_path: Path) -> None:
+    code = "const c = new VoyageAI({ baseURL: 'https://api.voyageai.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-139" for f in analyze_typescript(p))
+
+
+# ── TS-140: new AzureOpenAI({ endpoint: req.xxx }) — API key exfiltration ────
+
+
+def test_ts_140_fires_on_azure_openai_endpoint_req(tmp_path: Path) -> None:
+    code = "const c = new AzureOpenAI({ endpoint: req.body.azureEndpoint });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-140" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_140_no_fire_on_hardcoded_azure_endpoint(tmp_path: Path) -> None:
+    code = "const c = new AzureOpenAI({ endpoint: 'https://my.openai.azure.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-140" for f in analyze_typescript(p))
+
+
+# ── TS-141: new AI21({ baseURL: req.xxx }) — API key exfiltration ─────────────
+
+
+def test_ts_141_fires_on_ai21_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new AI21({ baseURL: req.params.ai21Base });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-141" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_141_no_fire_on_hardcoded_ai21_base(tmp_path: Path) -> None:
+    code = "const c = new AI21({ baseURL: 'https://api.ai21.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-141" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_forty_one_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 142)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

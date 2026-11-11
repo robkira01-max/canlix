@@ -867,3 +867,23 @@ def get_replicate_client(base_url: str):
 def get_hf_inference_client(base_url: str):
     # SRC-138: HuggingFace InferenceClient with user-controlled base_url — API key exfiltration
     return huggingface_hub.InferenceClient(base_url=base_url)
+
+
+import ai21  # noqa: E402
+import azure.ai.inference  # noqa: E402
+import voyageai  # noqa: E402
+
+
+def get_voyage_client(base_url: str):
+    # SRC-139: voyageai.Client with user-controlled base_url — API key exfiltration / SSRF
+    return voyageai.Client(base_url=base_url)
+
+
+def get_azure_inference_client(endpoint: str):
+    # SRC-140: Azure AI Inference with user-controlled endpoint — API key exfiltration / SSRF
+    return azure.ai.inference.ChatCompletionsClient(endpoint=endpoint)
+
+
+def get_ai21_client(api_host: str):
+    # SRC-141: AI21Client with user-controlled api_host — API key exfiltration / SSRF
+    return ai21.AI21Client(api_host=api_host)

@@ -322,6 +322,20 @@ _REPLICATE_CLIENT_FUNCS = frozenset({"replicate.Client", "replicate.AsyncClient"
 _HF_INFERENCE_FUNCS = frozenset(
     {"huggingface_hub.InferenceClient", "huggingface_hub.AsyncInferenceClient", "InferenceClient"}
 )
+# SRC-139: voyageai.Client(base_url=url) — SSRF / API key exfil via user-controlled Voyage AI URL
+_VOYAGE_CLIENT_FUNCS = frozenset({"voyageai.Client", "voyageai.AsyncClient", "voyageai.client.Client"})
+# SRC-140: azure.ai.inference.ChatCompletionsClient(endpoint=url) — SSRF via user-controlled endpoint
+_AZURE_INFERENCE_FUNCS = frozenset(
+    {
+        "azure.ai.inference.ChatCompletionsClient",
+        "azure.ai.inference.EmbeddingsClient",
+        "azure.ai.inference.ImageEmbeddingsClient",
+        "ChatCompletionsClient",
+        "EmbeddingsClient",
+    }
+)
+# SRC-141: ai21.AI21Client(api_host=url) — SSRF / API key exfil via user-controlled AI21 Labs endpoint
+_AI21_CLIENT_FUNCS = frozenset({"ai21.AI21Client", "ai21.AsyncAI21Client", "AI21Client", "AsyncAI21Client"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -601,6 +615,16 @@ class _Visitor(ast.NodeVisitor):
             and isinstance(node.func.value.value, ast.Name)
         ):
             return f"{node.func.value.value.id}.{node.func.value.attr}.{node.func.attr}"
+        # 4-level: azure.ai.inference.ChatCompletionsClient
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Attribute)
+            and isinstance(node.func.value.value, ast.Attribute)
+            and isinstance(node.func.value.value.value, ast.Name)
+        ):
+            return (
+                f"{node.func.value.value.value.id}.{node.func.value.value.attr}.{node.func.value.attr}.{node.func.attr}"
+            )
         return ""
 
     def visit_Constant(self, node: ast.Constant) -> None:
@@ -2637,6 +2661,50 @@ class _Visitor(ast.NodeVisitor):
                     " API calls to attacker server (API key exfiltration)",
                     "Hardcode the HuggingFace endpoint. Never accept AI API base URLs from user input.",
                 )
+
+        # SRC-139: voyageai.Client(base_url=url) — SSRF / API key exfil via user-controlled base URL
+        if fname in _VOYAGE_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-139",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"voyageai.Client(base_url={bu_kw.value.id}) — user-controlled base URL routes"
+                    " API calls to attacker server (API key exfiltration)",
+                    "Hardcode the Voyage AI base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-140: azure.ai.inference.ChatCompletionsClient(endpoint=url) — SSRF via user-controlled endpoint
+        if fname in _AZURE_INFERENCE_FUNCS and self._param_names:
+            ep_kw = next((kw for kw in node.keywords if kw.arg == "endpoint"), None)
+            if ep_kw and isinstance(ep_kw.value, ast.Name) and ep_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-140",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"ChatCompletionsClient(endpoint={ep_kw.value.id}) — user-controlled endpoint"
+                    " routes API calls to attacker server (SSRF / API key exfiltration)",
+                    "Hardcode the Azure AI Inference endpoint. Never accept API endpoints from user input.",
+                )
+
+        # SRC-141: ai21.AI21Client(api_host=url) — SSRF / API key exfil via user-controlled AI21 endpoint
+        if fname in _AI21_CLIENT_FUNCS and self._param_names:
+            for kwarg_name in ("api_host", "base_url"):
+                kw = next((kw for kw in node.keywords if kw.arg == kwarg_name), None)
+                if kw and isinstance(kw.value, ast.Name) and kw.value.id in self._param_names:
+                    self._add(
+                        "SRC-141",
+                        Severity.CRITICAL,
+                        Confidence.HIGH,
+                        node.lineno,
+                        f"AI21Client({kwarg_name}={kw.value.id}) — user-controlled endpoint routes"
+                        " API calls to attacker server (API key exfiltration)",
+                        "Hardcode the AI21 Labs endpoint. Never accept AI API endpoints from user input.",
+                    )
+                    break
 
         self.generic_visit(node)
 

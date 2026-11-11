@@ -1300,6 +1300,36 @@ _HF_INFERENCE_BASE_URL_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-139: new VoyageAI({ baseURL: req.xxx }) -- Voyage AI SSRF / API key exfil
+# ---------------------------------------------------------------------------
+
+_VOYAGE_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+VoyageAI\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-140: new AzureOpenAI({ endpoint: req.xxx }) -- Azure AI SSRF / API key exfil
+# ---------------------------------------------------------------------------
+
+_AZURE_OPENAI_ENDPOINT_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+AzureOpenAI\s*\(\s*\{[^}]*\bendpoint\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-141: new AI21({ baseURL: req.xxx }) -- AI21 Labs SSRF / API key exfil
+# ---------------------------------------------------------------------------
+
+_AI21_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+AI21\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2730,6 +2760,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new HuggingFaceInference({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
             "Hardcode the HuggingFace endpoint. Never accept AI API URLs from request data.",
+        )
+    # TS-139: new VoyageAI({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _VOYAGE_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-139",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new VoyageAI({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the Voyage AI base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-140: new AzureOpenAI({ endpoint: req.xxx }) -- SSRF / API key exfiltration
+    if _AZURE_OPENAI_ENDPOINT_REQ.search(raw):
+        _add(
+            "TS-140",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new AzureOpenAI({endpoint: req.xxx}) -- user-controlled endpoint exfiltrates API key",
+            "Hardcode the Azure AI endpoint. Never accept AI API endpoints from request data.",
+        )
+    # TS-141: new AI21({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _AI21_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-141",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new AI21({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the AI21 Labs base URL. Never accept AI API URLs from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):
