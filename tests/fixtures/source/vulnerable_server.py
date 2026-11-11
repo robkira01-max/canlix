@@ -985,3 +985,23 @@ def get_azure_openai_client(azure_endpoint: str):
 def init_sentry(dsn: str):
     # SRC-156: sentry_sdk.init with user-controlled DSN — error-report exfiltration
     sentry_sdk.init(dsn=dsn)
+
+
+import slack_sdk  # noqa: E402
+import statsd  # noqa: E402
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter  # noqa: E402
+
+
+def get_otlp_exporter(endpoint: str):
+    # SRC-157: OTLPSpanExporter with user-controlled endpoint — trace exfiltration
+    return OTLPSpanExporter(endpoint=endpoint)
+
+
+def get_statsd_client(host: str):
+    # SRC-158: statsd.StatsClient with user-controlled host — metrics exfiltration
+    return statsd.StatsClient(host=host)
+
+
+def get_slack_webhook(url: str):
+    # SRC-159: slack_sdk.WebhookClient with user-controlled URL — message exfiltration
+    return slack_sdk.WebhookClient(url=url)

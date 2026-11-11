@@ -3103,3 +3103,69 @@ def test_vulnerable_fixture_has_all_one_hundred_fifty_six_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 157)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-157: OTLPSpanExporter(endpoint=param) — trace exfiltration ───────────
+
+
+def test_src_157_fires_on_otlp_endpoint_param(tmp_path: Path) -> None:
+    code = (
+        "from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter\n"
+        "def exporter(endpoint: str):\n"
+        "    return OTLPSpanExporter(endpoint=endpoint)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-157" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_157_no_fire_on_hardcoded_otlp_endpoint(tmp_path: Path) -> None:
+    code = (
+        "from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter\n"
+        "def exporter():\n"
+        "    return OTLPSpanExporter(endpoint='http://collector:4317')\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-157" for f in analyze_python(p))
+
+
+# ── SRC-158: statsd.StatsClient(host=param) — metrics exfiltration ───────────
+
+
+def test_src_158_fires_on_statsd_host_param(tmp_path: Path) -> None:
+    code = "import statsd\ndef client(host: str):\n    return statsd.StatsClient(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-158" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_158_no_fire_on_hardcoded_statsd_host(tmp_path: Path) -> None:
+    code = "import statsd\ndef client():\n    return statsd.StatsClient(host='statsd.internal')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-158" for f in analyze_python(p))
+
+
+# ── SRC-159: slack_sdk.WebhookClient(url=param) — message exfiltration ───────
+
+
+def test_src_159_fires_on_slack_webhook_url_param(tmp_path: Path) -> None:
+    code = "import slack_sdk\ndef hook(url: str):\n    return slack_sdk.WebhookClient(url=url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-159" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_159_fires_on_slack_webhook_positional_param(tmp_path: Path) -> None:
+    code = "import slack_sdk\ndef hook(url: str):\n    return slack_sdk.WebhookClient(url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-159" for f in analyze_python(p))
+
+
+def test_src_159_no_fire_on_hardcoded_slack_webhook(tmp_path: Path) -> None:
+    code = "import slack_sdk\ndef hook():\n    return slack_sdk.WebhookClient('https://hooks.slack.com/services/X')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-159" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_fifty_nine_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 160)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

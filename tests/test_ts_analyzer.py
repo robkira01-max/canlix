@@ -3158,3 +3158,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_six_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 157)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-157: new OTLPTraceExporter({ url: req.xxx }) — trace exfil ────────────
+
+
+def test_ts_157_fires_on_otlp_url_req(tmp_path: Path) -> None:
+    code = "const ex = new OTLPTraceExporter({ url: req.query.otlpUrl });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-157" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_157_no_fire_on_hardcoded_otlp_url(tmp_path: Path) -> None:
+    code = "const ex = new OTLPTraceExporter({ url: 'http://collector:4318/v1/traces' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-157" for f in analyze_typescript(p))
+
+
+# ── TS-158: new IncomingWebhook(req.xxx) — Slack webhook exfil ───────────────
+
+
+def test_ts_158_fires_on_incoming_webhook_req(tmp_path: Path) -> None:
+    code = "const hook = new IncomingWebhook(req.body.webhookUrl);\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-158" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_158_no_fire_on_hardcoded_webhook_url(tmp_path: Path) -> None:
+    code = "const hook = new IncomingWebhook('https://hooks.slack.com/services/X');\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-158" for f in analyze_typescript(p))
+
+
+# ── TS-159: new WebClient(token, { slackApiUrl: req.xxx }) — token exfil ─────
+
+
+def test_ts_159_fires_on_slack_api_url_req(tmp_path: Path) -> None:
+    code = "const c = new WebClient(token, { slackApiUrl: req.params.slackApi });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-159" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_159_no_fire_on_hardcoded_slack_api_url(tmp_path: Path) -> None:
+    code = "const c = new WebClient(token, { slackApiUrl: 'https://slack.com/api/' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-159" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_nine_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 160)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

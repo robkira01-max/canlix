@@ -839,3 +839,21 @@ import StatsD from "hot-shots";
 function getStatsClient(req: any): StatsD {
   return new StatsD({ host: req.params.statsdHost });
 }
+
+// TS-157: new OTLPTraceExporter({ url: req.query.xxx }) -- trace exfil
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+function getTraceExporter(req: any): OTLPTraceExporter {
+  return new OTLPTraceExporter({ url: req.query.otlpUrl });
+}
+
+// TS-158: new IncomingWebhook(req.query.xxx) -- Slack webhook message exfil
+import { IncomingWebhook } from "@slack/webhook";
+function getSlackWebhook(req: any): IncomingWebhook {
+  return new IncomingWebhook(req.body.webhookUrl);
+}
+
+// TS-159: new WebClient(token, { slackApiUrl: req.query.xxx }) -- Slack token exfil
+import { WebClient } from "@slack/web-api";
+function getSlackClient(req: any, token: string): WebClient {
+  return new WebClient(token, { slackApiUrl: req.params.slackApi });
+}

@@ -402,6 +402,20 @@ _OLLAMA_CLIENT_FUNCS = frozenset({"ollama.Client", "ollama.AsyncClient", "Ollama
 _AZURE_OPENAI_FUNCS = frozenset({"openai.AzureOpenAI", "openai.AsyncAzureOpenAI", "AzureOpenAI", "AsyncAzureOpenAI"})
 # SRC-156: sentry_sdk.init(dsn=param) — error-report exfil via user-controlled Sentry DSN
 _SENTRY_INIT_FUNCS = frozenset({"sentry_sdk.init"})
+# SRC-157: OTLPSpanExporter(endpoint=param) — trace/metric exfil via user-controlled OTLP collector
+_OTLP_EXPORTER_FUNCS = frozenset(
+    {
+        "OTLPSpanExporter",
+        "OTLPMetricExporter",
+        "OTLPLogExporter",
+        "JaegerExporter",
+        "ZipkinExporter",
+    }
+)
+# SRC-158: statsd.StatsClient(host=param) — metrics exfil / UDP SSRF via user-controlled StatsD host
+_STATSD_CLIENT_FUNCS = frozenset({"statsd.StatsClient", "StatsClient"})
+# SRC-159: slack_sdk.WebhookClient(url=param) — message exfil via user-controlled Slack webhook URL
+_SLACK_CLIENT_FUNCS = frozenset({"slack_sdk.WebhookClient", "WebhookClient", "slack_sdk.webhook.WebhookClient"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -3022,6 +3036,58 @@ class _Visitor(ast.NodeVisitor):
                     f"sentry_sdk.init(dsn={dsn_kw.value.id}) — user-controlled DSN sends error"
                     " reports (stack traces, local variables, PII) to an attacker-chosen server",
                     "Hardcode the Sentry DSN in configuration. Never accept telemetry DSNs from user input.",
+                )
+
+        # SRC-157: OTLPSpanExporter(endpoint=param) — trace exfil via user-controlled OTLP collector
+        if fname in _OTLP_EXPORTER_FUNCS and self._param_names:
+            ep_kw = next((kw for kw in node.keywords if kw.arg == "endpoint"), None)
+            if ep_kw and isinstance(ep_kw.value, ast.Name) and ep_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-157",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"{fname}(endpoint={ep_kw.value.id}) — user-controlled collector endpoint"
+                    " sends traces and metrics (URLs, headers, attributes) to an attacker server",
+                    "Hardcode the OTLP collector endpoint. Never accept telemetry endpoints from user input.",
+                )
+
+        # SRC-158: statsd.StatsClient(host=param) — metrics exfil / UDP SSRF
+        if fname in _STATSD_CLIENT_FUNCS and self._param_names:
+            h_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if h_kw and isinstance(h_kw.value, ast.Name) and h_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-158",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"StatsClient(host={h_kw.value.id}) — user-controlled StatsD host"
+                    " exfiltrates metrics via UDP to an attacker-chosen server",
+                    "Hardcode the StatsD host. Never accept metrics hosts from user input.",
+                )
+
+        # SRC-159: slack_sdk.WebhookClient(url=param) — message exfil via user-controlled webhook
+        if fname in _SLACK_CLIENT_FUNCS and self._param_names:
+            u_kw = next((kw for kw in node.keywords if kw.arg == "url"), None)
+            if u_kw and isinstance(u_kw.value, ast.Name) and u_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-159",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"WebhookClient(url={u_kw.value.id}) — user-controlled webhook URL sends"
+                    " notification contents to an attacker-chosen server",
+                    "Hardcode the Slack webhook URL in configuration. Never accept it from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-159",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"WebhookClient({node.args[0].id}) — user-controlled webhook URL sends"
+                    " notification contents to an attacker-chosen server",
+                    "Hardcode the Slack webhook URL in configuration. Never accept it from user input.",
                 )
 
         self.generic_visit(node)

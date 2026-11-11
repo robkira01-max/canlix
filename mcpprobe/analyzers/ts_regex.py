@@ -1482,6 +1482,37 @@ _STATSD_HOST_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-157: new OTLPTraceExporter({ url: req.xxx }) -- trace exfil via OTLP collector
+# ---------------------------------------------------------------------------
+
+_OTLP_EXPORTER_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+OTLP(?:Trace|Metric|Log)Exporter\s*\(\s*\{[^}]*\burl\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-158: new IncomingWebhook(req.xxx) -- Slack webhook message exfil
+# ---------------------------------------------------------------------------
+
+_INCOMING_WEBHOOK_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+IncomingWebhook\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-159: new WebClient(token, { slackApiUrl: req.xxx }) -- Slack token exfil
+# ---------------------------------------------------------------------------
+
+_SLACK_API_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+WebClient\s*\([^)]*\bslackApiUrl\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -3075,6 +3106,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new StatsD({host: req.xxx}) -- user-controlled StatsD host exfiltrates metrics via UDP",
             "Hardcode the StatsD host. Never accept metrics hosts from request data.",
+        )
+    # TS-157: new OTLPTraceExporter({ url: req.xxx }) -- trace exfil via OTLP collector
+    if _OTLP_EXPORTER_URL_REQ.search(raw):
+        _add(
+            "TS-157",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new OTLPTraceExporter({url: req.xxx}) -- user-controlled collector URL exfiltrates traces",
+            "Hardcode the OTLP collector endpoint. Never accept telemetry endpoints from request data.",
+        )
+    # TS-158: new IncomingWebhook(req.xxx) -- Slack webhook message exfil
+    if _INCOMING_WEBHOOK_REQ.search(raw):
+        _add(
+            "TS-158",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new IncomingWebhook(req.xxx) -- user-controlled webhook URL sends notifications to attacker",
+            "Hardcode the Slack webhook URL in configuration. Never accept it from request data.",
+        )
+    # TS-159: new WebClient(token, { slackApiUrl: req.xxx }) -- Slack token exfil
+    if _SLACK_API_URL_REQ.search(raw):
+        _add(
+            "TS-159",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new WebClient(token, {slackApiUrl: req.xxx}) -- user-controlled API URL exfiltrates the Slack token",
+            "Hardcode the Slack API URL. Never accept API base URLs from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):
