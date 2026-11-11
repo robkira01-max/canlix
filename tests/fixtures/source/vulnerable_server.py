@@ -708,3 +708,22 @@ def connect_mysql(host: str):
 def connect_postgres(host: str):
     # SRC-114: psycopg2.connect(host=user_host) — SSRF via PostgreSQL host
     return psycopg2.connect(host=host, dbname="app", user="admin", password="secret")
+
+
+import httpx  # noqa: E402
+
+
+async def run_async_prog(prog: str) -> None:
+    # SRC-115: asyncio.create_subprocess_exec with user-controlled program
+    await asyncio.create_subprocess_exec(prog, "--help")
+
+
+async def open_tcp(host: str) -> None:
+    # SRC-116: asyncio.open_connection with user-controlled host — SSRF
+    await asyncio.open_connection(host, 8080)
+
+
+def stream_url(url: str) -> None:
+    # SRC-117: httpx.stream(method, url) — SSRF via user-controlled URL
+    with httpx.stream("GET", url) as _r:  # noqa: F841
+        pass

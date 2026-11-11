@@ -1070,6 +1070,30 @@ _TYPEORM_CONN_REQ = re.compile(
     """,
 )
 
+# TS-115: undici.request(req.xxx) / undici.fetch(req.xxx) — SSRF via undici HTTP client
+_UNDICI_REQ = re.compile(
+    r"""(?x)
+    \bundici\.(?:request|fetch|stream)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-116: superagent.get/post(req.xxx) — SSRF via superagent with user-controlled URL
+_SUPERAGENT_REQ = re.compile(
+    r"""(?x)
+    \bsuperagent\.(?:get|post|put|delete|patch|request)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-117: ky.get/post(req.xxx) / ky(req.xxx) — SSRF via ky HTTP client
+_KY_REQ = re.compile(
+    r"""(?x)
+    \bky(?:\.(?:get|post|put|delete|patch))?\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2279,6 +2303,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "createConnection({host: req.xxx}) — user-controlled TypeORM host enables SSRF",
             "Hardcode the database host. Never let request data determine the connection target.",
+        )
+
+    # TS-115: undici.request/fetch(req.xxx) — SSRF via undici HTTP client
+    if _UNDICI_REQ.search(raw):
+        _add(
+            "TS-115",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "undici.request/fetch(req.xxx) — user-controlled URL in undici enables SSRF",
+            "Validate the URL against an allowlist. Never pass request data directly to undici.",
+        )
+
+    # TS-116: superagent.get/post(req.xxx) — SSRF via superagent user-controlled URL
+    if _SUPERAGENT_REQ.search(raw):
+        _add(
+            "TS-116",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "superagent.*(req.xxx) — user-controlled URL passed to superagent enables SSRF",
+            "Validate the URL against an allowlist. Never pass request data directly to superagent.",
+        )
+
+    # TS-117: ky(req.xxx) / ky.get(req.xxx) — SSRF via ky HTTP client
+    if _KY_REQ.search(raw):
+        _add(
+            "TS-117",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "ky(req.xxx) — user-controlled URL passed to ky HTTP client enables SSRF",
+            "Validate the URL against an allowlist. Never pass request data directly to ky.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

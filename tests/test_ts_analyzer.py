@@ -2427,6 +2427,45 @@ def test_ts_114_no_fire_on_hardcoded_typeorm_host(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-114" for f in analyze_typescript(p))
 
 
+# ── TS-115: undici.request(req.xxx) — SSRF via undici ────────────────────────
+
+
+def test_ts_115_fires_on_undici_request_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "async function f(req:any){undici.request(req.query.targetUrl);}\n")
+    assert any(f.rule_id == "TS-115" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_115_no_fire_on_hardcoded_undici_url(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'async function f(){undici.request("https://api.example.com");}\n')
+    assert not any(f.rule_id == "TS-115" for f in analyze_typescript(p))
+
+
+# ── TS-116: superagent.get(req.xxx) — SSRF via superagent ────────────────────
+
+
+def test_ts_116_fires_on_superagent_get_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){superagent.get(req.query.apiUrl);}\n")
+    assert any(f.rule_id == "TS-116" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_116_no_fire_on_hardcoded_superagent_url(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){superagent.get("https://api.example.com");}\n')
+    assert not any(f.rule_id == "TS-116" for f in analyze_typescript(p))
+
+
+# ── TS-117: ky.get(req.xxx) / ky(req.xxx) — SSRF via ky HTTP client ──────────
+
+
+def test_ts_117_fires_on_ky_get_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "async function f(req:any){ky.get(req.query.serviceUrl).json();}\n")
+    assert any(f.rule_id == "TS-117" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_117_no_fire_on_hardcoded_ky_url(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'async function f(){ky.get("https://api.example.com").json();}\n')
+    assert not any(f.rule_id == "TS-117" for f in analyze_typescript(p))
+
+
 # ── Full fixture — all 111 rules ──────────────────────────────────────────────
 
 
@@ -2441,4 +2480,11 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_fourteen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 115)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_seventeen_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 118)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

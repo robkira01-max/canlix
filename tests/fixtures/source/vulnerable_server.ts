@@ -589,3 +589,21 @@ import { createConnection } from "typeorm";
 async function connectTypeORM(req: any) {
   return createConnection({ host: req.query.dbHost, type: "postgres", database: "app" });
 }
+
+// TS-115: undici.request(req.query.xxx) — SSRF via undici HTTP client
+import undici from "undici";
+async function fetchUndici(req: any) {
+  return undici.request(req.query.targetUrl);
+}
+
+// TS-116: superagent.get(req.query.xxx) — SSRF via superagent user-controlled URL
+import superagent from "superagent";
+function fetchSuperagent(req: any) {
+  return superagent.get(req.query.apiUrl);
+}
+
+// TS-117: ky.get(req.query.xxx) — SSRF via ky HTTP client
+import ky from "ky";
+async function fetchKy(req: any) {
+  return ky.get(req.query.serviceUrl).json();
+}

@@ -260,6 +260,12 @@ _MYSQL_CONNECT_FUNCS = frozenset(
 )
 # SRC-114: psycopg2.connect(host=user_host) — SSRF via PostgreSQL host
 _PSYCOPG_CONNECT_FUNCS = frozenset({"psycopg2.connect", "psycopg.connect", "psycopg2.extras.connect"})
+# SRC-115: asyncio.create_subprocess_exec(user_prog) — user-controlled executable in async subprocess
+_ASYNC_EXEC_FUNCS = frozenset({"asyncio.create_subprocess_exec", "create_subprocess_exec"})
+# SRC-116: asyncio.open_connection(user_host) — SSRF via async TCP connection
+_ASYNC_OPEN_CONN_FUNCS = frozenset({"asyncio.open_connection", "open_connection"})
+# SRC-117: httpx.stream(method, user_url) — SSRF via httpx streaming client (url is arg[1])
+_HTTPX_STREAM_FUNCS = frozenset({"httpx.stream"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2217,6 +2223,45 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"psycopg2.connect(host={host_kw.value.id}) — user-controlled PostgreSQL host enables SSRF",
                     "Hardcode or allowlist the PostgreSQL host. Never accept it from user input.",
+                )
+
+        # SRC-115: asyncio.create_subprocess_exec(user_prog) — user-controlled executable
+        if fname in _ASYNC_EXEC_FUNCS and node.args and self._param_names:
+            prog_arg = node.args[0]
+            if isinstance(prog_arg, ast.Name) and prog_arg.id in self._param_names:
+                self._add(
+                    "SRC-115",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"asyncio.create_subprocess_exec({prog_arg.id}, ...) — user-controlled executable path",
+                    "Allowlist executable paths. Never pass user input as the program to create_subprocess_exec.",
+                )
+
+        # SRC-116: asyncio.open_connection(user_host) — SSRF via async TCP
+        if fname in _ASYNC_OPEN_CONN_FUNCS and node.args and self._param_names:
+            host_arg = node.args[0]
+            if isinstance(host_arg, ast.Name) and host_arg.id in self._param_names:
+                self._add(
+                    "SRC-116",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"asyncio.open_connection({host_arg.id}, ...) — user-controlled host enables SSRF",
+                    "Allowlist permitted hosts. Never open a TCP connection to a user-supplied address.",
+                )
+
+        # SRC-117: httpx.stream(method, user_url) — SSRF via httpx streaming (url is 2nd positional arg)
+        if fname in _HTTPX_STREAM_FUNCS and len(node.args) >= 2 and self._param_names:
+            url_arg = node.args[1]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-117",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"httpx.stream(method, {url_arg.id}) — user-controlled URL in httpx streaming client",
+                    "Validate the URL against an allowlist. Never stream from a user-supplied URL.",
                 )
 
         self.generic_visit(node)

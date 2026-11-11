@@ -2309,6 +2309,45 @@ def test_src_114_no_fire_on_hardcoded_pg_host(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-114" for f in analyze_python(p))
 
 
+# ── SRC-115: asyncio.create_subprocess_exec(user_prog) — async command injection ─
+
+
+def test_src_115_fires_on_async_exec_prog_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import asyncio\nasync def run(prog: str):\n    await asyncio.create_subprocess_exec(prog)\n")
+    assert any(f.rule_id == "SRC-115" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_115_no_fire_on_hardcoded_async_prog(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import asyncio\nasync def run():\n    await asyncio.create_subprocess_exec('/bin/ls')\n")
+    assert not any(f.rule_id == "SRC-115" for f in analyze_python(p))
+
+
+# ── SRC-116: asyncio.open_connection(user_host) — SSRF via async TCP ─────────
+
+
+def test_src_116_fires_on_open_connection_host_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import asyncio\nasync def conn(host: str):\n    await asyncio.open_connection(host, 80)\n")
+    assert any(f.rule_id == "SRC-116" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_116_no_fire_on_hardcoded_host(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import asyncio\nasync def conn():\n    await asyncio.open_connection('localhost', 80)\n")
+    assert not any(f.rule_id == "SRC-116" for f in analyze_python(p))
+
+
+# ── SRC-117: httpx.stream(method, user_url) — SSRF via httpx streaming ───────
+
+
+def test_src_117_fires_on_httpx_stream_url_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import httpx\ndef fetch(url: str):\n    httpx.stream('GET', url)\n")
+    assert any(f.rule_id == "SRC-117" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_117_no_fire_on_hardcoded_stream_url(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import httpx\ndef fetch():\n    httpx.stream('GET', 'https://api.example.com')\n")
+    assert not any(f.rule_id == "SRC-117" for f in analyze_python(p))
+
+
 # ── Full fixture — all 111 rules ──────────────────────────────────────────────
 
 
@@ -2323,4 +2362,11 @@ def test_vulnerable_fixture_has_all_one_hundred_fourteen_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 115)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+def test_vulnerable_fixture_has_all_one_hundred_seventeen_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 118)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
