@@ -727,3 +727,23 @@ def stream_url(url: str) -> None:
     # SRC-117: httpx.stream(method, url) — SSRF via user-controlled URL
     with httpx.stream("GET", url) as _r:  # noqa: F841
         pass
+
+
+import aiofiles  # noqa: E402
+import boto3  # noqa: E402
+
+
+def create_boto3_client(endpoint_url: str):
+    # SRC-118: boto3.client with user-controlled endpoint_url — SSRF
+    return boto3.client("s3", endpoint_url=endpoint_url)
+
+
+async def read_file_async(path: str) -> str:
+    # SRC-119: aiofiles.open with user-controlled path — async path traversal
+    async with aiofiles.open(path, "r") as f:
+        return await f.read()
+
+
+def run_in_env(env: dict) -> None:
+    # SRC-120: subprocess.Popen(env=user_env) — user-controlled environment dict
+    subprocess.Popen(["app"], env=env)

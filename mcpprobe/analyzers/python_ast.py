@@ -266,6 +266,12 @@ _ASYNC_EXEC_FUNCS = frozenset({"asyncio.create_subprocess_exec", "create_subproc
 _ASYNC_OPEN_CONN_FUNCS = frozenset({"asyncio.open_connection", "open_connection"})
 # SRC-117: httpx.stream(method, user_url) — SSRF via httpx streaming client (url is arg[1])
 _HTTPX_STREAM_FUNCS = frozenset({"httpx.stream"})
+# SRC-118: boto3.client(service, endpoint_url=param) — SSRF via user-controlled AWS endpoint
+_BOTO3_CLIENT_FUNCS = frozenset({"boto3.client", "boto3.resource", "boto3.Session"})
+# SRC-119: aiofiles.open(user_path) — path traversal via user-controlled async file path
+_AIOFILES_OPEN_FUNCS = frozenset({"aiofiles.open"})
+# SRC-120: subprocess.Popen(env=param) — user-controlled environment dict (PATH hijacking, LD_PRELOAD)
+_POPEN_ENV_FUNCS = frozenset({"subprocess.Popen", "subprocess.run", "subprocess.call", "Popen"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2262,6 +2268,46 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"httpx.stream(method, {url_arg.id}) — user-controlled URL in httpx streaming client",
                     "Validate the URL against an allowlist. Never stream from a user-supplied URL.",
+                )
+
+        # SRC-118: boto3.client(service, endpoint_url=param) — SSRF via user-controlled AWS endpoint
+        if fname in _BOTO3_CLIENT_FUNCS and self._param_names:
+            ep_kw = next((kw for kw in node.keywords if kw.arg == "endpoint_url"), None)
+            if ep_kw and isinstance(ep_kw.value, ast.Name) and ep_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-118",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"boto3.client(endpoint_url={ep_kw.value.id}) — user-controlled AWS endpoint enables SSRF",
+                    "Hardcode the endpoint URL or allowlist it. Never accept AWS endpoints from user input.",
+                )
+
+        # SRC-119: aiofiles.open(user_path) — path traversal via async file open
+        if fname in _AIOFILES_OPEN_FUNCS and node.args and self._param_names:
+            path_arg = node.args[0]
+            if isinstance(path_arg, ast.Name) and path_arg.id in self._param_names:
+                self._add(
+                    "SRC-119",
+                    Severity.MEDIUM,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"aiofiles.open({path_arg.id}) — user-controlled path enables async path traversal",
+                    "Validate the path against an allowlist or use os.path.realpath + prefix check.",
+                )
+
+        # SRC-120: subprocess.Popen(env=param) — user-controlled env dict (PATH hijack / LD_PRELOAD)
+        if fname in _POPEN_ENV_FUNCS and self._param_names:
+            env_kw = next((kw for kw in node.keywords if kw.arg == "env"), None)
+            if env_kw and isinstance(env_kw.value, ast.Name) and env_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-120",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Popen(env={env_kw.value.id}) — user-controlled env enables PATH hijacking"
+                    " and LD_PRELOAD injection",
+                    "Build the environment dict from safe sources. Never pass caller-supplied dicts as env.",
                 )
 
         self.generic_visit(node)

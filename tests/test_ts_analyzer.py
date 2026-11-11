@@ -2466,6 +2466,45 @@ def test_ts_117_no_fire_on_hardcoded_ky_url(tmp_path: Path) -> None:
     assert not any(f.rule_id == "TS-117" for f in analyze_typescript(p))
 
 
+# ── TS-118: element.setAttribute("src", req.xxx) — DOM attribute injection ───
+
+
+def test_ts_118_fires_on_set_attribute_src_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(el:HTMLElement,req:any){el.setAttribute('src',req.query.imgUrl);}\n")
+    assert any(f.rule_id == "TS-118" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_118_no_fire_on_hardcoded_setAttribute(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(el:HTMLElement){el.setAttribute("src","https://cdn.example.com/img.png");}\n')
+    assert not any(f.rule_id == "TS-118" for f in analyze_typescript(p))
+
+
+# ── TS-119: location.assign(req.xxx) — open redirect via location ─────────────
+
+
+def test_ts_119_fires_on_location_assign_with_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){location.assign(req.query.returnUrl);}\n")
+    assert any(f.rule_id == "TS-119" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_119_no_fire_on_hardcoded_location(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){location.assign("https://example.com/dashboard");}\n')
+    assert not any(f.rule_id == "TS-119" for f in analyze_typescript(p))
+
+
+# ── TS-120: new S3Client({endpoint: req.xxx}) — AWS SDK SSRF ─────────────────
+
+
+def test_ts_120_fires_on_s3client_endpoint_req(tmp_path: Path) -> None:
+    p = _ts(tmp_path, "function f(req:any){new S3Client({endpoint:req.query.s3Endpoint});}\n")
+    assert any(f.rule_id == "TS-120" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_120_no_fire_on_hardcoded_s3_endpoint(tmp_path: Path) -> None:
+    p = _ts(tmp_path, 'function f(){new S3Client({endpoint:"https://s3.amazonaws.com"});}\n')
+    assert not any(f.rule_id == "TS-120" for f in analyze_typescript(p))
+
+
 # ── Full fixture — all 111 rules ──────────────────────────────────────────────
 
 
@@ -2487,4 +2526,11 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_seventeen_rules():
     findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 118)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 121)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

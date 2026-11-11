@@ -1094,6 +1094,30 @@ _KY_REQ = re.compile(
     """,
 )
 
+# TS-118: element.setAttribute("src"|"href", req.xxx) — DOM attribute injection XSS / open redirect
+_SET_ATTR_SRC_HREF_REQ = re.compile(
+    r"""(?x)
+    \.setAttribute\s*\(\s*["'](?:src|href|action|data|formaction)["']\s*,\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-119: location.assign(req.xxx) / location.replace(req.xxx) — open redirect via location
+_LOCATION_ASSIGN_REQ = re.compile(
+    r"""(?x)
+    \blocation\.(?:assign|replace)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# TS-120: new S3Client({endpoint: req.xxx}) / new DynamoDBClient({endpoint: req.xxx}) — AWS SSRF
+_AWS_SDK_ENDPOINT_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+(?:S3|DynamoDB|Lambda|SQS|SNS|SES|EC2|ECS|IAM|KMS|SecretsManager)Client\s*\(\s*\{[^}]*\bendpoint\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
 # ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
@@ -2333,6 +2357,36 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "ky(req.xxx) — user-controlled URL passed to ky HTTP client enables SSRF",
             "Validate the URL against an allowlist. Never pass request data directly to ky.",
+        )
+
+    # TS-118: element.setAttribute("src"|"href", req.xxx) — DOM attribute injection
+    if _SET_ATTR_SRC_HREF_REQ.search(raw):
+        _add(
+            "TS-118",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "setAttribute(src/href/action, req.xxx) — user-controlled DOM attribute enables XSS or open redirect",
+            "Allowlist permitted values. Never set src, href or action from request data without validation.",
+        )
+
+    # TS-119: location.assign/replace(req.xxx) — open redirect via location methods
+    if _LOCATION_ASSIGN_REQ.search(raw):
+        _add(
+            "TS-119",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "location.assign/replace(req.xxx) — user-controlled URL causes open redirect",
+            "Allowlist redirect destinations. Never call location.assign/replace with request data.",
+        )
+
+    # TS-120: new S3Client/DynamoDBClient({endpoint: req.xxx}) — AWS SDK SSRF
+    if _AWS_SDK_ENDPOINT_REQ.search(raw):
+        _add(
+            "TS-120",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new AwsClient({endpoint: req.xxx}) — user-controlled AWS endpoint enables SSRF",
+            "Hardcode the endpoint URL or allowlist it. Never accept AWS endpoints from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

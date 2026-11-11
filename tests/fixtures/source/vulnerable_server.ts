@@ -607,3 +607,19 @@ import ky from "ky";
 async function fetchKy(req: any) {
   return ky.get(req.query.serviceUrl).json();
 }
+
+// TS-118: element.setAttribute("src", req.query.xxx) — DOM attribute injection
+function setImgSrc(el: HTMLElement, req: any): void {
+  el.setAttribute("src", req.query.imageUrl);
+}
+
+// TS-119: location.assign(req.query.xxx) — open redirect via location
+function redirectUser(req: any): void {
+  location.assign(req.query.returnUrl);
+}
+
+// TS-120: new S3Client({endpoint: req.query.xxx}) — AWS SDK SSRF via endpoint
+import { S3Client } from "@aws-sdk/client-s3";
+function getS3Client(req: any): S3Client {
+  return new S3Client({ endpoint: req.query.s3Endpoint });
+}

@@ -2348,6 +2348,47 @@ def test_src_117_no_fire_on_hardcoded_stream_url(tmp_path: Path) -> None:
     assert not any(f.rule_id == "SRC-117" for f in analyze_python(p))
 
 
+# ── SRC-118: boto3.client(endpoint_url=param) — SSRF via AWS endpoint ─────────
+
+
+def test_src_118_fires_on_boto3_endpoint_url_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import boto3\ndef cli(endpoint_url: str):\n    boto3.client('s3', endpoint_url=endpoint_url)\n")
+    assert any(f.rule_id == "SRC-118" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_118_no_fire_on_hardcoded_boto3_endpoint(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import boto3\ndef cli():\n    boto3.client('s3', endpoint_url='https://s3.amazonaws.com')\n")
+    assert not any(f.rule_id == "SRC-118" for f in analyze_python(p))
+
+
+# ── SRC-119: aiofiles.open(user_path) — async path traversal ─────────────────
+
+
+def test_src_119_fires_on_aiofiles_open_param(tmp_path: Path) -> None:
+    code = "import aiofiles\nasync def read(path: str):\n    async with aiofiles.open(path):\n        pass\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-119" and f.severity == Severity.MEDIUM for f in analyze_python(p))
+
+
+def test_src_119_no_fire_on_hardcoded_aiofiles_path(tmp_path: Path) -> None:
+    code = "import aiofiles\nasync def read():\n    async with aiofiles.open('/tmp/data.txt'):\n        pass\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-119" for f in analyze_python(p))
+
+
+# ── SRC-120: subprocess.Popen(env=user_env) — env dict injection ─────────────
+
+
+def test_src_120_fires_on_popen_env_param(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import subprocess\ndef run(env: dict):\n    subprocess.Popen(['app'], env=env)\n")
+    assert any(f.rule_id == "SRC-120" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_120_no_fire_on_hardcoded_env(tmp_path: Path) -> None:
+    p = _py(tmp_path, "import subprocess\ndef run():\n    subprocess.Popen(['app'], env={'PATH': '/usr/bin'})\n")
+    assert not any(f.rule_id == "SRC-120" for f in analyze_python(p))
+
+
 # ── Full fixture — all 111 rules ──────────────────────────────────────────────
 
 
@@ -2369,4 +2410,11 @@ def test_vulnerable_fixture_has_all_one_hundred_seventeen_rules():
     findings = analyze_python(FIXTURES / "vulnerable_server.py")
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 118)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+def test_vulnerable_fixture_has_all_one_hundred_twenty_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 121)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
