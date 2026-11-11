@@ -713,3 +713,21 @@ import { Mistral } from "@mistralai/mistralai";
 function getMistralClient(req: any): Mistral {
   return new Mistral({ serverURL: req.query.mistralServer });
 }
+
+// TS-136: new Together({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import Together from "together-ai";
+function getTogetherClient(req: any): Together {
+  return new Together({ baseURL: req.query.togetherBase });
+}
+
+// TS-137: new ReplicateClient({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import ReplicateClient from "replicate";
+function getReplicateClient(req: any): ReplicateClient {
+  return new ReplicateClient({ baseURL: req.query.replicateBase });
+}
+
+// TS-138: new HuggingFaceInference({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import { HuggingFaceInference } from "@huggingface/inference";
+function getHFInferenceClient(req: any): HuggingFaceInference {
+  return new HuggingFaceInference({ baseURL: req.params.hfBase });
+}

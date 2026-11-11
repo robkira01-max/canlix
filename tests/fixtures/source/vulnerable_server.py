@@ -847,3 +847,23 @@ def get_cohere_client(base_url: str):
 def get_mistral_client(server_url: str):
     # SRC-135: Mistral with user-controlled server_url — API key exfiltration / SSRF
     return mistralai.Mistral(server_url=server_url)
+
+
+import huggingface_hub  # noqa: E402
+import replicate  # noqa: E402
+import together  # noqa: E402
+
+
+def get_together_client(base_url: str):
+    # SRC-136: together.Together with user-controlled base_url — API key exfiltration / SSRF
+    return together.Together(base_url=base_url)
+
+
+def get_replicate_client(base_url: str):
+    # SRC-137: replicate.Client with user-controlled base_url — API key exfiltration / SSRF
+    return replicate.Client(base_url=base_url)
+
+
+def get_hf_inference_client(base_url: str):
+    # SRC-138: HuggingFace InferenceClient with user-controlled base_url — API key exfiltration
+    return huggingface_hub.InferenceClient(base_url=base_url)

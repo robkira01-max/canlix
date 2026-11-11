@@ -314,6 +314,14 @@ _GROQ_CLIENT_FUNCS = frozenset({"groq.Groq", "groq.AsyncGroq", "Groq", "AsyncGro
 _COHERE_CLIENT_FUNCS = frozenset({"cohere.Client", "cohere.ClientV2", "cohere.AsyncClient", "Client"})
 # SRC-135: mistralai.Mistral(server_url=url) — SSRF / key exfil via user-controlled Mistral server URL
 _MISTRAL_CLIENT_FUNCS = frozenset({"mistralai.Mistral", "mistralai.MistralAsync", "Mistral"})
+# SRC-136: together.Together(base_url=url) — SSRF / API key exfil via user-controlled Together AI URL
+_TOGETHER_CLIENT_FUNCS = frozenset({"together.Together", "Together"})
+# SRC-137: replicate.Client(base_url=url) — SSRF / API key exfil via user-controlled Replicate URL
+_REPLICATE_CLIENT_FUNCS = frozenset({"replicate.Client", "replicate.AsyncClient"})
+# SRC-138: huggingface_hub.InferenceClient(base_url=url) — SSRF / key exfil via user-controlled endpoint
+_HF_INFERENCE_FUNCS = frozenset(
+    {"huggingface_hub.InferenceClient", "huggingface_hub.AsyncInferenceClient", "InferenceClient"}
+)
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2586,6 +2594,48 @@ class _Visitor(ast.NodeVisitor):
                     f"Mistral(server_url={su_kw.value.id}) — user-controlled server URL routes API"
                     " calls to attacker server (API key exfiltration)",
                     "Hardcode the Mistral server URL. Never accept AI API URLs from user input.",
+                )
+
+        # SRC-136: together.Together(base_url=url) — SSRF / API key exfil via user-controlled base URL
+        if fname in _TOGETHER_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-136",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Together(base_url={bu_kw.value.id}) — user-controlled base URL routes API"
+                    " calls to attacker server (API key exfiltration)",
+                    "Hardcode the Together AI base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-137: replicate.Client(base_url=url) — SSRF / API key exfil via user-controlled base URL
+        if fname in _REPLICATE_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-137",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"replicate.Client(base_url={bu_kw.value.id}) — user-controlled base URL routes"
+                    " API calls to attacker server (API key exfiltration)",
+                    "Hardcode the Replicate base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-138: huggingface_hub.InferenceClient(base_url=url) — SSRF / API key exfil
+        if fname in _HF_INFERENCE_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-138",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"InferenceClient(base_url={bu_kw.value.id}) — user-controlled base URL routes"
+                    " API calls to attacker server (API key exfiltration)",
+                    "Hardcode the HuggingFace endpoint. Never accept AI API base URLs from user input.",
                 )
 
         self.generic_visit(node)

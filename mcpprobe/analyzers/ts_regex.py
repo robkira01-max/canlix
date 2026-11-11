@@ -1270,6 +1270,36 @@ _MISTRAL_SERVER_URL_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-136: new Together({ baseURL: req.xxx }) -- Together AI SSRF / API key exfil
+# ---------------------------------------------------------------------------
+
+_TOGETHER_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Together\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-137: new ReplicateClient({ baseURL: req.xxx }) -- Replicate SSRF / API key exfil
+# ---------------------------------------------------------------------------
+
+_REPLICATE_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+ReplicateClient\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-138: new HuggingFaceInference({ baseURL: req.xxx }) -- HF inference SSRF
+# ---------------------------------------------------------------------------
+
+_HF_INFERENCE_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+HuggingFaceInference\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2673,6 +2703,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new MistralClient({serverURL: req.xxx}) -- user-controlled server URL exfiltrates API key",
             "Hardcode the Mistral server URL. Never accept AI API URLs from request data.",
+        )
+    # TS-136: new Together({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _TOGETHER_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-136",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new Together({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the Together AI base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-137: new ReplicateClient({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _REPLICATE_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-137",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new ReplicateClient({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the Replicate base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-138: new HuggingFaceInference({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _HF_INFERENCE_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-138",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new HuggingFaceInference({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the HuggingFace endpoint. Never accept AI API URLs from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

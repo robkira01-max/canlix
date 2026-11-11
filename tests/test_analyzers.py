@@ -2690,3 +2690,58 @@ def test_vulnerable_fixture_has_all_one_hundred_thirty_five_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 136)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-136: together.Together(base_url=url) — API key exfiltration SSRF ─────
+
+
+def test_src_136_fires_on_together_base_url_param(tmp_path: Path) -> None:
+    code = "import together\ndef client(base_url: str):\n    return together.Together(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-136" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_136_no_fire_on_hardcoded_together_base(tmp_path: Path) -> None:
+    code = "import together\ndef client():\n    return together.Together(base_url='https://api.together.xyz')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-136" for f in analyze_python(p))
+
+
+# ── SRC-137: replicate.Client(base_url=url) — API key exfiltration SSRF ──────
+
+
+def test_src_137_fires_on_replicate_base_url_param(tmp_path: Path) -> None:
+    code = "import replicate\ndef client(base_url: str):\n    return replicate.Client(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-137" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_137_no_fire_on_hardcoded_replicate_base(tmp_path: Path) -> None:
+    code = "import replicate\ndef client():\n    return replicate.Client(base_url='https://api.replicate.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-137" for f in analyze_python(p))
+
+
+# ── SRC-138: huggingface_hub.InferenceClient(base_url=url) — API key exfil ───
+
+
+def test_src_138_fires_on_hf_inference_base_url_param(tmp_path: Path) -> None:
+    code = (
+        "import huggingface_hub\ndef client(base_url: str):\n"
+        "    return huggingface_hub.InferenceClient(base_url=base_url)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-138" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_138_no_fire_on_hardcoded_hf_base(tmp_path: Path) -> None:
+    code = "import huggingface_hub\ndef client():\n    return huggingface_hub.InferenceClient(base_url='https://api-inference.huggingface.co')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-138" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_thirty_eight_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 139)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

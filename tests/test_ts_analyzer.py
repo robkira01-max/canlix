@@ -2794,3 +2794,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_thirty_five_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 136)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-136: new Together({ baseURL: req.xxx }) — API key exfiltration ────────
+
+
+def test_ts_136_fires_on_together_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new Together({ baseURL: req.query.togetherBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-136" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_136_no_fire_on_hardcoded_together_base(tmp_path: Path) -> None:
+    code = "const c = new Together({ baseURL: 'https://api.together.xyz' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-136" for f in analyze_typescript(p))
+
+
+# ── TS-137: new ReplicateClient({ baseURL: req.xxx }) — API key exfiltration ─
+
+
+def test_ts_137_fires_on_replicate_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new ReplicateClient({ baseURL: req.body.replicateBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-137" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_137_no_fire_on_hardcoded_replicate_base(tmp_path: Path) -> None:
+    code = "const c = new ReplicateClient({ baseURL: 'https://api.replicate.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-137" for f in analyze_typescript(p))
+
+
+# ── TS-138: new HuggingFaceInference({ baseURL: req.xxx }) — API key exfil ───
+
+
+def test_ts_138_fires_on_hf_inference_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new HuggingFaceInference({ baseURL: req.params.hfBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-138" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_138_no_fire_on_hardcoded_hf_base(tmp_path: Path) -> None:
+    code = "const c = new HuggingFaceInference({ baseURL: 'https://api-inference.huggingface.co' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-138" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_thirty_eight_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 139)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
