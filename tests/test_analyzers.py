@@ -2638,3 +2638,55 @@ def test_vulnerable_fixture_has_all_one_hundred_thirty_two_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 133)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-133: groq.Groq(base_url=url) — API key exfiltration SSRF ─────────────
+
+
+def test_src_133_fires_on_groq_base_url_param(tmp_path: Path) -> None:
+    code = "import groq\ndef client(base_url: str):\n    return groq.Groq(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-133" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_133_no_fire_on_hardcoded_groq_base(tmp_path: Path) -> None:
+    code = "import groq\ndef client():\n    return groq.Groq(base_url='https://api.groq.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-133" for f in analyze_python(p))
+
+
+# ── SRC-134: cohere.Client(base_url=url) — API key exfiltration SSRF ─────────
+
+
+def test_src_134_fires_on_cohere_base_url_param(tmp_path: Path) -> None:
+    code = "import cohere\ndef client(base_url: str):\n    return cohere.Client(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-134" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_134_no_fire_on_hardcoded_cohere_base(tmp_path: Path) -> None:
+    code = "import cohere\ndef client():\n    return cohere.Client(base_url='https://api.cohere.ai')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-134" for f in analyze_python(p))
+
+
+# ── SRC-135: mistralai.Mistral(server_url=url) — API key exfiltration SSRF ───
+
+
+def test_src_135_fires_on_mistral_server_url_param(tmp_path: Path) -> None:
+    code = "import mistralai\ndef client(server_url: str):\n    return mistralai.Mistral(server_url=server_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-135" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_135_no_fire_on_hardcoded_mistral_server(tmp_path: Path) -> None:
+    code = "import mistralai\ndef client():\n    return mistralai.Mistral(server_url='https://api.mistral.ai')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-135" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_thirty_five_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 136)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

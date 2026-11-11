@@ -2742,3 +2742,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_thirty_two_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 133)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-133: new Groq({ baseURL: req.xxx }) — API key exfiltration SSRF ───────
+
+
+def test_ts_133_fires_on_groq_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new Groq({ baseURL: req.query.groqBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-133" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_133_no_fire_on_hardcoded_groq_base(tmp_path: Path) -> None:
+    code = "const c = new Groq({ baseURL: 'https://api.groq.com/openai/v1' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-133" for f in analyze_typescript(p))
+
+
+# ── TS-134: new CohereClient({ baseURL: req.xxx }) — API key exfiltration ────
+
+
+def test_ts_134_fires_on_cohere_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new CohereClient({ baseURL: req.query.cohereBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-134" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_134_no_fire_on_hardcoded_cohere_base(tmp_path: Path) -> None:
+    code = "const c = new CohereClient({ baseURL: 'https://api.cohere.ai' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-134" for f in analyze_typescript(p))
+
+
+# ── TS-135: new Mistral({ serverURL: req.xxx }) — API key exfiltration ───────
+
+
+def test_ts_135_fires_on_mistral_server_url_req(tmp_path: Path) -> None:
+    code = "const c = new Mistral({ serverURL: req.query.mistralServer });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-135" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_135_no_fire_on_hardcoded_mistral_server(tmp_path: Path) -> None:
+    code = "const c = new Mistral({ serverURL: 'https://api.mistral.ai' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-135" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_thirty_five_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 136)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

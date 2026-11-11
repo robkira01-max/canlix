@@ -827,3 +827,23 @@ def get_anthropic_client(base_url: str):
 def get_milvus_client(host: str):
     # SRC-132: MilvusClient with user-controlled host — SSRF
     return pymilvus.MilvusClient(host=host)
+
+
+import cohere  # noqa: E402
+import groq  # noqa: E402
+import mistralai  # noqa: E402
+
+
+def get_groq_client(base_url: str):
+    # SRC-133: Groq with user-controlled base_url — API key exfiltration / SSRF
+    return groq.Groq(base_url=base_url)
+
+
+def get_cohere_client(base_url: str):
+    # SRC-134: cohere.Client with user-controlled base_url — API key exfiltration / SSRF
+    return cohere.Client(base_url=base_url)
+
+
+def get_mistral_client(server_url: str):
+    # SRC-135: Mistral with user-controlled server_url — API key exfiltration / SSRF
+    return mistralai.Mistral(server_url=server_url)

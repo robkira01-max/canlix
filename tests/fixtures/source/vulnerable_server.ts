@@ -695,3 +695,21 @@ import { MilvusClient } from "@zilliz/milvus2-sdk-node";
 function getMilvusClient(req: any): MilvusClient {
   return new MilvusClient({ address: req.query.milvusAddr });
 }
+
+// TS-133: new Groq({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import Groq from "groq-sdk";
+function getGroqClient(req: any): Groq {
+  return new Groq({ baseURL: req.query.groqBase });
+}
+
+// TS-134: new CohereClient({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import { CohereClient } from "cohere-ai";
+function getCohereClient(req: any): CohereClient {
+  return new CohereClient({ baseURL: req.query.cohereBase });
+}
+
+// TS-135: new Mistral({ serverURL: req.query.xxx }) -- API key exfiltration SSRF
+import { Mistral } from "@mistralai/mistralai";
+function getMistralClient(req: any): Mistral {
+  return new Mistral({ serverURL: req.query.mistralServer });
+}

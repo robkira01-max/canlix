@@ -1240,6 +1240,36 @@ _MILVUS_ADDRESS_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-133: new Groq({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+# ---------------------------------------------------------------------------
+
+_GROQ_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Groq\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-134: new CohereClient({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+# ---------------------------------------------------------------------------
+
+_COHERE_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+CohereClient\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-135: new MistralClient({ serverURL: req.xxx }) -- SSRF / API key exfiltration
+# ---------------------------------------------------------------------------
+
+_MISTRAL_SERVER_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Mistral(?:Client)?\s*\(\s*\{[^}]*\bserverURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2616,6 +2646,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new MilvusClient({address: req.xxx}) -- user-controlled Milvus address enables SSRF",
             "Hardcode the Milvus address. Never accept vector DB addresses from request data.",
+        )
+    # TS-133: new Groq({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _GROQ_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-133",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new Groq({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key to attacker",
+            "Hardcode the Groq base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-134: new CohereClient({ baseURL: req.xxx }) -- SSRF / API key exfiltration
+    if _COHERE_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-134",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new CohereClient({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the Cohere base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-135: new MistralClient({ serverURL: req.xxx }) -- SSRF / API key exfiltration
+    if _MISTRAL_SERVER_URL_REQ.search(raw):
+        _add(
+            "TS-135",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new MistralClient({serverURL: req.xxx}) -- user-controlled server URL exfiltrates API key",
+            "Hardcode the Mistral server URL. Never accept AI API URLs from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

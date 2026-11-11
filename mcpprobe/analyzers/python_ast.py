@@ -308,6 +308,12 @@ _ANTHROPIC_CLIENT_FUNCS = frozenset({"anthropic.Anthropic", "anthropic.AsyncAnth
 _MILVUS_CONNECT_FUNCS = frozenset(
     {"pymilvus.connections.connect", "connections.connect", "MilvusClient", "pymilvus.MilvusClient"}
 )
+# SRC-133: groq.Groq(base_url=url) — SSRF / API key exfil via user-controlled Groq base URL
+_GROQ_CLIENT_FUNCS = frozenset({"groq.Groq", "groq.AsyncGroq", "Groq", "AsyncGroq"})
+# SRC-134: cohere.Client(base_url=url) — SSRF / API key exfil via user-controlled Cohere base URL
+_COHERE_CLIENT_FUNCS = frozenset({"cohere.Client", "cohere.ClientV2", "cohere.AsyncClient", "Client"})
+# SRC-135: mistralai.Mistral(server_url=url) — SSRF / key exfil via user-controlled Mistral server URL
+_MISTRAL_CLIENT_FUNCS = frozenset({"mistralai.Mistral", "mistralai.MistralAsync", "Mistral"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2538,6 +2544,48 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"MilvusClient({node.args[0].id}) — user-controlled host enables SSRF",
                     "Hardcode the Milvus host. Never accept vector DB hosts from user input.",
+                )
+
+        # SRC-133: groq.Groq(base_url=url) — SSRF / API key exfil via user-controlled base URL
+        if fname in _GROQ_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-133",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Groq(base_url={bu_kw.value.id}) — user-controlled base URL routes API calls"
+                    " to attacker server (API key exfiltration)",
+                    "Hardcode the Groq base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-134: cohere.Client(base_url=url) — SSRF / API key exfil via user-controlled base URL
+        if fname in _COHERE_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-134",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"cohere.Client(base_url={bu_kw.value.id}) — user-controlled base URL routes"
+                    " API calls to attacker server (API key exfiltration)",
+                    "Hardcode the Cohere base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-135: mistralai.Mistral(server_url=url) — SSRF / key exfil via user-controlled server URL
+        if fname in _MISTRAL_CLIENT_FUNCS and self._param_names:
+            su_kw = next((kw for kw in node.keywords if kw.arg == "server_url"), None)
+            if su_kw and isinstance(su_kw.value, ast.Name) and su_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-135",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Mistral(server_url={su_kw.value.id}) — user-controlled server URL routes API"
+                    " calls to attacker server (API key exfiltration)",
+                    "Hardcode the Mistral server URL. Never accept AI API URLs from user input.",
                 )
 
         self.generic_visit(node)
