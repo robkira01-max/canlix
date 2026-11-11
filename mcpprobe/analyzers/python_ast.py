@@ -336,6 +336,19 @@ _AZURE_INFERENCE_FUNCS = frozenset(
 )
 # SRC-141: ai21.AI21Client(api_host=url) — SSRF / API key exfil via user-controlled AI21 Labs endpoint
 _AI21_CLIENT_FUNCS = frozenset({"ai21.AI21Client", "ai21.AsyncAI21Client", "AI21Client", "AsyncAI21Client"})
+# SRC-142: httpx.Client(base_url=url) — SSRF via user-controlled httpx persistent client base URL
+_HTTPX_CLIENT_FUNCS = frozenset({"httpx.Client", "httpx.AsyncClient", "Client", "AsyncClient"})
+# SRC-143: cerebras.Cerebras(base_url=url) — SSRF / API key exfil via user-controlled Cerebras base URL
+_CEREBRAS_CLIENT_FUNCS = frozenset({"cerebras.Cerebras", "Cerebras"})
+# SRC-144: azure.storage.blob.BlobServiceClient(account_url=url) — SSRF via user-controlled Azure Blob URL
+_BLOB_SERVICE_CLIENT_FUNCS = frozenset(
+    {
+        "azure.storage.blob.BlobServiceClient",
+        "BlobServiceClient",
+        "azure.storage.blob.ContainerClient",
+        "ContainerClient",
+    }
+)
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2705,6 +2718,60 @@ class _Visitor(ast.NodeVisitor):
                         "Hardcode the AI21 Labs endpoint. Never accept AI API endpoints from user input.",
                     )
                     break
+
+        # SRC-142: httpx.Client(base_url=url) — SSRF via user-controlled httpx base URL
+        if fname in _HTTPX_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-142",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"httpx.Client(base_url={bu_kw.value.id}) — user-controlled base URL enables SSRF"
+                    " on all requests made by this client",
+                    "Hardcode the base URL. Never allow user input to set an httpx client base URL.",
+                )
+
+        # SRC-143: cerebras.Cerebras(base_url=url) — SSRF / API key exfil via user-controlled base URL
+        if fname in _CEREBRAS_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-143",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"cerebras.Cerebras(base_url={bu_kw.value.id}) — user-controlled base URL routes"
+                    " API calls to attacker server (API key exfiltration)",
+                    "Hardcode the Cerebras base URL. Never accept AI API base URLs from user input.",
+                )
+
+        # SRC-144: azure.storage.blob.BlobServiceClient(account_url=url) — SSRF via user-controlled URL
+        if fname in _BLOB_SERVICE_CLIENT_FUNCS and self._param_names:
+            for kwarg_name in ("account_url", "url"):
+                kw = next((kw for kw in node.keywords if kw.arg == kwarg_name), None)
+                if kw and isinstance(kw.value, ast.Name) and kw.value.id in self._param_names:
+                    self._add(
+                        "SRC-144",
+                        Severity.HIGH,
+                        Confidence.HIGH,
+                        node.lineno,
+                        f"BlobServiceClient({kwarg_name}={kw.value.id}) — user-controlled Azure"
+                        " Blob URL enables SSRF to internal storage endpoints",
+                        "Hardcode the Azure storage account URL. Never let user input set cloud storage URLs.",
+                    )
+                    break
+            if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-144",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"BlobServiceClient({node.args[0].id}) — user-controlled Azure"
+                    " Blob URL enables SSRF to internal storage endpoints",
+                    "Hardcode the Azure storage account URL. Never let user input set cloud storage URLs.",
+                )
 
         self.generic_visit(node)
 

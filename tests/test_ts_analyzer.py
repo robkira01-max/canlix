@@ -2898,3 +2898,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_forty_one_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 142)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-142: axios.create({ baseURL: req.xxx }) — SSRF via axios instance ─────
+
+
+def test_ts_142_fires_on_axios_create_base_url_req(tmp_path: Path) -> None:
+    code = "const inst = axios.create({ baseURL: req.query.apiBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-142" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_142_no_fire_on_hardcoded_axios_base(tmp_path: Path) -> None:
+    code = "const inst = axios.create({ baseURL: 'https://api.example.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-142" for f in analyze_typescript(p))
+
+
+# ── TS-143: new Cerebras({ baseURL: req.xxx }) — API key exfiltration ────────
+
+
+def test_ts_143_fires_on_cerebras_base_url_req(tmp_path: Path) -> None:
+    code = "const c = new Cerebras({ baseURL: req.body.cerebrasBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-143" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_143_no_fire_on_hardcoded_cerebras_base(tmp_path: Path) -> None:
+    code = "const c = new Cerebras({ baseURL: 'https://api.cerebras.ai' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-143" for f in analyze_typescript(p))
+
+
+# ── TS-144: new BlobServiceClient(req.xxx) — Azure Blob SSRF ─────────────────
+
+
+def test_ts_144_fires_on_blob_service_client_req_url(tmp_path: Path) -> None:
+    code = "const c = new BlobServiceClient(req.params.blobUrl);\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-144" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_144_no_fire_on_hardcoded_blob_url(tmp_path: Path) -> None:
+    code = "const c = new BlobServiceClient('https://myaccount.blob.core.windows.net');\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-144" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_forty_four_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 145)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

@@ -749,3 +749,21 @@ import AI21 from "ai21";
 function getAI21Client(req: any): AI21 {
   return new AI21({ baseURL: req.params.ai21Base });
 }
+
+// TS-142: axios.create({ baseURL: req.query.xxx }) -- SSRF via axios instance
+import axios from "axios";
+function getAxiosInstance(req: any) {
+  return axios.create({ baseURL: req.query.apiBase });
+}
+
+// TS-143: new Cerebras({ baseURL: req.query.xxx }) -- API key exfiltration SSRF
+import Cerebras from "cerebras-cloud-sdk";
+function getCerebrasClient(req: any): Cerebras {
+  return new Cerebras({ baseURL: req.body.cerebrasBase });
+}
+
+// TS-144: new BlobServiceClient(req.query.xxx) -- Azure Blob SSRF
+import { BlobServiceClient } from "@azure/storage-blob";
+function getBlobClient(req: any): BlobServiceClient {
+  return new BlobServiceClient(req.params.blobUrl);
+}

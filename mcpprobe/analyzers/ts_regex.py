@@ -1330,6 +1330,36 @@ _AI21_BASE_URL_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-142: axios.create({ baseURL: req.xxx }) -- SSRF via axios instance base URL
+# ---------------------------------------------------------------------------
+
+_AXIOS_CREATE_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \baxios\.create\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-143: new Cerebras({ baseURL: req.xxx }) -- Cerebras AI SSRF / API key exfil
+# ---------------------------------------------------------------------------
+
+_CEREBRAS_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Cerebras\s*\(\s*\{[^}]*\bbaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-144: new BlobServiceClient(req.xxx) -- Azure Blob SSRF via user-controlled URL
+# ---------------------------------------------------------------------------
+
+_BLOB_SERVICE_CLIENT_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+BlobServiceClient\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2787,6 +2817,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new AI21({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
             "Hardcode the AI21 Labs base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-142: axios.create({ baseURL: req.xxx }) -- SSRF via axios instance base URL
+    if _AXIOS_CREATE_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-142",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "axios.create({baseURL: req.xxx}) -- user-controlled base URL poisons all requests from this instance",
+            "Hardcode the base URL in axios.create(). Never accept HTTP base URLs from request data.",
+        )
+    # TS-143: new Cerebras({ baseURL: req.xxx }) -- Cerebras AI SSRF / API key exfiltration
+    if _CEREBRAS_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-143",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new Cerebras({baseURL: req.xxx}) -- user-controlled base URL exfiltrates API key",
+            "Hardcode the Cerebras base URL. Never accept AI API URLs from request data.",
+        )
+    # TS-144: new BlobServiceClient(req.xxx) -- Azure Blob SSRF via user-controlled URL
+    if _BLOB_SERVICE_CLIENT_URL_REQ.search(raw):
+        _add(
+            "TS-144",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new BlobServiceClient(req.xxx) -- user-controlled Azure Blob URL enables SSRF",
+            "Hardcode the Azure storage account URL. Never let request data set cloud storage URLs.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

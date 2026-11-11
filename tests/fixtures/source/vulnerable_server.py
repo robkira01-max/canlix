@@ -887,3 +887,22 @@ def get_azure_inference_client(endpoint: str):
 def get_ai21_client(api_host: str):
     # SRC-141: AI21Client with user-controlled api_host — API key exfiltration / SSRF
     return ai21.AI21Client(api_host=api_host)
+
+
+import azure.storage.blob  # noqa: E402
+import cerebras  # noqa: E402
+
+
+def get_httpx_client(base_url: str):
+    # SRC-142: httpx.Client with user-controlled base_url — SSRF
+    return httpx.Client(base_url=base_url)
+
+
+def get_cerebras_client(base_url: str):
+    # SRC-143: cerebras.Cerebras with user-controlled base_url — API key exfiltration / SSRF
+    return cerebras.Cerebras(base_url=base_url)
+
+
+def get_blob_service_client(account_url: str):
+    # SRC-144: BlobServiceClient with user-controlled account_url — SSRF
+    return azure.storage.blob.BlobServiceClient(account_url=account_url)

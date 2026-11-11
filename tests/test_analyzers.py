@@ -2803,3 +2803,61 @@ def test_vulnerable_fixture_has_all_one_hundred_forty_one_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 142)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-142: httpx.Client(base_url=url) — SSRF via httpx persistent client ───
+
+
+def test_src_142_fires_on_httpx_client_base_url_param(tmp_path: Path) -> None:
+    code = "import httpx\ndef client(base_url: str):\n    return httpx.Client(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-142" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_142_no_fire_on_hardcoded_httpx_base(tmp_path: Path) -> None:
+    code = "import httpx\ndef client():\n    return httpx.Client(base_url='https://api.example.com')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-142" for f in analyze_python(p))
+
+
+# ── SRC-143: cerebras.Cerebras(base_url=url) — API key exfiltration SSRF ─────
+
+
+def test_src_143_fires_on_cerebras_base_url_param(tmp_path: Path) -> None:
+    code = "import cerebras\ndef client(base_url: str):\n    return cerebras.Cerebras(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-143" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_143_no_fire_on_hardcoded_cerebras_base(tmp_path: Path) -> None:
+    code = "import cerebras\ndef client():\n    return cerebras.Cerebras(base_url='https://api.cerebras.ai')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-143" for f in analyze_python(p))
+
+
+# ── SRC-144: BlobServiceClient(account_url=url) — Azure Blob SSRF ────────────
+
+
+def test_src_144_fires_on_blob_service_client_account_url_param(tmp_path: Path) -> None:
+    code = (
+        "import azure.storage.blob\ndef client(account_url: str):\n"
+        "    return azure.storage.blob.BlobServiceClient(account_url=account_url)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-144" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_144_no_fire_on_hardcoded_blob_url(tmp_path: Path) -> None:
+    code = (
+        "import azure.storage.blob\ndef client():\n"
+        "    return azure.storage.blob.BlobServiceClient(account_url='https://myaccount.blob.core.windows.net')\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-144" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_forty_four_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 145)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
