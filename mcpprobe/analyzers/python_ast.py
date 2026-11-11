@@ -383,6 +383,19 @@ _SNOWFLAKE_CONNECT_FUNCS = frozenset({"snowflake.connector.connect", "snowflake.
 _PULSAR_CLIENT_FUNCS = frozenset({"pulsar.Client"})
 # SRC-150: databricks.sql.connect(server_hostname=param) — SSRF / credential exfil via Databricks host
 _DATABRICKS_CONNECT_FUNCS = frozenset({"databricks.sql.connect"})
+# SRC-151: minio.Minio(endpoint=param) — SSRF / credential exfil via user-controlled MinIO/S3 endpoint
+_MINIO_CLIENT_FUNCS = frozenset({"minio.Minio", "Minio"})
+# SRC-152: pymemcache Client(server=param) — SSRF via user-controlled memcached server
+_PYMEMCACHE_CLIENT_FUNCS = frozenset(
+    {
+        "pymemcache.client.base.Client",
+        "pymemcache.Client",
+        "pymemcache.client.base.PooledClient",
+        "pymemcache.PooledClient",
+    }
+)
+# SRC-153: consul.Consul(host=param) — SSRF via user-controlled Consul agent host
+_CONSUL_CLIENT_FUNCS = frozenset({"consul.Consul", "Consul"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2899,6 +2912,68 @@ class _Visitor(ast.NodeVisitor):
                     f"databricks.sql.connect(server_hostname={sh_kw.value.id}) — user-controlled"
                     " host routes the connection (and access token) to an attacker-chosen server",
                     "Hardcode the Databricks workspace hostname. Never accept it from user input.",
+                )
+
+        # SRC-151: minio.Minio(endpoint=param) — SSRF / credential exfil via user-controlled endpoint
+        if fname in _MINIO_CLIENT_FUNCS and self._param_names:
+            ep_kw = next((kw for kw in node.keywords if kw.arg == "endpoint"), None)
+            if ep_kw and isinstance(ep_kw.value, ast.Name) and ep_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-151",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Minio(endpoint={ep_kw.value.id}) — user-controlled endpoint routes the"
+                    " connection (and access keys) to an attacker-chosen server",
+                    "Hardcode the MinIO/S3 endpoint. Never accept object storage endpoints from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-151",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Minio({node.args[0].id}) — user-controlled endpoint routes the"
+                    " connection (and access keys) to an attacker-chosen server",
+                    "Hardcode the MinIO/S3 endpoint. Never accept object storage endpoints from user input.",
+                )
+
+        # SRC-152: pymemcache Client(server=param) — SSRF via user-controlled memcached server
+        if fname in _PYMEMCACHE_CLIENT_FUNCS and self._param_names:
+            sv_kw = next((kw for kw in node.keywords if kw.arg == "server"), None)
+            if sv_kw and isinstance(sv_kw.value, ast.Name) and sv_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-152",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pymemcache Client(server={sv_kw.value.id}) — user-controlled memcached"
+                    " server enables SSRF to internal services",
+                    "Hardcode the memcached server address. Never accept cache hosts from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-152",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pymemcache Client({node.args[0].id}) — user-controlled memcached"
+                    " server enables SSRF to internal services",
+                    "Hardcode the memcached server address. Never accept cache hosts from user input.",
+                )
+
+        # SRC-153: consul.Consul(host=param) — SSRF via user-controlled Consul agent host
+        if fname in _CONSUL_CLIENT_FUNCS and self._param_names:
+            h_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if h_kw and isinstance(h_kw.value, ast.Name) and h_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-153",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"consul.Consul(host={h_kw.value.id}) — user-controlled Consul agent host"
+                    " enables SSRF and service-discovery poisoning",
+                    "Hardcode the Consul agent address. Never accept it from user input.",
                 )
 
         self.generic_visit(node)

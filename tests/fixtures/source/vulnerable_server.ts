@@ -803,3 +803,21 @@ import { createClient } from "@clickhouse/client";
 function getClickHouseClient(req: any) {
   return createClient({ host: req.params.chHost });
 }
+
+// TS-151: nodemailer.createTransport({ host: req.query.xxx }) -- SMTP open relay / SSRF
+import nodemailer from "nodemailer";
+function getMailTransport(req: any) {
+  return nodemailer.createTransport({ host: req.query.smtpHost, port: 587 });
+}
+
+// TS-152: ldap.createClient({ url: req.query.xxx }) -- LDAP SSRF
+import ldap from "ldapjs";
+function getLdapClient(req: any) {
+  return ldap.createClient({ url: req.body.ldapUrl });
+}
+
+// TS-153: new InfluxDB({ url: req.query.xxx }) -- InfluxDB SSRF / token exfil
+import { InfluxDB } from "@influxdata/influxdb-client";
+function getInfluxClient(req: any): InfluxDB {
+  return new InfluxDB({ url: req.params.influxUrl });
+}

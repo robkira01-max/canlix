@@ -946,3 +946,23 @@ def get_pulsar_client(service_url: str):
 def get_databricks_connection(server_hostname: str):
     # SRC-150: databricks.sql.connect with user-controlled server_hostname — credential exfiltration
     return databricks.sql.connect(server_hostname=server_hostname, http_path="/sql")
+
+
+import consul  # noqa: E402
+import minio  # noqa: E402
+import pymemcache  # noqa: E402
+
+
+def get_minio_client(endpoint: str):
+    # SRC-151: minio.Minio with user-controlled endpoint — credential exfiltration / SSRF
+    return minio.Minio(endpoint=endpoint)
+
+
+def get_memcache_client(server: str):
+    # SRC-152: pymemcache Client with user-controlled server — SSRF
+    return pymemcache.Client(server=server)
+
+
+def get_consul_client(host: str):
+    # SRC-153: consul.Consul with user-controlled host — SSRF / service-discovery poisoning
+    return consul.Consul(host=host)

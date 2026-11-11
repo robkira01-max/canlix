@@ -2990,3 +2990,61 @@ def test_vulnerable_fixture_has_all_one_hundred_fifty_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 151)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-151: minio.Minio(endpoint=param) — credential exfil / SSRF ───────────
+
+
+def test_src_151_fires_on_minio_endpoint_param(tmp_path: Path) -> None:
+    code = "import minio\ndef client(endpoint: str):\n    return minio.Minio(endpoint=endpoint)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-151" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_151_fires_on_minio_positional_param(tmp_path: Path) -> None:
+    code = "import minio\ndef client(endpoint: str):\n    return minio.Minio(endpoint)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-151" for f in analyze_python(p))
+
+
+def test_src_151_no_fire_on_hardcoded_minio_endpoint(tmp_path: Path) -> None:
+    code = "import minio\ndef client():\n    return minio.Minio('storage.internal:9000')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-151" for f in analyze_python(p))
+
+
+# ── SRC-152: pymemcache Client(server=param) — memcached SSRF ────────────────
+
+
+def test_src_152_fires_on_pymemcache_server_param(tmp_path: Path) -> None:
+    code = "import pymemcache\ndef client(server: str):\n    return pymemcache.Client(server=server)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-152" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_152_no_fire_on_hardcoded_memcache_server(tmp_path: Path) -> None:
+    code = "import pymemcache\ndef client():\n    return pymemcache.Client(server='cache.internal:11211')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-152" for f in analyze_python(p))
+
+
+# ── SRC-153: consul.Consul(host=param) — Consul agent SSRF ───────────────────
+
+
+def test_src_153_fires_on_consul_host_param(tmp_path: Path) -> None:
+    code = "import consul\ndef client(host: str):\n    return consul.Consul(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-153" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_153_no_fire_on_hardcoded_consul_host(tmp_path: Path) -> None:
+    code = "import consul\ndef client():\n    return consul.Consul(host='consul.internal')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-153" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_fifty_three_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 154)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

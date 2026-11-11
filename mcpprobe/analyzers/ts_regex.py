@@ -1420,6 +1420,38 @@ _CREATE_CLIENT_HOST_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-151: nodemailer.createTransport({ host: req.xxx }) -- SMTP open relay / SSRF
+# ---------------------------------------------------------------------------
+
+_NODEMAILER_HOST_REQ = re.compile(
+    r"""(?x)
+    \b(?:nodemailer\s*\.\s*)?createTransport\s*\(\s*\{[^}]*\bhost\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-152: ldap.createClient({ url: req.xxx }) -- LDAP SSRF (ldapjs)
+# ---------------------------------------------------------------------------
+
+_LDAP_CREATE_CLIENT_URL_REQ = re.compile(
+    r"""(?x)
+    \bldap(?:js)?\s*\.\s*createClient\s*\(\s*\{[^}]*\burl\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-153: new InfluxDB({ url: req.xxx }) -- InfluxDB SSRF / token exfil
+# ---------------------------------------------------------------------------
+
+_INFLUXDB_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+InfluxDB\s*\(\s*\{[^}]*\burl\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2959,6 +2991,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "createClient({host: req.xxx}) -- user-controlled host enables SSRF",
             "Hardcode the client host. Never accept database/service hosts from request data.",
+        )
+    # TS-151: nodemailer.createTransport({ host: req.xxx }) -- SMTP open relay / SSRF
+    if _NODEMAILER_HOST_REQ.search(raw):
+        _add(
+            "TS-151",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "createTransport({host: req.xxx}) -- user-controlled SMTP host enables open relay and SSRF",
+            "Hardcode the SMTP server. Never accept mail server hosts from request data.",
+        )
+    # TS-152: ldap.createClient({ url: req.xxx }) -- LDAP SSRF (ldapjs)
+    if _LDAP_CREATE_CLIENT_URL_REQ.search(raw):
+        _add(
+            "TS-152",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "ldap.createClient({url: req.xxx}) -- user-controlled LDAP URL enables SSRF",
+            "Hardcode the LDAP server URL. Never accept directory URLs from request data.",
+        )
+    # TS-153: new InfluxDB({ url: req.xxx }) -- InfluxDB SSRF / token exfil
+    if _INFLUXDB_URL_REQ.search(raw):
+        _add(
+            "TS-153",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new InfluxDB({url: req.xxx}) -- user-controlled InfluxDB URL enables SSRF and token exfiltration",
+            "Hardcode the InfluxDB URL. Never accept time-series DB URLs from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

@@ -3054,3 +3054,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 151)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-151: nodemailer.createTransport({ host: req.xxx }) — open relay ───────
+
+
+def test_ts_151_fires_on_nodemailer_host_req(tmp_path: Path) -> None:
+    code = "const t = nodemailer.createTransport({ host: req.query.smtpHost, port: 587 });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-151" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_151_no_fire_on_hardcoded_smtp_host(tmp_path: Path) -> None:
+    code = "const t = nodemailer.createTransport({ host: 'smtp.example.com', port: 587 });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-151" for f in analyze_typescript(p))
+
+
+# ── TS-152: ldap.createClient({ url: req.xxx }) — LDAP SSRF ──────────────────
+
+
+def test_ts_152_fires_on_ldap_url_req(tmp_path: Path) -> None:
+    code = "const c = ldap.createClient({ url: req.body.ldapUrl });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-152" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_152_no_fire_on_hardcoded_ldap_url(tmp_path: Path) -> None:
+    code = "const c = ldap.createClient({ url: 'ldaps://ldap.internal:636' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-152" for f in analyze_typescript(p))
+
+
+# ── TS-153: new InfluxDB({ url: req.xxx }) — InfluxDB SSRF ───────────────────
+
+
+def test_ts_153_fires_on_influxdb_url_req(tmp_path: Path) -> None:
+    code = "const db = new InfluxDB({ url: req.params.influxUrl });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-153" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_153_no_fire_on_hardcoded_influx_url(tmp_path: Path) -> None:
+    code = "const db = new InfluxDB({ url: 'http://influx.internal:8086' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-153" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_three_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 154)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
