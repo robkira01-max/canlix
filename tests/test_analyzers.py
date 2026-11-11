@@ -2924,3 +2924,69 @@ def test_vulnerable_fixture_has_all_one_hundred_forty_seven_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 148)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-148: snowflake.connector.connect(account=param) — credential exfil ───
+
+
+def test_src_148_fires_on_snowflake_account_param(tmp_path: Path) -> None:
+    code = (
+        "import snowflake.connector\ndef conn(account: str):\n    return snowflake.connector.connect(account=account)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-148" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_148_no_fire_on_hardcoded_snowflake_account(tmp_path: Path) -> None:
+    code = "import snowflake.connector\ndef conn():\n    return snowflake.connector.connect(account='myorg-acct')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-148" for f in analyze_python(p))
+
+
+# ── SRC-149: pulsar.Client(service_url=param) — Pulsar broker SSRF ───────────
+
+
+def test_src_149_fires_on_pulsar_service_url_param(tmp_path: Path) -> None:
+    code = "import pulsar\ndef client(service_url: str):\n    return pulsar.Client(service_url=service_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-149" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_149_fires_on_pulsar_positional_param(tmp_path: Path) -> None:
+    code = "import pulsar\ndef client(url: str):\n    return pulsar.Client(url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-149" for f in analyze_python(p))
+
+
+def test_src_149_no_fire_on_hardcoded_pulsar_url(tmp_path: Path) -> None:
+    code = "import pulsar\ndef client():\n    return pulsar.Client('pulsar://broker:6650')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-149" for f in analyze_python(p))
+
+
+# ── SRC-150: databricks.sql.connect(server_hostname=param) — cred exfil ──────
+
+
+def test_src_150_fires_on_databricks_hostname_param(tmp_path: Path) -> None:
+    code = (
+        "import databricks.sql\ndef conn(server_hostname: str):\n"
+        "    return databricks.sql.connect(server_hostname=server_hostname)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-150" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_150_no_fire_on_hardcoded_databricks_hostname(tmp_path: Path) -> None:
+    code = (
+        "import databricks.sql\ndef conn():\n"
+        "    return databricks.sql.connect(server_hostname='dbc-123.cloud.databricks.com')\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-150" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_fifty_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 151)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

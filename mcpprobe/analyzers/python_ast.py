@@ -376,6 +376,13 @@ _GCP_TRANSLATE_FUNCS = frozenset(
         "TextToSpeechClient",
     }
 )
+# SRC-148: snowflake.connector.connect(account=param) — SSRF / credential exfil: the account value
+#           controls the <account>.snowflakecomputing.com hostname the driver connects to
+_SNOWFLAKE_CONNECT_FUNCS = frozenset({"snowflake.connector.connect", "snowflake.connect"})
+# SRC-149: pulsar.Client(service_url=param) — SSRF via user-controlled Pulsar broker URL
+_PULSAR_CLIENT_FUNCS = frozenset({"pulsar.Client"})
+# SRC-150: databricks.sql.connect(server_hostname=param) — SSRF / credential exfil via Databricks host
+_DATABRICKS_CONNECT_FUNCS = frozenset({"databricks.sql.connect"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2840,6 +2847,58 @@ class _Visitor(ast.NodeVisitor):
                     f"GCP AI client(client_options={co_kw.value.id}) — user-controlled"
                     " client_options can override the service endpoint, enabling SSRF",
                     "Hardcode GCP AI service options. Never pass user-controlled client_options to AI clients.",
+                )
+
+        # SRC-148: snowflake.connector.connect(account=param) — SSRF / credential exfil
+        if fname in _SNOWFLAKE_CONNECT_FUNCS and self._param_names:
+            for kwarg_name in ("account", "host"):
+                kw = next((kw for kw in node.keywords if kw.arg == kwarg_name), None)
+                if kw and isinstance(kw.value, ast.Name) and kw.value.id in self._param_names:
+                    self._add(
+                        "SRC-148",
+                        Severity.CRITICAL,
+                        Confidence.HIGH,
+                        node.lineno,
+                        f"snowflake.connector.connect({kwarg_name}={kw.value.id}) — user-controlled"
+                        " account routes the connection (and credentials) to an attacker-chosen host",
+                        "Hardcode the Snowflake account. Never accept warehouse hosts from user input.",
+                    )
+                    break
+
+        # SRC-149: pulsar.Client(service_url=param) — SSRF via user-controlled Pulsar broker URL
+        if fname in _PULSAR_CLIENT_FUNCS and self._param_names:
+            su_kw = next((kw for kw in node.keywords if kw.arg == "service_url"), None)
+            if su_kw and isinstance(su_kw.value, ast.Name) and su_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-149",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pulsar.Client(service_url={su_kw.value.id}) — user-controlled broker URL enables SSRF",
+                    "Hardcode the Pulsar service URL. Never accept broker URLs from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-149",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pulsar.Client({node.args[0].id}) — user-controlled broker URL enables SSRF",
+                    "Hardcode the Pulsar service URL. Never accept broker URLs from user input.",
+                )
+
+        # SRC-150: databricks.sql.connect(server_hostname=param) — SSRF / credential exfil
+        if fname in _DATABRICKS_CONNECT_FUNCS and self._param_names:
+            sh_kw = next((kw for kw in node.keywords if kw.arg == "server_hostname"), None)
+            if sh_kw and isinstance(sh_kw.value, ast.Name) and sh_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-150",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"databricks.sql.connect(server_hostname={sh_kw.value.id}) — user-controlled"
+                    " host routes the connection (and access token) to an attacker-chosen server",
+                    "Hardcode the Databricks workspace hostname. Never accept it from user input.",
                 )
 
         self.generic_visit(node)

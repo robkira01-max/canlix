@@ -926,3 +926,23 @@ def init_firebase(options: dict):
 def get_translate_client(client_options: dict):
     # SRC-147: GCP AI client with user-controlled client_options — SSRF
     return google.cloud.translate.TranslationServiceClient(client_options=client_options)
+
+
+import databricks.sql  # noqa: E402
+import pulsar  # noqa: E402
+import snowflake.connector  # noqa: E402
+
+
+def get_snowflake_connection(account: str):
+    # SRC-148: snowflake.connector.connect with user-controlled account — credential exfiltration
+    return snowflake.connector.connect(account=account, user="svc")
+
+
+def get_pulsar_client(service_url: str):
+    # SRC-149: pulsar.Client with user-controlled service_url — SSRF
+    return pulsar.Client(service_url=service_url)
+
+
+def get_databricks_connection(server_hostname: str):
+    # SRC-150: databricks.sql.connect with user-controlled server_hostname — credential exfiltration
+    return databricks.sql.connect(server_hostname=server_hostname, http_path="/sql")

@@ -1390,6 +1390,36 @@ _BIGQUERY_API_ENDPOINT_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-148: snowflake.createConnection({ account: req.xxx }) -- Snowflake SSRF / cred exfil
+# ---------------------------------------------------------------------------
+
+_SNOWFLAKE_ACCOUNT_REQ = re.compile(
+    r"""(?x)
+    \bsnowflake\.createConnection\s*\(\s*\{[^}]*\baccount\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-149: new Pulsar.Client({ serviceUrl: req.xxx }) -- Pulsar broker SSRF
+# ---------------------------------------------------------------------------
+
+_PULSAR_SERVICE_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Pulsar\.Client\s*\(\s*\{[^}]*\bserviceUrl\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-150: createClient({ host: req.xxx }) -- ClickHouse/generic client host SSRF
+# ---------------------------------------------------------------------------
+
+_CREATE_CLIENT_HOST_REQ = re.compile(
+    r"""(?x)
+    \bcreateClient\s*\(\s*\{[^}]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2901,6 +2931,34 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new BigQuery({apiEndpoint: req.xxx}) -- user-controlled BigQuery endpoint enables SSRF",
             "Hardcode the BigQuery endpoint. Never let request data set cloud endpoints.",
+        )
+    # TS-148: snowflake.createConnection({ account: req.xxx }) -- Snowflake SSRF / cred exfil
+    if _SNOWFLAKE_ACCOUNT_REQ.search(raw):
+        _add(
+            "TS-148",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "snowflake.createConnection({account: req.xxx}) -- user-controlled account routes"
+            " credentials to an attacker-chosen host",
+            "Hardcode the Snowflake account. Never accept warehouse hosts from request data.",
+        )
+    # TS-149: new Pulsar.Client({ serviceUrl: req.xxx }) -- Pulsar broker SSRF
+    if _PULSAR_SERVICE_URL_REQ.search(raw):
+        _add(
+            "TS-149",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Pulsar.Client({serviceUrl: req.xxx}) -- user-controlled broker URL enables SSRF",
+            "Hardcode the Pulsar service URL. Never accept broker URLs from request data.",
+        )
+    # TS-150: createClient({ host: req.xxx }) -- ClickHouse/generic client host SSRF
+    if _CREATE_CLIENT_HOST_REQ.search(raw):
+        _add(
+            "TS-150",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "createClient({host: req.xxx}) -- user-controlled host enables SSRF",
+            "Hardcode the client host. Never accept database/service hosts from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

@@ -785,3 +785,21 @@ import { BigQuery } from "@google-cloud/bigquery";
 function getBigQueryClient(req: any): BigQuery {
   return new BigQuery({ apiEndpoint: req.params.bqEndpoint });
 }
+
+// TS-148: snowflake.createConnection({ account: req.query.xxx }) -- Snowflake SSRF
+import snowflake from "snowflake-sdk";
+function getSnowflakeConnection(req: any) {
+  return snowflake.createConnection({ account: req.query.sfAccount, username: "svc" });
+}
+
+// TS-149: new Pulsar.Client({ serviceUrl: req.query.xxx }) -- Pulsar broker SSRF
+import Pulsar from "pulsar-client";
+function getPulsarClient(req: any) {
+  return new Pulsar.Client({ serviceUrl: req.body.pulsarUrl });
+}
+
+// TS-150: createClient({ host: req.query.xxx }) -- ClickHouse client host SSRF
+import { createClient } from "@clickhouse/client";
+function getClickHouseClient(req: any) {
+  return createClient({ host: req.params.chHost });
+}

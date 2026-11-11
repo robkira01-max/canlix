@@ -3002,3 +3002,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_forty_seven_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 148)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-148: snowflake.createConnection({ account: req.xxx }) — cred exfil ────
+
+
+def test_ts_148_fires_on_snowflake_account_req(tmp_path: Path) -> None:
+    code = "const conn = snowflake.createConnection({ account: req.query.sfAccount });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-148" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_148_no_fire_on_hardcoded_snowflake_account(tmp_path: Path) -> None:
+    code = "const conn = snowflake.createConnection({ account: 'myorg-acct' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-148" for f in analyze_typescript(p))
+
+
+# ── TS-149: new Pulsar.Client({ serviceUrl: req.xxx }) — Pulsar SSRF ─────────
+
+
+def test_ts_149_fires_on_pulsar_service_url_req(tmp_path: Path) -> None:
+    code = "const c = new Pulsar.Client({ serviceUrl: req.body.pulsarUrl });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-149" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_149_no_fire_on_hardcoded_pulsar_url(tmp_path: Path) -> None:
+    code = "const c = new Pulsar.Client({ serviceUrl: 'pulsar://broker:6650' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-149" for f in analyze_typescript(p))
+
+
+# ── TS-150: createClient({ host: req.xxx }) — client host SSRF ───────────────
+
+
+def test_ts_150_fires_on_create_client_host_req(tmp_path: Path) -> None:
+    code = "const ch = createClient({ host: req.params.chHost });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-150" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_150_no_fire_on_hardcoded_create_client_host(tmp_path: Path) -> None:
+    code = "const ch = createClient({ host: 'http://clickhouse:8123' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-150" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 151)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
