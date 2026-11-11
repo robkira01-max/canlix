@@ -659,3 +659,21 @@ import { ClickHouse } from "clickhouse";
 function getClickHouseClient(req: any): ClickHouse {
   return new ClickHouse({ host: req.query.chHost });
 }
+
+// TS-127: new WeaviateClient({ httpHost: req.query.xxx }) -- Weaviate SSRF
+import weaviate from "weaviate-ts-client";
+function getWeaviateClient(req: any) {
+  return new weaviate.WeaviateClient({ httpHost: req.query.wvHost });
+}
+
+// TS-128: new QdrantClient({ url: req.query.xxx }) -- Qdrant SSRF
+import { QdrantClient } from "@qdrant/js-client-rest";
+function getQdrantClient(req: any): QdrantClient {
+  return new QdrantClient({ url: req.query.qdrantUrl });
+}
+
+// TS-129: new ChromaClient({ path: req.query.xxx }) -- ChromaDB SSRF
+import { ChromaClient } from "chromadb";
+function getChromaClient(req: any): ChromaClient {
+  return new ChromaClient({ path: req.query.chromaPath });
+}

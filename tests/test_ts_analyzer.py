@@ -2638,3 +2638,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_six_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 127)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-127: new WeaviateClient({ httpHost: req.xxx }) — Weaviate SSRF ────────
+
+
+def test_ts_127_fires_on_weaviate_host_req(tmp_path: Path) -> None:
+    code = "const c = new WeaviateClient({ httpHost: req.query.wvHost });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-127" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_127_no_fire_on_hardcoded_weaviate_host(tmp_path: Path) -> None:
+    code = "const c = new WeaviateClient({ httpHost: 'localhost' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-127" for f in analyze_typescript(p))
+
+
+# ── TS-128: new QdrantClient({ url: req.xxx }) — Qdrant SSRF ─────────────────
+
+
+def test_ts_128_fires_on_qdrant_url_req(tmp_path: Path) -> None:
+    code = "const q = new QdrantClient({ url: req.query.qdrantUrl });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-128" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_128_no_fire_on_hardcoded_qdrant_url(tmp_path: Path) -> None:
+    code = "const q = new QdrantClient({ url: 'http://localhost:6333' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-128" for f in analyze_typescript(p))
+
+
+# ── TS-129: new ChromaClient({ path: req.xxx }) — ChromaDB SSRF ──────────────
+
+
+def test_ts_129_fires_on_chroma_path_req(tmp_path: Path) -> None:
+    code = "const c = new ChromaClient({ path: req.query.chromaPath });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-129" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_129_no_fire_on_hardcoded_chroma_path(tmp_path: Path) -> None:
+    code = "const c = new ChromaClient({ path: 'http://localhost:8000' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-129" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_nine_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 130)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

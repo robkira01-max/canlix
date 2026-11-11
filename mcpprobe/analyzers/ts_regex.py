@@ -1179,6 +1179,37 @@ _CLICKHOUSE_HOST_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-127: weaviateClient.connectToCustom({ httpHost: req.xxx }) -- Weaviate SSRF
+# ---------------------------------------------------------------------------
+
+_WEAVIATE_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+WeaviateClient\s*\(\s*\{[^}]*\bhttpHost\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-128: new QdrantClient({ url: req.xxx }) -- Qdrant vector DB SSRF
+# ---------------------------------------------------------------------------
+
+_QDRANT_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+QdrantClient\s*\(\s*\{[^}]*\b(?:url|host)\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-129: new ChromaClient({ path: req.xxx }) -- ChromaDB SSRF
+# ---------------------------------------------------------------------------
+
+_CHROMA_PATH_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+ChromaClient\s*\(\s*\{[^}]*\bpath\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2501,6 +2532,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new ClickHouse({host: req.xxx}) — user-controlled ClickHouse host enables SSRF",
             "Hardcode the ClickHouse host. Never accept database hosts from request data.",
+        )
+    # TS-127: new WeaviateClient({ httpHost: req.xxx }) -- Weaviate vector DB SSRF
+    if _WEAVIATE_HOST_REQ.search(raw):
+        _add(
+            "TS-127",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new WeaviateClient({httpHost: req.xxx}) -- user-controlled Weaviate host enables SSRF",
+            "Hardcode the Weaviate host. Never accept vector DB hosts from request data.",
+        )
+    # TS-128: new QdrantClient({ url: req.xxx }) -- Qdrant vector DB SSRF
+    if _QDRANT_URL_REQ.search(raw):
+        _add(
+            "TS-128",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new QdrantClient({url: req.xxx}) -- user-controlled Qdrant URL enables SSRF",
+            "Hardcode the Qdrant URL. Never accept vector DB URLs from request data.",
+        )
+    # TS-129: new ChromaClient({ path: req.xxx }) -- ChromaDB SSRF
+    if _CHROMA_PATH_REQ.search(raw):
+        _add(
+            "TS-129",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new ChromaClient({path: req.xxx}) -- user-controlled ChromaDB path enables SSRF",
+            "Hardcode the ChromaDB path. Never accept vector DB paths from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

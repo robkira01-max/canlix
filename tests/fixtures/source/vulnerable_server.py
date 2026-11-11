@@ -787,3 +787,23 @@ def get_clickhouse_client(host: str):
 def get_neo4j_driver(uri: str):
     # SRC-126: GraphDatabase.driver with user-controlled URI — SSRF
     return neo4j.GraphDatabase.driver(uri)
+
+
+import chromadb  # noqa: E402
+import qdrant_client  # noqa: E402
+import weaviate  # noqa: E402
+
+
+def get_weaviate_client(url: str):
+    # SRC-127: weaviate.Client with user-controlled URL — SSRF
+    return weaviate.Client(url=url)
+
+
+def get_qdrant_client(host: str):
+    # SRC-128: QdrantClient with user-controlled host — SSRF
+    return qdrant_client.QdrantClient(host=host)
+
+
+def get_chroma_client(host: str):
+    # SRC-129: chromadb.HttpClient with user-controlled host — SSRF
+    return chromadb.HttpClient(host=host)

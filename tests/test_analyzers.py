@@ -2534,3 +2534,55 @@ def test_vulnerable_fixture_has_all_one_hundred_twenty_six_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 127)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-127: weaviate.Client(url=url) — Weaviate SSRF ────────────────────────
+
+
+def test_src_127_fires_on_weaviate_client_url_param(tmp_path: Path) -> None:
+    code = "import weaviate\ndef connect(url: str):\n    return weaviate.Client(url=url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-127" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_127_no_fire_on_hardcoded_weaviate_url(tmp_path: Path) -> None:
+    code = "import weaviate\ndef connect():\n    return weaviate.Client(url='http://localhost:8080')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-127" for f in analyze_python(p))
+
+
+# ── SRC-128: QdrantClient(host=host) — Qdrant SSRF ───────────────────────────
+
+
+def test_src_128_fires_on_qdrant_client_host_param(tmp_path: Path) -> None:
+    code = "import qdrant_client\ndef connect(host: str):\n    return qdrant_client.QdrantClient(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-128" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_128_no_fire_on_hardcoded_qdrant_host(tmp_path: Path) -> None:
+    code = "import qdrant_client\ndef connect():\n    return qdrant_client.QdrantClient(host='localhost')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-128" for f in analyze_python(p))
+
+
+# ── SRC-129: chromadb.HttpClient(host=host) — ChromaDB SSRF ──────────────────
+
+
+def test_src_129_fires_on_chroma_host_param(tmp_path: Path) -> None:
+    code = "import chromadb\ndef connect(host: str):\n    return chromadb.HttpClient(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-129" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_129_no_fire_on_hardcoded_chroma_host(tmp_path: Path) -> None:
+    code = "import chromadb\ndef connect():\n    return chromadb.HttpClient(host='localhost')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-129" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_twenty_nine_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 130)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

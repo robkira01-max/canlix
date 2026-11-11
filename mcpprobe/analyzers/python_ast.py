@@ -294,6 +294,12 @@ _CLICKHOUSE_CLIENT_FUNCS = frozenset(
 _NEO4J_DRIVER_FUNCS = frozenset(
     {"neo4j.GraphDatabase.driver", "neo4j.AsyncGraphDatabase.driver", "GraphDatabase.driver"}
 )
+# SRC-127: weaviate.Client(url=url) — SSRF via user-controlled Weaviate URL
+_WEAVIATE_CLIENT_FUNCS = frozenset({"weaviate.Client", "weaviate.connect_to_custom", "Client"})
+# SRC-128: qdrant_client.QdrantClient(host=host) — SSRF via user-controlled Qdrant host
+_QDRANT_CLIENT_FUNCS = frozenset({"qdrant_client.QdrantClient", "QdrantClient"})
+# SRC-129: chromadb.HttpClient(host=host) — SSRF via user-controlled ChromaDB host
+_CHROMADB_CLIENT_FUNCS = frozenset({"chromadb.HttpClient", "chromadb.AsyncHttpClient", "HttpClient"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2426,6 +2432,54 @@ class _Visitor(ast.NodeVisitor):
                     node.lineno,
                     f"GraphDatabase.driver({uri_arg.id}) — user-controlled Neo4j URI enables SSRF",
                     "Hardcode the Neo4j URI. Never accept graph database URIs from user input.",
+                )
+
+        # SRC-127: weaviate.Client(url=url) — SSRF via user-controlled Weaviate URL
+        if fname in _WEAVIATE_CLIENT_FUNCS and self._param_names:
+            url_kw = next((kw for kw in node.keywords if kw.arg == "url"), None)
+            if url_kw and isinstance(url_kw.value, ast.Name) and url_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-127",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"weaviate.Client(url={url_kw.value.id}) — user-controlled Weaviate URL enables SSRF",
+                    "Hardcode the Weaviate URL. Never accept vector DB URLs from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-127",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"weaviate.Client({node.args[0].id}) — user-controlled Weaviate URL enables SSRF",
+                    "Hardcode the Weaviate URL. Never accept vector DB URLs from user input.",
+                )
+
+        # SRC-128: qdrant_client.QdrantClient(host=host) — SSRF via user-controlled Qdrant host
+        if fname in _QDRANT_CLIENT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg in ("host", "url")), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-128",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"QdrantClient({host_kw.arg}={host_kw.value.id}) — user-controlled host enables SSRF",
+                    "Hardcode the Qdrant host. Never accept vector DB hosts from user input.",
+                )
+
+        # SRC-129: chromadb.HttpClient(host=host) — SSRF via user-controlled ChromaDB host
+        if fname in _CHROMADB_CLIENT_FUNCS and self._param_names:
+            host_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if host_kw and isinstance(host_kw.value, ast.Name) and host_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-129",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"chromadb.HttpClient(host={host_kw.value.id}) — user-controlled host enables SSRF",
+                    "Hardcode the ChromaDB host. Never accept vector DB hosts from user input.",
                 )
 
         self.generic_visit(node)
