@@ -767,3 +767,21 @@ import { BlobServiceClient } from "@azure/storage-blob";
 function getBlobClient(req: any): BlobServiceClient {
   return new BlobServiceClient(req.params.blobUrl);
 }
+
+// TS-145: new Storage({ apiEndpoint: req.query.xxx }) -- Google Cloud Storage SSRF
+import { Storage } from "@google-cloud/storage";
+function getGcsClient(req: any): Storage {
+  return new Storage({ apiEndpoint: req.query.gcsEndpoint });
+}
+
+// TS-146: initializeApp({ databaseURL: req.query.xxx }) -- Firebase SSRF
+import { initializeApp } from "firebase-admin/app";
+function initFirebase(req: any) {
+  return initializeApp({ databaseURL: req.body.firebaseDb });
+}
+
+// TS-147: new BigQuery({ apiEndpoint: req.query.xxx }) -- Google BigQuery SSRF
+import { BigQuery } from "@google-cloud/bigquery";
+function getBigQueryClient(req: any): BigQuery {
+  return new BigQuery({ apiEndpoint: req.params.bqEndpoint });
+}

@@ -349,6 +349,33 @@ _BLOB_SERVICE_CLIENT_FUNCS = frozenset(
         "ContainerClient",
     }
 )
+# SRC-145: google.cloud.bigquery.Client(client_options=param) — SSRF via user-controlled GCP client options
+_GCP_CLIENT_FUNCS = frozenset(
+    {
+        "google.cloud.bigquery.Client",
+        "google.cloud.storage.Client",
+        "google.cloud.firestore.Client",
+        "google.cloud.pubsub_v1.PublisherClient",
+        "google.cloud.pubsub_v1.SubscriberClient",
+        "BigQueryClient",
+    }
+)
+# SRC-146: firebase_admin.initialize_app(options=param) — SSRF via user-controlled Firebase options
+_FIREBASE_INIT_FUNCS = frozenset({"firebase_admin.initialize_app", "initialize_app"})
+# SRC-147: google.cloud.storage.Client(project=param, client_options=param) first positional is safe;
+#           detect when client_options kwarg is a parameter (attacker controls api_endpoint inside)
+_GCP_TRANSLATE_FUNCS = frozenset(
+    {
+        "google.cloud.translate.TranslationServiceClient",
+        "google.cloud.vision.ImageAnnotatorClient",
+        "google.cloud.speech.SpeechClient",
+        "google.cloud.texttospeech.TextToSpeechClient",
+        "TranslationServiceClient",
+        "ImageAnnotatorClient",
+        "SpeechClient",
+        "TextToSpeechClient",
+    }
+)
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2771,6 +2798,48 @@ class _Visitor(ast.NodeVisitor):
                     f"BlobServiceClient({node.args[0].id}) — user-controlled Azure"
                     " Blob URL enables SSRF to internal storage endpoints",
                     "Hardcode the Azure storage account URL. Never let user input set cloud storage URLs.",
+                )
+
+        # SRC-145: google.cloud.*.Client(client_options=param) — SSRF via user-controlled GCP options
+        if fname in _GCP_CLIENT_FUNCS and self._param_names:
+            co_kw = next((kw for kw in node.keywords if kw.arg == "client_options"), None)
+            if co_kw and isinstance(co_kw.value, ast.Name) and co_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-145",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"google.cloud.Client(client_options={co_kw.value.id}) — user-controlled"
+                    " client_options can override api_endpoint, enabling SSRF",
+                    "Hardcode GCP client options. Never pass user-controlled client_options to Cloud SDK clients.",
+                )
+
+        # SRC-146: firebase_admin.initialize_app(options=param) — SSRF via user-controlled Firebase options
+        if fname in _FIREBASE_INIT_FUNCS and self._param_names:
+            opt_kw = next((kw for kw in node.keywords if kw.arg == "options"), None)
+            if opt_kw and isinstance(opt_kw.value, ast.Name) and opt_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-146",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"firebase_admin.initialize_app(options={opt_kw.value.id}) — user-controlled"
+                    " options can override databaseURL, enabling SSRF",
+                    "Hardcode Firebase app options. Never pass user-controlled options to initialize_app().",
+                )
+
+        # SRC-147: google.cloud.*Client(client_options=param) — SSRF via user-controlled GCP AI service options
+        if fname in _GCP_TRANSLATE_FUNCS and self._param_names:
+            co_kw = next((kw for kw in node.keywords if kw.arg == "client_options"), None)
+            if co_kw and isinstance(co_kw.value, ast.Name) and co_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-147",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"GCP AI client(client_options={co_kw.value.id}) — user-controlled"
+                    " client_options can override the service endpoint, enabling SSRF",
+                    "Hardcode GCP AI service options. Never pass user-controlled client_options to AI clients.",
                 )
 
         self.generic_visit(node)

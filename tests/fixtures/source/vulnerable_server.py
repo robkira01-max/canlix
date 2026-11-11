@@ -906,3 +906,23 @@ def get_cerebras_client(base_url: str):
 def get_blob_service_client(account_url: str):
     # SRC-144: BlobServiceClient with user-controlled account_url — SSRF
     return azure.storage.blob.BlobServiceClient(account_url=account_url)
+
+
+import firebase_admin  # noqa: E402
+import google.cloud.bigquery  # noqa: E402
+import google.cloud.translate  # noqa: E402
+
+
+def get_bigquery_client(client_options: dict):
+    # SRC-145: google.cloud.bigquery.Client with user-controlled client_options — SSRF
+    return google.cloud.bigquery.Client(client_options=client_options)
+
+
+def init_firebase(options: dict):
+    # SRC-146: firebase_admin.initialize_app with user-controlled options — SSRF
+    return firebase_admin.initialize_app(options=options)
+
+
+def get_translate_client(client_options: dict):
+    # SRC-147: GCP AI client with user-controlled client_options — SSRF
+    return google.cloud.translate.TranslationServiceClient(client_options=client_options)

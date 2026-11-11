@@ -2861,3 +2861,66 @@ def test_vulnerable_fixture_has_all_one_hundred_forty_four_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 145)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-145: google.cloud.*.Client(client_options=param) — GCP SSRF ──────────
+
+
+def test_src_145_fires_on_bigquery_client_options_param(tmp_path: Path) -> None:
+    code = (
+        "import google.cloud.bigquery\ndef client(client_options: dict):\n"
+        "    return google.cloud.bigquery.Client(client_options=client_options)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-145" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_145_no_fire_on_hardcoded_client_options(tmp_path: Path) -> None:
+    code = "import google.cloud.bigquery\ndef client():\n    return google.cloud.bigquery.Client(client_options=None)\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-145" for f in analyze_python(p))
+
+
+# ── SRC-146: firebase_admin.initialize_app(options=param) — Firebase SSRF ────
+
+
+def test_src_146_fires_on_firebase_options_param(tmp_path: Path) -> None:
+    code = (
+        "import firebase_admin\ndef init(options: dict):\n    return firebase_admin.initialize_app(options=options)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-146" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_146_no_fire_on_hardcoded_firebase_options(tmp_path: Path) -> None:
+    code = "import firebase_admin\ndef init():\n    return firebase_admin.initialize_app(options=None)\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-146" for f in analyze_python(p))
+
+
+# ── SRC-147: GCP AI client(client_options=param) — GCP AI service SSRF ───────
+
+
+def test_src_147_fires_on_translate_client_options_param(tmp_path: Path) -> None:
+    code = (
+        "import google.cloud.translate\ndef client(client_options: dict):\n"
+        "    return google.cloud.translate.TranslationServiceClient(client_options=client_options)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-147" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_147_no_fire_on_hardcoded_translate_options(tmp_path: Path) -> None:
+    code = (
+        "import google.cloud.translate\ndef client():\n"
+        "    return google.cloud.translate.TranslationServiceClient(client_options=None)\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-147" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_forty_seven_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 148)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

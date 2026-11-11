@@ -1360,6 +1360,36 @@ _BLOB_SERVICE_CLIENT_URL_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-145: new Storage({ apiEndpoint: req.xxx }) -- Google Cloud Storage SSRF
+# ---------------------------------------------------------------------------
+
+_GCS_API_ENDPOINT_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Storage\s*\(\s*\{[^}]*\bapiEndpoint\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-146: initializeApp({ databaseURL: req.xxx }) -- Firebase SSRF
+# ---------------------------------------------------------------------------
+
+_FIREBASE_DATABASE_URL_REQ = re.compile(
+    r"""(?x)
+    \binitializeApp\s*\(\s*\{[^}]*\bdatabaseURL\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-147: new BigQuery({ apiEndpoint: req.xxx }) -- Google BigQuery SSRF
+# ---------------------------------------------------------------------------
+
+_BIGQUERY_API_ENDPOINT_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+BigQuery\s*\(\s*\{[^}]*\bapiEndpoint\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2844,6 +2874,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new BlobServiceClient(req.xxx) -- user-controlled Azure Blob URL enables SSRF",
             "Hardcode the Azure storage account URL. Never let request data set cloud storage URLs.",
+        )
+    # TS-145: new Storage({ apiEndpoint: req.xxx }) -- Google Cloud Storage SSRF
+    if _GCS_API_ENDPOINT_REQ.search(raw):
+        _add(
+            "TS-145",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Storage({apiEndpoint: req.xxx}) -- user-controlled GCS endpoint enables SSRF",
+            "Hardcode the Google Cloud Storage endpoint. Never let request data set cloud endpoints.",
+        )
+    # TS-146: initializeApp({ databaseURL: req.xxx }) -- Firebase SSRF
+    if _FIREBASE_DATABASE_URL_REQ.search(raw):
+        _add(
+            "TS-146",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "initializeApp({databaseURL: req.xxx}) -- user-controlled Firebase database URL enables SSRF",
+            "Hardcode the Firebase databaseURL. Never let request data set Firebase app options.",
+        )
+    # TS-147: new BigQuery({ apiEndpoint: req.xxx }) -- Google BigQuery SSRF
+    if _BIGQUERY_API_ENDPOINT_REQ.search(raw):
+        _add(
+            "TS-147",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new BigQuery({apiEndpoint: req.xxx}) -- user-controlled BigQuery endpoint enables SSRF",
+            "Hardcode the BigQuery endpoint. Never let request data set cloud endpoints.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

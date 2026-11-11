@@ -2950,3 +2950,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_forty_four_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 145)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-145: new Storage({ apiEndpoint: req.xxx }) — GCS SSRF ─────────────────
+
+
+def test_ts_145_fires_on_gcs_api_endpoint_req(tmp_path: Path) -> None:
+    code = "const s = new Storage({ apiEndpoint: req.query.gcsEndpoint });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-145" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_145_no_fire_on_hardcoded_gcs_endpoint(tmp_path: Path) -> None:
+    code = "const s = new Storage({ apiEndpoint: 'https://storage.googleapis.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-145" for f in analyze_typescript(p))
+
+
+# ── TS-146: initializeApp({ databaseURL: req.xxx }) — Firebase SSRF ──────────
+
+
+def test_ts_146_fires_on_firebase_database_url_req(tmp_path: Path) -> None:
+    code = "const app = initializeApp({ databaseURL: req.body.firebaseDb });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-146" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_146_no_fire_on_hardcoded_firebase_url(tmp_path: Path) -> None:
+    code = "const app = initializeApp({ databaseURL: 'https://myapp.firebaseio.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-146" for f in analyze_typescript(p))
+
+
+# ── TS-147: new BigQuery({ apiEndpoint: req.xxx }) — BigQuery SSRF ───────────
+
+
+def test_ts_147_fires_on_bigquery_api_endpoint_req(tmp_path: Path) -> None:
+    code = "const bq = new BigQuery({ apiEndpoint: req.params.bqEndpoint });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-147" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_147_no_fire_on_hardcoded_bq_endpoint(tmp_path: Path) -> None:
+    code = "const bq = new BigQuery({ apiEndpoint: 'https://bigquery.googleapis.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-147" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_forty_seven_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 148)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
