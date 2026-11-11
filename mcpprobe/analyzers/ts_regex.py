@@ -1119,6 +1119,36 @@ _AWS_SDK_ENDPOINT_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-121: new Kafka({ brokers: req.xxx }) — SSRF via user-controlled KafkaJS brokers
+# ---------------------------------------------------------------------------
+
+_KAFKAJS_BROKERS_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Kafka\s*\(\s*\{[^}]*\bbrokers\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-122: tls.connect({ host: req.xxx }) — SSRF via user-controlled TLS host
+# ---------------------------------------------------------------------------
+
+_TLS_CONNECT_REQ = re.compile(
+    r"""(?x)
+    \btls\.connect\s*\(\s*\{[^}]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-123: nats.connect(req.xxx) — SSRF via user-controlled NATS server URL
+# ---------------------------------------------------------------------------
+
+_NATS_CONNECT_REQ = re.compile(
+    r"""(?x)
+    \bnats\.connect\s*\(\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -2387,6 +2417,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new AwsClient({endpoint: req.xxx}) — user-controlled AWS endpoint enables SSRF",
             "Hardcode the endpoint URL or allowlist it. Never accept AWS endpoints from request data.",
+        )
+    # TS-121: new Kafka({ brokers: req.xxx }) — SSRF via user-controlled KafkaJS brokers
+    if _KAFKAJS_BROKERS_REQ.search(raw):
+        _add(
+            "TS-121",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Kafka({brokers: req.xxx}) — user-controlled Kafka brokers enable SSRF",
+            "Hardcode Kafka broker addresses. Never accept broker URLs from request data.",
+        )
+    # TS-122: tls.connect({ host: req.xxx }) — SSRF via user-controlled TLS host
+    if _TLS_CONNECT_REQ.search(raw):
+        _add(
+            "TS-122",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "tls.connect({host: req.xxx}) — user-controlled TLS host enables SSRF",
+            "Hardcode the TLS host. Never accept connection targets from request data.",
+        )
+    # TS-123: nats.connect(req.xxx) — SSRF via user-controlled NATS server URL
+    if _NATS_CONNECT_REQ.search(raw):
+        _add(
+            "TS-123",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "nats.connect(req.xxx) — user-controlled NATS server URL enables SSRF",
+            "Hardcode the NATS server URL. Never accept server addresses from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

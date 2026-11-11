@@ -623,3 +623,21 @@ import { S3Client } from "@aws-sdk/client-s3";
 function getS3Client(req: any): S3Client {
   return new S3Client({ endpoint: req.query.s3Endpoint });
 }
+
+// TS-121: new Kafka({ brokers: req.query.xxx }) — KafkaJS broker SSRF
+import { Kafka } from "kafkajs";
+function getKafkaClient(req: any): Kafka {
+  return new Kafka({ brokers: req.query.kafkaBrokers });
+}
+
+// TS-122: tls.connect({ host: req.query.xxx }) — TLS SSRF via user-controlled host
+import * as tls from "tls";
+function tlsConnect(req: any): void {
+  tls.connect({ host: req.query.tlsHost, port: 443 });
+}
+
+// TS-123: nats.connect(req.query.xxx) — NATS SSRF via user-controlled server URL
+import * as nats from "nats";
+async function natsConnect(req: any): Promise<void> {
+  await nats.connect(req.query.natsServer);
+}

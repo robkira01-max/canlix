@@ -747,3 +747,23 @@ async def read_file_async(path: str) -> str:
 def run_in_env(env: dict) -> None:
     # SRC-120: subprocess.Popen(env=user_env) — user-controlled environment dict
     subprocess.Popen(["app"], env=env)
+
+
+import celery  # noqa: E402
+import kafka  # noqa: E402
+import motor.motor_asyncio  # noqa: E402
+
+
+async def get_motor_client(url: str):
+    # SRC-121: AsyncIOMotorClient with user-controlled URL — SSRF
+    return motor.motor_asyncio.AsyncIOMotorClient(url)
+
+
+def get_kafka_producer(bootstrap_servers: str):
+    # SRC-122: KafkaProducer with user-controlled bootstrap_servers — SSRF
+    return kafka.KafkaProducer(bootstrap_servers=bootstrap_servers)
+
+
+def get_celery_app(broker: str):
+    # SRC-123: Celery with user-controlled broker URL — SSRF
+    return celery.Celery(broker=broker)

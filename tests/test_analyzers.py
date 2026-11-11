@@ -2418,3 +2418,67 @@ def test_vulnerable_fixture_has_all_one_hundred_twenty_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 121)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-121: motor.motor_asyncio.AsyncIOMotorClient(url) — async MongoDB SSRF ─
+
+
+def test_src_121_fires_on_motor_client_param(tmp_path: Path) -> None:
+    code = (
+        "import motor.motor_asyncio\n"
+        "async def connect(url: str):\n"
+        "    return motor.motor_asyncio.AsyncIOMotorClient(url)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-121" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_121_no_fire_on_hardcoded_motor_url(tmp_path: Path) -> None:
+    code = (
+        "import motor.motor_asyncio\n"
+        "async def connect():\n"
+        "    return motor.motor_asyncio.AsyncIOMotorClient('mongodb://localhost')\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-121" for f in analyze_python(p))
+
+
+# ── SRC-122: kafka.KafkaProducer(bootstrap_servers=url) — Kafka broker SSRF ──
+
+
+def test_src_122_fires_on_kafka_producer_param(tmp_path: Path) -> None:
+    code = (
+        "import kafka\n"
+        "def make_producer(bootstrap_servers: str):\n"
+        "    return kafka.KafkaProducer(bootstrap_servers=bootstrap_servers)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-122" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_122_no_fire_on_hardcoded_kafka_servers(tmp_path: Path) -> None:
+    code = "import kafka\ndef make_producer():\n    return kafka.KafkaProducer(bootstrap_servers='broker:9092')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-122" for f in analyze_python(p))
+
+
+# ── SRC-123: celery.Celery(broker=url) — Celery broker SSRF ──────────────────
+
+
+def test_src_123_fires_on_celery_broker_param(tmp_path: Path) -> None:
+    code = "import celery\ndef make_app(broker: str):\n    return celery.Celery(broker=broker)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-123" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_123_no_fire_on_hardcoded_celery_broker(tmp_path: Path) -> None:
+    code = "import celery\ndef make_app():\n    return celery.Celery(broker='redis://localhost:6379/0')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-123" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_twenty_three_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 124)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

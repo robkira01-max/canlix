@@ -272,6 +272,16 @@ _BOTO3_CLIENT_FUNCS = frozenset({"boto3.client", "boto3.resource", "boto3.Sessio
 _AIOFILES_OPEN_FUNCS = frozenset({"aiofiles.open"})
 # SRC-120: subprocess.Popen(env=param) — user-controlled environment dict (PATH hijacking, LD_PRELOAD)
 _POPEN_ENV_FUNCS = frozenset({"subprocess.Popen", "subprocess.run", "subprocess.call", "Popen"})
+# SRC-121: motor.motor_asyncio.AsyncIOMotorClient(url) — SSRF via user-controlled async MongoDB URL
+_MOTOR_CLIENT_FUNCS = frozenset(
+    {"motor.motor_asyncio.AsyncIOMotorClient", "motor.MotorClient", "AsyncIOMotorClient", "MotorClient"}
+)
+# SRC-122: kafka.KafkaProducer(bootstrap_servers=url) — SSRF via user-controlled Kafka bootstrap servers
+_KAFKA_FUNCS = frozenset(
+    {"kafka.KafkaProducer", "kafka.KafkaConsumer", "kafka.KafkaAdminClient", "KafkaProducer", "KafkaConsumer"}
+)
+# SRC-123: celery.Celery(broker=url) — SSRF via user-controlled Celery broker URL
+_CELERY_FUNCS = frozenset({"celery.Celery", "Celery"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -2308,6 +2318,45 @@ class _Visitor(ast.NodeVisitor):
                     f"Popen(env={env_kw.value.id}) — user-controlled env enables PATH hijacking"
                     " and LD_PRELOAD injection",
                     "Build the environment dict from safe sources. Never pass caller-supplied dicts as env.",
+                )
+
+        # SRC-121: motor.motor_asyncio.AsyncIOMotorClient(url) — SSRF via user-controlled async MongoDB URL
+        if fname in _MOTOR_CLIENT_FUNCS and node.args and self._param_names:
+            url_arg = node.args[0]
+            if isinstance(url_arg, ast.Name) and url_arg.id in self._param_names:
+                self._add(
+                    "SRC-121",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"AsyncIOMotorClient({url_arg.id}) — user-controlled MongoDB URL enables SSRF",
+                    "Hardcode the MongoDB connection URI. Never accept database URLs from user input.",
+                )
+
+        # SRC-122: kafka.KafkaProducer(bootstrap_servers=url) — SSRF via user-controlled Kafka servers
+        if fname in _KAFKA_FUNCS and self._param_names:
+            bs_kw = next((kw for kw in node.keywords if kw.arg == "bootstrap_servers"), None)
+            if bs_kw and isinstance(bs_kw.value, ast.Name) and bs_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-122",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"KafkaProducer(bootstrap_servers={bs_kw.value.id}) — user-controlled brokers enable SSRF",
+                    "Hardcode Kafka bootstrap servers. Never accept broker addresses from user input.",
+                )
+
+        # SRC-123: celery.Celery(broker=url) — SSRF via user-controlled Celery broker URL
+        if fname in _CELERY_FUNCS and self._param_names:
+            broker_kw = next((kw for kw in node.keywords if kw.arg == "broker"), None)
+            if broker_kw and isinstance(broker_kw.value, ast.Name) and broker_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-123",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"Celery(broker={broker_kw.value.id}) — user-controlled broker URL enables SSRF",
+                    "Hardcode the Celery broker URL. Never accept broker URLs from user input.",
                 )
 
         self.generic_visit(node)

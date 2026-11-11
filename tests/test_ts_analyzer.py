@@ -2534,3 +2534,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 121)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-121: new Kafka({ brokers: req.xxx }) — KafkaJS broker SSRF ────────────
+
+
+def test_ts_121_fires_on_kafka_brokers_req(tmp_path: Path) -> None:
+    code = "const k = new Kafka({ brokers: req.query.brokers });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-121" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_121_no_fire_on_hardcoded_kafka_brokers(tmp_path: Path) -> None:
+    code = "const k = new Kafka({ brokers: ['broker:9092'] });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-121" for f in analyze_typescript(p))
+
+
+# ── TS-122: tls.connect({ host: req.xxx }) — TLS host SSRF ───────────────────
+
+
+def test_ts_122_fires_on_tls_connect_host_req(tmp_path: Path) -> None:
+    code = "tls.connect({ host: req.query.host, port: 443 });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-122" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_122_no_fire_on_hardcoded_tls_host(tmp_path: Path) -> None:
+    code = "tls.connect({ host: 'example.com', port: 443 });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-122" for f in analyze_typescript(p))
+
+
+# ── TS-123: nats.connect(req.xxx) — NATS server SSRF ─────────────────────────
+
+
+def test_ts_123_fires_on_nats_connect_req(tmp_path: Path) -> None:
+    code = "await nats.connect(req.query.natsServer);\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-123" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_123_no_fire_on_hardcoded_nats_server(tmp_path: Path) -> None:
+    code = "await nats.connect('nats://localhost:4222');\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-123" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_twenty_three_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 124)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
