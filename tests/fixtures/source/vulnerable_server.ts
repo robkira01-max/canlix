@@ -857,3 +857,22 @@ import { WebClient } from "@slack/web-api";
 function getSlackClient(req: any, token: string): WebClient {
   return new WebClient(token, { slackApiUrl: req.params.slackApi });
 }
+
+// TS-160: vault({ endpoint: req.query.xxx }) -- Vault token exfil (node-vault)
+import vault from "node-vault";
+function getVaultClient(req: any) {
+  return vault({ endpoint: req.query.vaultAddr });
+}
+
+// TS-161: new SecretClient(req.query.xxx, credential) -- Azure Key Vault cred exfil
+import { SecretClient } from "@azure/keyvault-secrets";
+function getKeyVaultClient(req: any, credential: any): SecretClient {
+  return new SecretClient(req.body.vaultUrl, credential);
+}
+
+// TS-162: sftp.connect({ host: req.query.xxx }) -- SFTP SSRF / credential exfil
+import SftpClient from "ssh2-sftp-client";
+async function connectSftp(req: any) {
+  const sftp = new SftpClient();
+  return sftp.connect({ host: req.params.sftpHost, username: "svc" });
+}

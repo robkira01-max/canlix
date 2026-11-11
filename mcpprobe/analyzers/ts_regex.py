@@ -1513,6 +1513,38 @@ _SLACK_API_URL_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-160: vault({ endpoint: req.xxx }) -- Vault token exfil (node-vault)
+# ---------------------------------------------------------------------------
+
+_NODE_VAULT_ENDPOINT_REQ = re.compile(
+    r"""(?x)
+    \bvault\s*\(\s*\{[^}]*\bendpoint\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-161: new SecretClient(req.xxx, credential) -- Azure Key Vault cred exfil
+# ---------------------------------------------------------------------------
+
+_SECRET_CLIENT_URL_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+(?:SecretClient|KeyClient|CertificateClient)\s*\(\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-162: sftp.connect({ host: req.xxx }) -- SFTP SSRF / credential exfil
+# ---------------------------------------------------------------------------
+
+_SFTP_CONNECT_HOST_REQ = re.compile(
+    r"""(?x)
+    \b(?:sftp|ssh|conn)\s*\.\s*connect\s*\(\s*\{[^}]*\bhost\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -3133,6 +3165,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "new WebClient(token, {slackApiUrl: req.xxx}) -- user-controlled API URL exfiltrates the Slack token",
             "Hardcode the Slack API URL. Never accept API base URLs from request data.",
+        )
+    # TS-160: vault({ endpoint: req.xxx }) -- Vault token exfil (node-vault)
+    if _NODE_VAULT_ENDPOINT_REQ.search(raw):
+        _add(
+            "TS-160",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "vault({endpoint: req.xxx}) -- user-controlled Vault address exfiltrates the Vault token",
+            "Hardcode the Vault address in configuration. Never accept it from request data.",
+        )
+    # TS-161: new SecretClient(req.xxx, credential) -- Azure Key Vault cred exfil
+    if _SECRET_CLIENT_URL_REQ.search(raw):
+        _add(
+            "TS-161",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new SecretClient(req.xxx, ...) -- user-controlled vault URL sends Azure AD tokens to attacker",
+            "Hardcode the Key Vault URL. Never accept vault endpoints from request data.",
+        )
+    # TS-162: sftp.connect({ host: req.xxx }) -- SFTP SSRF / credential exfil
+    if _SFTP_CONNECT_HOST_REQ.search(raw):
+        _add(
+            "TS-162",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "sftp.connect({host: req.xxx}) -- user-controlled SFTP host enables SSRF and credential exfil",
+            "Hardcode the SFTP host. Never accept file-transfer hosts from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

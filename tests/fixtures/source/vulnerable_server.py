@@ -1005,3 +1005,23 @@ def get_statsd_client(host: str):
 def get_slack_webhook(url: str):
     # SRC-159: slack_sdk.WebhookClient with user-controlled URL — message exfiltration
     return slack_sdk.WebhookClient(url=url)
+
+
+import hvac  # noqa: E402
+import pysftp  # noqa: E402
+from azure.keyvault.secrets import SecretClient  # noqa: E402
+
+
+def get_vault_client(url: str):
+    # SRC-160: hvac.Client with user-controlled URL — Vault token exfiltration
+    return hvac.Client(url=url)
+
+
+def get_keyvault_client(vault_url: str):
+    # SRC-161: SecretClient with user-controlled vault_url — Azure AD token exfiltration
+    return SecretClient(vault_url=vault_url, credential=None)
+
+
+def get_sftp_connection(host: str):
+    # SRC-162: pysftp.Connection with user-controlled host — SSRF / credential exfiltration
+    return pysftp.Connection(host=host)

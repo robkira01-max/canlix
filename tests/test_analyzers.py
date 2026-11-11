@@ -3169,3 +3169,69 @@ def test_vulnerable_fixture_has_all_one_hundred_fifty_nine_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 160)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-160: hvac.Client(url=param) — Vault token exfiltration ───────────────
+
+
+def test_src_160_fires_on_hvac_url_param(tmp_path: Path) -> None:
+    code = "import hvac\ndef client(url: str):\n    return hvac.Client(url=url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-160" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_160_no_fire_on_hardcoded_vault_url(tmp_path: Path) -> None:
+    code = "import hvac\ndef client():\n    return hvac.Client(url='https://vault.internal:8200')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-160" for f in analyze_python(p))
+
+
+# ── SRC-161: SecretClient(vault_url=param) — Key Vault cred exfil ────────────
+
+
+def test_src_161_fires_on_keyvault_url_param(tmp_path: Path) -> None:
+    code = (
+        "from azure.keyvault.secrets import SecretClient\n"
+        "def client(vault_url: str):\n"
+        "    return SecretClient(vault_url=vault_url, credential=None)\n"
+    )
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-161" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_161_no_fire_on_hardcoded_keyvault_url(tmp_path: Path) -> None:
+    code = (
+        "from azure.keyvault.secrets import SecretClient\n"
+        "def client():\n"
+        "    return SecretClient(vault_url='https://kv.vault.azure.net', credential=None)\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-161" for f in analyze_python(p))
+
+
+# ── SRC-162: pysftp.Connection(host=param) — SFTP SSRF / cred exfil ──────────
+
+
+def test_src_162_fires_on_pysftp_host_param(tmp_path: Path) -> None:
+    code = "import pysftp\ndef conn(host: str):\n    return pysftp.Connection(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-162" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_162_fires_on_pysftp_positional_param(tmp_path: Path) -> None:
+    code = "import pysftp\ndef conn(host: str):\n    return pysftp.Connection(host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-162" for f in analyze_python(p))
+
+
+def test_src_162_no_fire_on_hardcoded_sftp_host(tmp_path: Path) -> None:
+    code = "import pysftp\ndef conn():\n    return pysftp.Connection('sftp.internal')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-162" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_sixty_two_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 163)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

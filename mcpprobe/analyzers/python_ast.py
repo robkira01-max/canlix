@@ -416,6 +416,21 @@ _OTLP_EXPORTER_FUNCS = frozenset(
 _STATSD_CLIENT_FUNCS = frozenset({"statsd.StatsClient", "StatsClient"})
 # SRC-159: slack_sdk.WebhookClient(url=param) — message exfil via user-controlled Slack webhook URL
 _SLACK_CLIENT_FUNCS = frozenset({"slack_sdk.WebhookClient", "WebhookClient", "slack_sdk.webhook.WebhookClient"})
+# SRC-160: hvac.Client(url=param) — Vault token exfil via user-controlled Vault address
+_HVAC_CLIENT_FUNCS = frozenset({"hvac.Client"})
+# SRC-161: azure.keyvault.secrets.SecretClient(vault_url=param) — Key Vault credential exfil
+_KEYVAULT_CLIENT_FUNCS = frozenset(
+    {
+        "azure.keyvault.secrets.SecretClient",
+        "azure.keyvault.keys.KeyClient",
+        "azure.keyvault.certificates.CertificateClient",
+        "SecretClient",
+        "KeyClient",
+        "CertificateClient",
+    }
+)
+# SRC-162: pysftp.Connection(host=param) — SSRF / credential exfil via user-controlled SFTP host
+_PYSFTP_CONNECTION_FUNCS = frozenset({"pysftp.Connection"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -3088,6 +3103,68 @@ class _Visitor(ast.NodeVisitor):
                     f"WebhookClient({node.args[0].id}) — user-controlled webhook URL sends"
                     " notification contents to an attacker-chosen server",
                     "Hardcode the Slack webhook URL in configuration. Never accept it from user input.",
+                )
+
+        # SRC-160: hvac.Client(url=param) — Vault token exfil via user-controlled Vault address
+        if fname in _HVAC_CLIENT_FUNCS and self._param_names:
+            u_kw = next((kw for kw in node.keywords if kw.arg == "url"), None)
+            if u_kw and isinstance(u_kw.value, ast.Name) and u_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-160",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"hvac.Client(url={u_kw.value.id}) — user-controlled Vault address sends the"
+                    " Vault token (and every secret read through it) to an attacker server",
+                    "Hardcode the Vault address in configuration. Never accept it from user input.",
+                )
+
+        # SRC-161: azure.keyvault SecretClient(vault_url=param) — Key Vault credential exfil
+        if fname in _KEYVAULT_CLIENT_FUNCS and self._param_names:
+            vu_kw = next((kw for kw in node.keywords if kw.arg == "vault_url"), None)
+            if vu_kw and isinstance(vu_kw.value, ast.Name) and vu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-161",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"SecretClient(vault_url={vu_kw.value.id}) — user-controlled vault URL sends"
+                    " Azure AD tokens to an attacker-chosen endpoint",
+                    "Hardcode the Key Vault URL. Never accept vault endpoints from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-161",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"SecretClient({node.args[0].id}, ...) — user-controlled vault URL sends"
+                    " Azure AD tokens to an attacker-chosen endpoint",
+                    "Hardcode the Key Vault URL. Never accept vault endpoints from user input.",
+                )
+
+        # SRC-162: pysftp.Connection(host=param) — SSRF / credential exfil via user-controlled SFTP host
+        if fname in _PYSFTP_CONNECTION_FUNCS and self._param_names:
+            h_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if h_kw and isinstance(h_kw.value, ast.Name) and h_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-162",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pysftp.Connection(host={h_kw.value.id}) — user-controlled SFTP host enables"
+                    " SSRF and sends SSH credentials to an attacker-chosen server",
+                    "Hardcode the SFTP host. Never accept file-transfer hosts from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-162",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pysftp.Connection({node.args[0].id}) — user-controlled SFTP host enables"
+                    " SSRF and sends SSH credentials to an attacker-chosen server",
+                    "Hardcode the SFTP host. Never accept file-transfer hosts from user input.",
                 )
 
         self.generic_visit(node)

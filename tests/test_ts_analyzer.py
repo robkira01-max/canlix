@@ -3210,3 +3210,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_fifty_nine_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 160)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-160: vault({ endpoint: req.xxx }) — Vault token exfil ─────────────────
+
+
+def test_ts_160_fires_on_vault_endpoint_req(tmp_path: Path) -> None:
+    code = "const v = vault({ endpoint: req.query.vaultAddr });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-160" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_160_no_fire_on_hardcoded_vault_endpoint(tmp_path: Path) -> None:
+    code = "const v = vault({ endpoint: 'https://vault.internal:8200' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-160" for f in analyze_typescript(p))
+
+
+# ── TS-161: new SecretClient(req.xxx, credential) — Key Vault exfil ──────────
+
+
+def test_ts_161_fires_on_secret_client_req_url(tmp_path: Path) -> None:
+    code = "const c = new SecretClient(req.body.vaultUrl, credential);\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-161" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_161_no_fire_on_hardcoded_keyvault_url(tmp_path: Path) -> None:
+    code = "const c = new SecretClient('https://kv.vault.azure.net', credential);\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-161" for f in analyze_typescript(p))
+
+
+# ── TS-162: sftp.connect({ host: req.xxx }) — SFTP SSRF / cred exfil ─────────
+
+
+def test_ts_162_fires_on_sftp_connect_host_req(tmp_path: Path) -> None:
+    code = "await sftp.connect({ host: req.params.sftpHost, username: 'svc' });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-162" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_162_no_fire_on_hardcoded_sftp_host(tmp_path: Path) -> None:
+    code = "await sftp.connect({ host: 'sftp.internal', username: 'svc' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-162" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_sixty_two_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 163)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
