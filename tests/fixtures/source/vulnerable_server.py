@@ -1025,3 +1025,23 @@ def get_keyvault_client(vault_url: str):
 def get_sftp_connection(host: str):
     # SRC-162: pysftp.Connection with user-controlled host — SSRF / credential exfiltration
     return pysftp.Connection(host=host)
+
+
+import docker  # noqa: E402
+import kubernetes  # noqa: E402
+import winrm  # noqa: E402
+
+
+def get_docker_client(base_url: str):
+    # SRC-163: docker.DockerClient with user-controlled base_url — rogue Docker daemon
+    return docker.DockerClient(base_url=base_url)
+
+
+def get_k8s_config(host: str):
+    # SRC-164: kubernetes Configuration with user-controlled host — cluster credential exfiltration
+    return kubernetes.client.Configuration(host=host)
+
+
+def get_winrm_session(target: str):
+    # SRC-165: winrm.Session with user-controlled target — Windows credential exfiltration
+    return winrm.Session(target)

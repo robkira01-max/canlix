@@ -876,3 +876,20 @@ async function connectSftp(req: any) {
   const sftp = new SftpClient();
   return sftp.connect({ host: req.params.sftpHost, username: "svc" });
 }
+
+// TS-163: new Docker({ host: req.query.xxx }) -- attacker-controlled Docker daemon
+import Docker from "dockerode";
+function getDockerClient(req: any): Docker {
+  return new Docker({ host: req.query.dockerHost, port: 2375 });
+}
+
+// TS-164: got.extend({ prefixUrl: req.query.xxx }) -- persistent SSRF via got
+import got from "got";
+function getApiClient(req: any) {
+  return got.extend({ prefixUrl: req.body.apiBase });
+}
+
+// TS-165: axios.defaults.baseURL = req.query.xxx -- global axios poisoning
+function configureAxios(req: any) {
+  axios.defaults.baseURL = req.query.apiRoot;
+}

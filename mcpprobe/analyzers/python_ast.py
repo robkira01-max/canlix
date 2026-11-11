@@ -431,6 +431,12 @@ _KEYVAULT_CLIENT_FUNCS = frozenset(
 )
 # SRC-162: pysftp.Connection(host=param) — SSRF / credential exfil via user-controlled SFTP host
 _PYSFTP_CONNECTION_FUNCS = frozenset({"pysftp.Connection"})
+# SRC-163: docker.DockerClient(base_url=param) — attacker-controlled Docker daemon (container escape)
+_DOCKER_CLIENT_FUNCS = frozenset({"docker.DockerClient", "DockerClient", "docker.APIClient"})
+# SRC-164: kubernetes.client.Configuration(host=param) — K8s tokens sent to attacker apiserver
+_K8S_CONFIG_FUNCS = frozenset({"kubernetes.client.Configuration", "Configuration"})
+# SRC-165: winrm.Session(param) — Windows credential exfil via user-controlled WinRM target
+_WINRM_SESSION_FUNCS = frozenset({"winrm.Session"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -3165,6 +3171,47 @@ class _Visitor(ast.NodeVisitor):
                     f"pysftp.Connection({node.args[0].id}) — user-controlled SFTP host enables"
                     " SSRF and sends SSH credentials to an attacker-chosen server",
                     "Hardcode the SFTP host. Never accept file-transfer hosts from user input.",
+                )
+
+        # SRC-163: docker.DockerClient(base_url=param) — attacker-controlled Docker daemon
+        if fname in _DOCKER_CLIENT_FUNCS and self._param_names:
+            bu_kw = next((kw for kw in node.keywords if kw.arg == "base_url"), None)
+            if bu_kw and isinstance(bu_kw.value, ast.Name) and bu_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-163",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"DockerClient(base_url={bu_kw.value.id}) — user-controlled daemon URL lets an"
+                    " attacker serve a rogue Docker API (poisoned images, data exfil)",
+                    "Hardcode the Docker daemon socket/URL. Never accept it from user input.",
+                )
+
+        # SRC-164: kubernetes.client.Configuration(host=param) — K8s tokens to attacker apiserver
+        if fname in _K8S_CONFIG_FUNCS and self._param_names:
+            h_kw = next((kw for kw in node.keywords if kw.arg == "host"), None)
+            if h_kw and isinstance(h_kw.value, ast.Name) and h_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-164",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"kubernetes Configuration(host={h_kw.value.id}) — user-controlled apiserver"
+                    " URL sends cluster credentials to an attacker-chosen endpoint",
+                    "Hardcode the Kubernetes apiserver URL. Never accept it from user input.",
+                )
+
+        # SRC-165: winrm.Session(param) — Windows credential exfil via user-controlled target
+        if fname in _WINRM_SESSION_FUNCS and self._param_names:
+            if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-165",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"winrm.Session({node.args[0].id}) — user-controlled WinRM target sends"
+                    " Windows credentials to an attacker-chosen host",
+                    "Hardcode the WinRM endpoint. Never accept remote-management hosts from user input.",
                 )
 
         self.generic_visit(node)

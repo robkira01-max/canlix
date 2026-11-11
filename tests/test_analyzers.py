@@ -3235,3 +3235,58 @@ def test_vulnerable_fixture_has_all_one_hundred_sixty_two_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"SRC-{i:03d}" for i in range(1, 163)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── SRC-163: docker.DockerClient(base_url=param) — rogue Docker daemon ───────
+
+
+def test_src_163_fires_on_docker_base_url_param(tmp_path: Path) -> None:
+    code = "import docker\ndef client(base_url: str):\n    return docker.DockerClient(base_url=base_url)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-163" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_163_no_fire_on_hardcoded_docker_socket(tmp_path: Path) -> None:
+    code = "import docker\ndef client():\n    return docker.DockerClient(base_url='unix:///var/run/docker.sock')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-163" for f in analyze_python(p))
+
+
+# ── SRC-164: kubernetes Configuration(host=param) — K8s cred exfil ───────────
+
+
+def test_src_164_fires_on_k8s_host_param(tmp_path: Path) -> None:
+    code = "import kubernetes\ndef config(host: str):\n    return kubernetes.client.Configuration(host=host)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-164" and f.severity == Severity.CRITICAL for f in analyze_python(p))
+
+
+def test_src_164_no_fire_on_hardcoded_k8s_host(tmp_path: Path) -> None:
+    code = (
+        "import kubernetes\ndef config():\n"
+        "    return kubernetes.client.Configuration(host='https://k8s.internal:6443')\n"
+    )
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-164" for f in analyze_python(p))
+
+
+# ── SRC-165: winrm.Session(param) — Windows credential exfil ─────────────────
+
+
+def test_src_165_fires_on_winrm_target_param(tmp_path: Path) -> None:
+    code = "import winrm\ndef session(target: str):\n    return winrm.Session(target)\n"
+    p = _py(tmp_path, code)
+    assert any(f.rule_id == "SRC-165" and f.severity == Severity.HIGH for f in analyze_python(p))
+
+
+def test_src_165_no_fire_on_hardcoded_winrm_target(tmp_path: Path) -> None:
+    code = "import winrm\ndef session():\n    return winrm.Session('winsrv.internal')\n"
+    p = _py(tmp_path, code)
+    assert not any(f.rule_id == "SRC-165" for f in analyze_python(p))
+
+
+def test_vulnerable_fixture_has_all_one_hundred_sixty_five_rules():
+    findings = analyze_python(FIXTURES / "vulnerable_server.py")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"SRC-{i:03d}" for i in range(1, 166)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

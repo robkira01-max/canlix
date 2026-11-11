@@ -3262,3 +3262,55 @@ def test_vulnerable_ts_fixture_has_all_one_hundred_sixty_two_rules():
     rule_ids = {f.rule_id for f in findings}
     expected = {f"TS-{i:03d}" for i in range(1, 163)}
     assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"
+
+
+# ── TS-163: new Docker({ host: req.xxx }) — rogue Docker daemon ──────────────
+
+
+def test_ts_163_fires_on_dockerode_host_req(tmp_path: Path) -> None:
+    code = "const d = new Docker({ host: req.query.dockerHost, port: 2375 });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-163" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_163_no_fire_on_hardcoded_docker_host(tmp_path: Path) -> None:
+    code = "const d = new Docker({ host: 'docker.internal', port: 2375 });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-163" for f in analyze_typescript(p))
+
+
+# ── TS-164: got.extend({ prefixUrl: req.xxx }) — persistent SSRF ─────────────
+
+
+def test_ts_164_fires_on_got_prefix_url_req(tmp_path: Path) -> None:
+    code = "const api = got.extend({ prefixUrl: req.body.apiBase });\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-164" and f.severity == Severity.HIGH for f in analyze_typescript(p))
+
+
+def test_ts_164_no_fire_on_hardcoded_got_prefix(tmp_path: Path) -> None:
+    code = "const api = got.extend({ prefixUrl: 'https://api.example.com' });\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-164" for f in analyze_typescript(p))
+
+
+# ── TS-165: axios.defaults.baseURL = req.xxx — global poisoning ──────────────
+
+
+def test_ts_165_fires_on_axios_defaults_base_url_req(tmp_path: Path) -> None:
+    code = "axios.defaults.baseURL = req.query.apiRoot;\n"
+    p = _ts(tmp_path, code)
+    assert any(f.rule_id == "TS-165" and f.severity == Severity.CRITICAL for f in analyze_typescript(p))
+
+
+def test_ts_165_no_fire_on_hardcoded_axios_default(tmp_path: Path) -> None:
+    code = "axios.defaults.baseURL = 'https://api.example.com';\n"
+    p = _ts(tmp_path, code)
+    assert not any(f.rule_id == "TS-165" for f in analyze_typescript(p))
+
+
+def test_vulnerable_ts_fixture_has_all_one_hundred_sixty_five_rules():
+    findings = analyze_typescript(FIXTURES / "vulnerable_server.ts")
+    rule_ids = {f.rule_id for f in findings}
+    expected = {f"TS-{i:03d}" for i in range(1, 166)}
+    assert expected <= rule_ids, f"Missing rules: {expected - rule_ids}"

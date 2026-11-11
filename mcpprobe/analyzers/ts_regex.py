@@ -1545,6 +1545,37 @@ _SFTP_CONNECT_HOST_REQ = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# TS-163: new Docker({ host: req.xxx }) -- attacker-controlled Docker daemon (dockerode)
+# ---------------------------------------------------------------------------
+
+_DOCKERODE_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Docker\s*\(\s*\{[^}]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-164: got.extend({ prefixUrl: req.xxx }) -- persistent SSRF via got instance
+# ---------------------------------------------------------------------------
+
+_GOT_PREFIX_URL_REQ = re.compile(
+    r"""(?x)
+    \b(?:got|ky)\s*\.\s*extend\s*\(\s*\{[^}]*\bprefixUrl\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-165: axios.defaults.baseURL = req.xxx -- global axios base URL poisoning
+# ---------------------------------------------------------------------------
+
+_AXIOS_DEFAULTS_BASE_URL_REQ = re.compile(
+    r"""(?x)
+    \baxios\s*\.\s*defaults\s*\.\s*baseURL\s*=\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
 # TS-052: document.getElementById(req.xxx).innerHTML — DOM XSS via id injection
 # ---------------------------------------------------------------------------
 
@@ -3192,6 +3223,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "sftp.connect({host: req.xxx}) -- user-controlled SFTP host enables SSRF and credential exfil",
             "Hardcode the SFTP host. Never accept file-transfer hosts from request data.",
+        )
+    # TS-163: new Docker({ host: req.xxx }) -- attacker-controlled Docker daemon
+    if _DOCKERODE_HOST_REQ.search(raw):
+        _add(
+            "TS-163",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "new Docker({host: req.xxx}) -- user-controlled Docker daemon enables rogue container control",
+            "Hardcode the Docker daemon socket/host. Never accept it from request data.",
+        )
+    # TS-164: got.extend({ prefixUrl: req.xxx }) -- persistent SSRF via got instance
+    if _GOT_PREFIX_URL_REQ.search(raw):
+        _add(
+            "TS-164",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "got.extend({prefixUrl: req.xxx}) -- user-controlled prefix URL poisons every request of the instance",
+            "Hardcode the prefix URL. Never accept HTTP base URLs from request data.",
+        )
+    # TS-165: axios.defaults.baseURL = req.xxx -- global axios base URL poisoning
+    if _AXIOS_DEFAULTS_BASE_URL_REQ.search(raw):
+        _add(
+            "TS-165",
+            Severity.CRITICAL,
+            Confidence.HIGH,
+            "axios.defaults.baseURL = req.xxx -- user-controlled global base URL poisons all axios requests",
+            "Never assign request data to axios.defaults. Configure the base URL once at startup.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):
