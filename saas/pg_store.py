@@ -16,7 +16,7 @@ from psycopg_pool import ConnectionPool
 from saas.diff import ScanDiff, diff_scans
 from saas.ingest import NormalizedFinding, compute_score
 from saas.security import hash_token, lookup_key, new_api_token, verify_token
-from saas.store import PLANS, Org, PlanLimitError, Project, Scan, UnknownPlanError, _ttl_to_dt
+from saas.store import PLANS, EmailAlreadyExistsError, Org, PlanLimitError, Project, Scan, UnknownPlanError, _ttl_to_dt
 
 
 def _jsonb(value: object) -> object:
@@ -117,6 +117,65 @@ class PgStore:
                     [new_key, new_digest, org_id, expires_at],
                 )
         return new_token
+
+    def register(
+        self,
+        name: str,
+        email: str,
+        password: str,
+        plan: str = "free",
+        token_ttl_days: int | None = None,
+    ) -> tuple[Org, str]:
+        """Create an org with email/password credentials. Raises EmailAlreadyExistsError on duplicate."""
+        import psycopg.errors
+
+        from saas.auth import hash_password
+
+        if plan not in PLANS:
+            raise UnknownPlanError(plan)
+        email_key = email.lower().strip()
+        pw_hash = hash_password(password)
+        token, key, digest = new_api_token()
+        org_id = uuid.uuid4().hex
+        expires_at = _ttl_to_dt(token_ttl_days)
+        with self._pool.connection() as conn:
+            with conn.transaction():
+                try:
+                    conn.execute(
+                        "INSERT INTO orgs(id, name, plan, email, password_hash) VALUES(%s, %s, %s, %s, %s)",
+                        [org_id, name, plan, email_key, pw_hash],
+                    )
+                except psycopg.errors.UniqueViolation:
+                    raise EmailAlreadyExistsError(email_key)
+                conn.execute(
+                    "INSERT INTO tokens(lookup_key, digest, org_id, expires_at) VALUES(%s, %s, %s, %s)",
+                    [key, digest, org_id, expires_at],
+                )
+        return Org(org_id, name, plan), token
+
+    def login_with_email(self, email: str, password: str) -> str | None:
+        """Verify email+password and return a fresh API token, or None on failure."""
+        from saas.auth import dummy_verify, verify_password
+
+        email_key = email.lower().strip()
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT id, password_hash FROM orgs WHERE email = %s",
+                [email_key],
+            ).fetchone()
+        if row is None:
+            dummy_verify(password)
+            return None
+        org_id, pw_hash = row
+        if not verify_password(password, pw_hash):
+            return None
+        token, key, digest = new_api_token()
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO tokens(lookup_key, digest, org_id) VALUES(%s, %s, %s)",
+                [key, digest, org_id],
+            )
+        return token
 
     # ------------------------------------------------------------------
     # Project

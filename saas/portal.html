@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canlix — Security Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+    --accent: #6366f1; --accent2: #818cf8; --danger: #ef4444;
+    --ok: #22c55e; --warn: #f59e0b;
+    --text: #e2e8f0; --muted: #64748b;
+    --radius: 8px; --font: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font);
+    min-height: 100vh; display: flex; flex-direction: column; }
+  a { color: var(--accent2); text-decoration: none; }
+  button { cursor: pointer; border: none; border-radius: var(--radius);
+    font-family: inherit; font-size: 0.875rem; transition: opacity .15s; }
+  button:hover { opacity: .85; }
+  button:disabled { opacity: .4; cursor: default; }
+  input { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); font-family: inherit; font-size: 0.875rem;
+    padding: .5rem .75rem; width: 100%; outline: none; }
+  input:focus { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #fff; padding: .55rem 1.1rem; }
+  .btn-secondary { background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); padding: .5rem 1rem; }
+  .btn-danger { background: var(--danger); color: #fff; padding: .5rem 1rem; font-size: .8rem; }
+
+  /* ---- Nav ---- */
+  nav { background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: .75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  nav .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: -.02em; }
+  nav .logo span { color: var(--accent); }
+  nav .spacer { flex: 1; }
+  nav .org-name { font-size: .85rem; color: var(--muted); }
+  nav #btn-logout { display: none; }
+
+  /* ---- Sections ---- */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ---- Auth page ---- */
+  #auth-page { display: flex; justify-content: center; align-items: center;
+    flex: 1; padding: 2rem 1rem; }
+  .auth-box { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 380px; }
+  .auth-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+  .auth-tab { flex: 1; padding: .5rem; border-radius: var(--radius);
+    background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .auth-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .35rem; }
+  .auth-box h2 { font-size: 1.1rem; margin-bottom: 1.5rem; }
+  .auth-box .btn-primary { width: 100%; margin-top: .5rem; }
+  .msg { font-size: .8rem; margin-top: .75rem; padding: .5rem; border-radius: 4px; }
+  .msg.error { background: #3b1a1a; color: #fca5a5; }
+  .msg.success { background: #14291f; color: #86efac; }
+
+  /* ---- Dashboard ---- */
+  #dashboard { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .dash-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+  .dash-header h1 { font-size: 1.3rem; }
+  .badge { background: var(--accent); color: #fff; font-size: .7rem;
+    padding: .2rem .5rem; border-radius: 999px; text-transform: uppercase; }
+
+  /* ---- Cards ---- */
+  .card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.25rem; }
+  .card-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); margin-bottom: .75rem; }
+
+  /* ---- Token card ---- */
+  .token-row { display: flex; align-items: center; gap: .5rem; }
+  .token-display { font-family: monospace; font-size: .8rem; color: var(--accent2);
+    flex: 1; word-break: break-all; }
+
+  /* ---- Projects ---- */
+  .new-project-row { display: flex; gap: .5rem; margin-bottom: 1rem; }
+  .new-project-row input { flex: 1; }
+  .project-item { display: flex; align-items: center; padding: .6rem .75rem;
+    border: 1px solid var(--border); border-radius: 6px; margin-bottom: .5rem; gap: .75rem; }
+  .project-item .pname { flex: 1; font-size: .9rem; }
+  .project-item .scans-count { font-size: .75rem; color: var(--muted); }
+  .score-pill { font-size: .7rem; padding: .2rem .5rem; border-radius: 999px;
+    font-weight: 600; min-width: 36px; text-align: center; }
+  .score-high { background: #14291f; color: #86efac; }
+  .score-mid  { background: #2a200e; color: #fcd34d; }
+  .score-low  { background: #3b1a1a; color: #fca5a5; }
+  #empty-projects { color: var(--muted); font-size: .875rem; }
+
+  /* ---- Scan history ---- */
+  .scan-row { font-size: .8rem; display: flex; align-items: center;
+    gap: .75rem; padding: .5rem 0; border-bottom: 1px solid var(--border); }
+  .scan-row:last-child { border-bottom: none; }
+  .scan-row .scan-date { color: var(--muted); min-width: 130px; }
+  .scan-row .scan-proj { color: var(--accent2); flex: 1; }
+  .scan-row .scan-diff { color: var(--muted); font-size: .75rem; }
+  #scan-history-empty { color: var(--muted); font-size: .875rem; }
+  #back-to-projects { display: none; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo"><span>◆</span> Canlix</div>
+  <div class="spacer"></div>
+  <span class="org-name" id="nav-org"></span>
+  <button class="btn-secondary" id="btn-logout" onclick="logout()">Log out</button>
+</nav>
+
+<!-- Auth page -->
+<div id="auth-page">
+  <div class="auth-box">
+    <h2>Welcome to Canlix</h2>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="showTab('login')">Log in</button>
+      <button class="auth-tab" id="tab-register" onclick="showTab('register')">Register</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="form-login">
+      <div class="form-group"><label>Email</label><input id="l-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="form-group"><label>Password</label><input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn-primary" onclick="doLogin()">Log in</button>
+      <div id="login-msg" class="msg" style="display:none"></div>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none">
+      <div class="form-group"><label>Organisation name</label><input id="r-name" type="text" placeholder="Acme Security" autocomplete="organization"></div>
+      <div class="form-group"><label>Email</label><input id="r-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="form-group"><label>Password (min 8 chars)</label><input id="r-pass" type="password" placeholder="••••••••" autocomplete="new-password"></div>
+      <button class="btn-primary" onclick="doRegister()">Create account</button>
+      <div id="register-msg" class="msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" style="display:none">
+
+  <div class="dash-header">
+    <h1 id="dash-org-name">Dashboard</h1>
+    <span class="badge" id="dash-plan">free</span>
+  </div>
+
+  <!-- Token management -->
+  <div class="card">
+    <div class="card-title">API Token</div>
+    <div class="token-row">
+      <span class="token-display" id="token-display">cnx_••••••••••••••••••••••••••••••••••••••••••</span>
+      <button class="btn-secondary" style="font-size:.75rem;padding:.4rem .7rem" onclick="toggleToken()">Show</button>
+      <button class="btn-secondary" style="font-size:.75rem;padding:.4rem .7rem" onclick="copyToken()">Copy</button>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-top:.75rem">
+      <button class="btn-secondary" style="font-size:.75rem" onclick="rotateToken()">Rotate token</button>
+      <button class="btn-danger" onclick="revokeToken()">Revoke &amp; log out</button>
+    </div>
+    <div id="token-msg" class="msg" style="display:none;margin-top:.5rem"></div>
+  </div>
+
+  <!-- Projects -->
+  <div class="card">
+    <div class="card-title">Projects</div>
+    <div class="new-project-row">
+      <input id="new-proj-name" type="text" placeholder="New project name…" onkeydown="if(event.key==='Enter')createProject()">
+      <button class="btn-primary" onclick="createProject()">Add</button>
+    </div>
+    <div id="projects-list"><p id="empty-projects" style="color:var(--muted);font-size:.875rem">No projects yet.</p></div>
+  </div>
+
+  <!-- Scan history -->
+  <div class="card">
+    <div class="card-title">Recent scans <span id="scan-history-title" style="color:var(--muted);font-size:.7rem"></span></div>
+    <div id="scan-history"><p id="scan-history-empty" style="color:var(--muted);font-size:.875rem">No scans recorded yet.</p></div>
+  </div>
+
+</div>
+
+<script>
+const API = '';   // same origin
+let _token = '';
+let _tokenVisible = false;
+let _projects = [];
+
+// ---------- helpers ----------
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (_token) opts.headers['Authorization'] = 'Bearer ' + _token;
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  if (!r.ok) {
+    const msg = typeof data === 'object' && data.detail ? data.detail : (typeof data === 'string' ? data : r.status);
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
+function showMsg(id, type, text) {
+  const el = document.getElementById(id);
+  el.className = 'msg ' + type;
+  el.textContent = text;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+
+function saveSession(tok) {
+  _token = tok;
+  sessionStorage.setItem('cnx_token', tok);
+}
+
+function clearSession() {
+  _token = '';
+  sessionStorage.removeItem('cnx_token');
+}
+
+// ---------- auth ----------
+function showTab(tab) {
+  document.getElementById('form-login').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tab-login').className = 'auth-tab' + (tab === 'login' ? ' active' : '');
+  document.getElementById('tab-register').className = 'auth-tab' + (tab === 'register' ? ' active' : '');
+}
+
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const password = document.getElementById('l-pass').value;
+  try {
+    const d = await api('POST', '/auth/login', { email, password });
+    saveSession(d.token);
+    await showDashboard();
+  } catch (e) {
+    showMsg('login-msg', 'error', 'Login failed: ' + e.message);
+  }
+}
+
+async function doRegister() {
+  const name = document.getElementById('r-name').value.trim();
+  const email = document.getElementById('r-email').value.trim();
+  const password = document.getElementById('r-pass').value;
+  if (password.length < 8) { showMsg('register-msg', 'error', 'Password must be at least 8 characters.'); return; }
+  try {
+    const d = await api('POST', '/auth/register', { name, email, password });
+    saveSession(d.token);
+    await showDashboard();
+  } catch (e) {
+    showMsg('register-msg', 'error', 'Registration failed: ' + e.message);
+  }
+}
+
+async function logout() {
+  clearSession();
+  document.getElementById('auth-page').style.display = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('nav-org').textContent = '';
+}
+
+// ---------- dashboard ----------
+async function showDashboard() {
+  const me = await api('GET', '/orgs/me');
+  document.getElementById('dash-org-name').textContent = me.name;
+  document.getElementById('dash-plan').textContent = me.plan;
+  document.getElementById('nav-org').textContent = me.name;
+  document.getElementById('auth-page').style.display = 'none';
+  document.getElementById('dashboard').style.display = '';
+  document.getElementById('btn-logout').style.display = '';
+  _tokenVisible = false;
+  document.getElementById('token-display').textContent = 'cnx_' + '•'.repeat(40);
+  await loadProjects();
+}
+
+// ---------- token ----------
+function toggleToken() {
+  const el = document.getElementById('token-display');
+  _tokenVisible = !_tokenVisible;
+  el.textContent = _tokenVisible ? _token : 'cnx_' + '•'.repeat(40);
+  document.querySelectorAll('.token-row button')[0].textContent = _tokenVisible ? 'Hide' : 'Show';
+}
+
+function copyToken() {
+  navigator.clipboard.writeText(_token).then(() => showMsg('token-msg', 'success', 'Token copied to clipboard.'));
+}
+
+async function rotateToken() {
+  if (!confirm('Rotate your API token? The current token will stop working immediately.')) return;
+  try {
+    const d = await api('POST', '/orgs/me/token/rotate', {});
+    saveSession(d.token);
+    _tokenVisible = true;
+    document.getElementById('token-display').textContent = d.token;
+    document.querySelectorAll('.token-row button')[0].textContent = 'Hide';
+    showMsg('token-msg', 'success', 'Token rotated — copy it now.');
+  } catch (e) {
+    showMsg('token-msg', 'error', 'Failed: ' + e.message);
+  }
+}
+
+async function revokeToken() {
+  if (!confirm('Revoke your token? You will be logged out and need to log in again.')) return;
+  try {
+    await api('DELETE', '/orgs/me/token');
+    clearSession();
+    logout();
+  } catch (e) {
+    showMsg('token-msg', 'error', 'Failed: ' + e.message);
+  }
+}
+
+// ---------- projects ----------
+async function loadProjects() {
+  try {
+    _projects = await api('GET', '/projects');
+    renderProjects();
+    await loadRecentScans();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function scorePill(score) {
+  const cls = score >= 70 ? 'score-high' : score >= 40 ? 'score-mid' : 'score-low';
+  return `<span class="score-pill ${cls}">${score}</span>`;
+}
+
+function renderProjects() {
+  const el = document.getElementById('projects-list');
+  if (!_projects.length) {
+    el.innerHTML = '<p id="empty-projects" style="color:var(--muted);font-size:.875rem">No projects yet.</p>';
+    return;
+  }
+  el.innerHTML = _projects.map(p =>
+    `<div class="project-item">
+      <span class="pname">${esc(p.name)}</span>
+      <a href="#" style="font-size:.75rem" onclick="loadProjectScans('${esc(p.project_id)}','${esc(p.name)}');return false">View scans</a>
+    </div>`
+  ).join('');
+}
+
+async function createProject() {
+  const inp = document.getElementById('new-proj-name');
+  const name = inp.value.trim();
+  if (!name) return;
+  try {
+    await api('POST', '/projects', { name });
+    inp.value = '';
+    await loadProjects();
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+// ---------- scan history ----------
+async function loadRecentScans() {
+  const histEl = document.getElementById('scan-history');
+  document.getElementById('scan-history-title').textContent = '(all projects, last 10)';
+  if (!_projects.length) {
+    histEl.innerHTML = '<p id="scan-history-empty" style="color:var(--muted);font-size:.875rem">No scans recorded yet.</p>';
+    return;
+  }
+  const rows = [];
+  for (const p of _projects.slice(0, 5)) {
+    try {
+      const scans = await api('GET', '/projects/' + p.project_id + '/scans?limit=5');
+      for (const s of scans) rows.push({ ...s, pname: p.name });
+    } catch {}
+  }
+  rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  renderScans(rows.slice(0, 10));
+}
+
+async function loadProjectScans(pid, pname) {
+  document.getElementById('scan-history-title').textContent = `— ${esc(pname)}`;
+  try {
+    const scans = await api('GET', '/projects/' + pid + '/scans?limit=20');
+    renderScans(scans.map(s => ({ ...s, pname })));
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+function renderScans(rows) {
+  const el = document.getElementById('scan-history');
+  if (!rows.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:.875rem">No scans yet.</p>';
+    return;
+  }
+  el.innerHTML = rows.map(s => {
+    const d = new Date(s.created_at);
+    const diff = s.diff;
+    const diffStr = diff.baseline ? '(baseline)' : `+${diff.new} -${diff.fixed} =${diff.persisting}`;
+    return `<div class="scan-row">
+      <span class="scan-date">${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+      <span class="scan-proj">${esc(s.pname || '')}</span>
+      ${scorePill(s.score)}
+      <span class="scan-diff">${s.total_findings} findings &nbsp;${diffStr}</span>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ---------- init ----------
+(async function init() {
+  const tok = sessionStorage.getItem('cnx_token');
+  if (tok) {
+    try {
+      _token = tok;
+      await showDashboard();
+    } catch {
+      clearSession();
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -41,7 +41,7 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Request
 from pydantic import BaseModel, Field, ValidationError
 
 from saas.ingest import normalize_report
-from saas.store import PLANS, Org, PlanLimitError, Scan, Store, UnknownPlanError
+from saas.store import PLANS, EmailAlreadyExistsError, Org, PlanLimitError, Scan, Store, UnknownPlanError
 
 _MAX_BODY_BYTES = 5 * 1024 * 1024  # 5 MB; reverse proxy should also enforce this
 
@@ -403,3 +403,68 @@ def get_scan(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Email auth routes
+# ---------------------------------------------------------------------------
+
+
+class RegisterBody(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=1024)
+    plan: str = Field(default="free", max_length=20)
+    token_ttl_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class LoginBody(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+@app.post("/auth/register", status_code=201)
+def register(body: RegisterBody, request: Request, store: Store = Depends(_get_store)) -> CreateOrgOut:
+    """Create an org with email+password credentials."""
+    _rate_check(f"anon:{_client_ip(request)}", _ANON_LIMIT)
+    try:
+        org, token = store.register(body.name, body.email, body.password, body.plan, body.token_ttl_days)
+    except UnknownPlanError:
+        raise HTTPException(status_code=422, detail="unknown_plan")
+    except EmailAlreadyExistsError:
+        raise HTTPException(status_code=409, detail="email_already_registered")
+    return CreateOrgOut(org_id=org.id, name=org.name, plan=org.plan, token=token)
+
+
+@app.post("/auth/login")
+def login(body: LoginBody, request: Request, store: Store = Depends(_get_store)) -> TokenOut:
+    """Verify email+password and return a fresh API token."""
+    _rate_check(f"anon:{_client_ip(request)}", _ANON_LIMIT)
+    token = store.login_with_email(body.email, body.password)
+    if token is None:
+        raise HTTPException(status_code=401, detail="invalid_credentials")
+    return TokenOut(token=token)
+
+
+# ---------------------------------------------------------------------------
+# Web portal (self-contained HTML — no aiofiles / StaticFiles dependency)
+# ---------------------------------------------------------------------------
+
+_PORTAL_HTML = None
+
+
+def _load_portal() -> str:
+    global _PORTAL_HTML
+    if _PORTAL_HTML is None:
+        import pathlib
+
+        p = pathlib.Path(__file__).parent / "portal.html"
+        _PORTAL_HTML = p.read_text(encoding="utf-8") if p.exists() else "<h1>Portal not found</h1>"
+    return _PORTAL_HTML
+
+
+@app.get("/portal")
+def portal():
+    from fastapi.responses import HTMLResponse
+
+    return HTMLResponse(_load_portal())

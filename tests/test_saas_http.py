@@ -403,3 +403,67 @@ def test_create_org_with_ttl(client):
 def test_create_org_ttl_out_of_range_rejected(client):
     r = client.post("/orgs", json={"name": "TTLOrg", "token_ttl_days": 0})
     assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Email auth routes
+# ---------------------------------------------------------------------------
+
+
+def test_register_creates_org_returns_201(client):
+    r = client.post("/auth/register", json={"name": "Acme", "email": "alice@example.com", "password": "hunter2!"})
+    assert r.status_code == 201
+    d = r.json()
+    assert d["token"].startswith("cnx_")
+    assert d["name"] == "Acme"
+
+
+def test_register_duplicate_email_returns_409(client):
+    client.post("/auth/register", json={"name": "A", "email": "dup@example.com", "password": "password1"})
+    r = client.post("/auth/register", json={"name": "B", "email": "dup@example.com", "password": "password2"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "email_already_registered"
+
+
+def test_register_weak_password_rejected(client):
+    r = client.post("/auth/register", json={"name": "A", "email": "a@b.com", "password": "short"})
+    assert r.status_code == 422
+
+
+def test_login_returns_token(client):
+    client.post("/auth/register", json={"name": "Bob", "email": "bob@example.com", "password": "s3cr3t!!"})
+    r = client.post("/auth/login", json={"email": "bob@example.com", "password": "s3cr3t!!"})
+    assert r.status_code == 200
+    token = r.json()["token"]
+    assert token.startswith("cnx_")
+    # token must work for authenticated calls
+    me = client.get("/orgs/me", headers=_auth(token))
+    assert me.status_code == 200
+    assert me.json()["name"] == "Bob"
+
+
+def test_login_wrong_password_returns_401(client):
+    client.post("/auth/register", json={"name": "C", "email": "carol@example.com", "password": "rightpassword"})
+    r = client.post("/auth/login", json={"email": "carol@example.com", "password": "wrongpassword"})
+    assert r.status_code == 401
+    assert r.json()["detail"] == "invalid_credentials"
+
+
+def test_login_unknown_email_returns_401(client):
+    r = client.post("/auth/login", json={"email": "nobody@example.com", "password": "irrelevant"})
+    assert r.status_code == 401
+
+
+def test_register_bad_plan_returns_422(client):
+    r = client.post(
+        "/auth/register", json={"name": "D", "email": "d@e.com", "password": "password1", "plan": "platinum"}
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == "unknown_plan"
+
+
+def test_portal_returns_html(client):
+    r = client.get("/portal")
+    assert r.status_code == 200
+    assert "text/html" in r.headers.get("content-type", "")
+    assert b"Canlix" in r.content

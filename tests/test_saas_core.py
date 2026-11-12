@@ -231,3 +231,69 @@ def test_ttl_none_means_no_expiry():
     with s._lock:
         entries = s._tokens[key]
         assert all(expires_at is None for _, _, expires_at in entries)
+
+
+# --- email auth ---
+
+
+def test_register_creates_org_and_authenticates():
+    s = Store()
+    org, token = s.register("Acme", "alice@example.com", "hunter2!")
+    assert org.name == "Acme"
+    assert s.authenticate(token) == org
+
+
+def test_register_duplicate_email_raises():
+    from saas.store import EmailAlreadyExistsError
+
+    s = Store()
+    s.register("A", "dup@example.com", "password1")
+    with pytest.raises(EmailAlreadyExistsError):
+        s.register("B", "dup@example.com", "password2")
+
+
+def test_register_email_case_insensitive():
+    from saas.store import EmailAlreadyExistsError
+
+    s = Store()
+    s.register("A", "Upper@Example.COM", "password1")
+    with pytest.raises(EmailAlreadyExistsError):
+        s.register("B", "upper@example.com", "password2")
+
+
+def test_login_with_email_returns_valid_token():
+    s = Store()
+    org, _ = s.register("Acme", "bob@example.com", "s3cr3t!")
+    login_token = s.login_with_email("bob@example.com", "s3cr3t!")
+    assert login_token is not None
+    assert s.authenticate(login_token) == org
+
+
+def test_login_wrong_password_returns_none():
+    s = Store()
+    s.register("Acme", "carol@example.com", "rightpassword")
+    assert s.login_with_email("carol@example.com", "wrongpassword") is None
+
+
+def test_login_unknown_email_returns_none():
+    s = Store()
+    assert s.login_with_email("nobody@example.com", "whatever") is None
+
+
+def test_login_produces_independent_tokens():
+    s = Store()
+    s.register("Acme", "dave@example.com", "pass1234")
+    t1 = s.login_with_email("dave@example.com", "pass1234")
+    t2 = s.login_with_email("dave@example.com", "pass1234")
+    assert t1 != t2
+    org = s.authenticate(t1)
+    assert s.authenticate(t2) == org  # both tokens belong to same org
+
+
+def test_auth_module_hash_verify_roundtrip():
+    from saas.auth import hash_password, verify_password
+
+    h = hash_password("hello world")
+    assert verify_password("hello world", h)
+    assert not verify_password("wrong", h)
+    assert not verify_password("hello world", "badformat")

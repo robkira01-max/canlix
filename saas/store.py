@@ -38,6 +38,10 @@ class UnknownPlanError(ValueError):
     pass
 
 
+class EmailAlreadyExistsError(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class Org:
     id: str
@@ -70,6 +74,8 @@ class Store:
     _revoked: set[str] = field(default_factory=set)  # set of digests
     _projects: dict[str, Project] = field(default_factory=dict)
     _scans: dict[str, list[Scan]] = field(default_factory=dict)
+    # email → (password_hash, org_id)
+    _emails: dict[str, tuple[str, str]] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
 
     def create_org(self, name: str, plan: str = "free", token_ttl_days: int | None = None) -> tuple[Org, str]:
@@ -129,6 +135,43 @@ class Store:
                 return None
             self._tokens.setdefault(new_key, []).append((new_digest, org_id, expires_at))
         return new_token
+
+    def register(
+        self,
+        name: str,
+        email: str,
+        password: str,
+        plan: str = "free",
+        token_ttl_days: int | None = None,
+    ) -> tuple[Org, str]:
+        """Create an org with email/password credentials. Raises EmailAlreadyExistsError on duplicate."""
+        from saas.auth import hash_password
+
+        email_key = email.lower().strip()
+        with self._lock:
+            if email_key in self._emails:
+                raise EmailAlreadyExistsError(email_key)
+            org, token = self.create_org(name, plan, token_ttl_days)
+            self._emails[email_key] = (hash_password(password), org.id)
+        return org, token
+
+    def login_with_email(self, email: str, password: str) -> str | None:
+        """Verify email+password and return a fresh API token, or None on failure."""
+        from saas.auth import dummy_verify, verify_password
+
+        email_key = email.lower().strip()
+        with self._lock:
+            entry = self._emails.get(email_key)
+        if entry is None:
+            dummy_verify(password)
+            return None
+        pw_hash, org_id = entry
+        if not verify_password(password, pw_hash):
+            return None
+        token, key, digest = new_api_token()
+        with self._lock:
+            self._tokens.setdefault(key, []).append((digest, org_id, None))
+        return token
 
     def create_project(self, org_id: str, name: str) -> Project:
         with self._lock:

@@ -112,9 +112,16 @@ CREATE INDEX IF NOT EXISTS tokens_lookup_active_idx
     WHERE revoked_at IS NULL;
 """
 
+_DDL_0003 = """
+ALTER TABLE orgs
+    ADD COLUMN IF NOT EXISTS email         TEXT UNIQUE NULL,
+    ADD COLUMN IF NOT EXISTS password_hash TEXT NULL;
+"""
+
 _MIGRATIONS: list[tuple[str, str]] = [
     ("0001_initial", _DDL_0001),
     ("0002_token_revocation", _DDL_0002),
+    ("0003_email_auth", _DDL_0003),
 ]
 
 
