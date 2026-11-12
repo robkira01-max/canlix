@@ -16,7 +16,7 @@ from psycopg_pool import ConnectionPool
 from saas.diff import ScanDiff, diff_scans
 from saas.ingest import NormalizedFinding, compute_score
 from saas.security import hash_token, lookup_key, new_api_token, verify_token
-from saas.store import PLANS, Org, PlanLimitError, Project, Scan, UnknownPlanError
+from saas.store import PLANS, Org, PlanLimitError, Project, Scan, UnknownPlanError, _ttl_to_dt
 
 
 def _jsonb(value: object) -> object:
@@ -34,11 +34,12 @@ class PgStore:
     # Org
     # ------------------------------------------------------------------
 
-    def create_org(self, name: str, plan: str = "free") -> tuple[Org, str]:
+    def create_org(self, name: str, plan: str = "free", token_ttl_days: int | None = None) -> tuple[Org, str]:
         if plan not in PLANS:
             raise UnknownPlanError(plan)
         token, key, digest = new_api_token()
         org_id = uuid.uuid4().hex
+        expires_at = _ttl_to_dt(token_ttl_days)
         with self._pool.connection() as conn:
             with conn.transaction():
                 conn.execute(
@@ -46,19 +47,22 @@ class PgStore:
                     [org_id, name, plan],
                 )
                 conn.execute(
-                    "INSERT INTO tokens(lookup_key, digest, org_id) VALUES(%s, %s, %s)",
-                    [key, digest, org_id],
+                    "INSERT INTO tokens(lookup_key, digest, org_id, expires_at) VALUES(%s, %s, %s, %s)",
+                    [key, digest, org_id, expires_at],
                 )
         return Org(org_id, name, plan), token
 
     def authenticate(self, token: str) -> Org | None:
         key = lookup_key(token)
+        now = datetime.now(timezone.utc)
         with self._pool.connection() as conn:
             rows = conn.execute(
                 """SELECT t.digest, o.id, o.name, o.plan
                    FROM tokens t JOIN orgs o ON t.org_id = o.id
-                   WHERE t.lookup_key = %s""",
-                [key],
+                   WHERE t.lookup_key = %s
+                     AND t.revoked_at IS NULL
+                     AND (t.expires_at IS NULL OR t.expires_at > %s)""",
+                [key, now],
             ).fetchall()
         for row in rows:
             if verify_token(token, row[0]):
@@ -66,6 +70,53 @@ class PgStore:
         # M2: equalize timing for unknown-prefix branch
         _hmac.compare_digest(hash_token(token), hash_token(token))
         return None
+
+    def revoke_token(self, org_id: str, token: str) -> bool:
+        """Mark a token as revoked. Returns False if the token is not found/valid for this org."""
+        key = lookup_key(token)
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                """SELECT t.digest FROM tokens t
+                   WHERE t.lookup_key = %s AND t.org_id = %s AND t.revoked_at IS NULL""",
+                [key, org_id],
+            ).fetchall()
+            for row in rows:
+                if verify_token(token, row[0]):
+                    conn.execute(
+                        "UPDATE tokens SET revoked_at = now() WHERE lookup_key = %s AND digest = %s",
+                        [key, row[0]],
+                    )
+                    return True
+        return False
+
+    def rotate_token(self, org_id: str, old_token: str, token_ttl_days: int | None = None) -> str | None:
+        """Atomically revoke old token and issue a new one. Returns new token or None if invalid."""
+        key = lookup_key(old_token)
+        new_token, new_key, new_digest = new_api_token()
+        expires_at = _ttl_to_dt(token_ttl_days)
+        with self._pool.connection() as conn:
+            with conn.transaction():
+                rows = conn.execute(
+                    """SELECT t.digest FROM tokens t
+                       WHERE t.lookup_key = %s AND t.org_id = %s AND t.revoked_at IS NULL""",
+                    [key, org_id],
+                ).fetchall()
+                found = False
+                for row in rows:
+                    if verify_token(old_token, row[0]):
+                        conn.execute(
+                            "UPDATE tokens SET revoked_at = now() WHERE lookup_key = %s AND digest = %s",
+                            [key, row[0]],
+                        )
+                        found = True
+                        break
+                if not found:
+                    return None
+                conn.execute(
+                    "INSERT INTO tokens(lookup_key, digest, org_id, expires_at) VALUES(%s, %s, %s, %s)",
+                    [new_key, new_digest, org_id, expires_at],
+                )
+        return new_token
 
     # ------------------------------------------------------------------
     # Project

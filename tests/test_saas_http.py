@@ -352,3 +352,54 @@ def test_body_too_large_returns_413(client):
         headers={**_auth(token), "content-length": str(len(big)), "Content-Type": "application/json"},
     )
     assert r.status_code == 413
+
+
+# ---------------------------------------------------------------------------
+# Token revocation and rotation (HTTP layer)
+# ---------------------------------------------------------------------------
+
+
+def test_revoke_token_blocks_further_requests(client):
+    _, token = _create_org(client)
+    r = client.delete("/orgs/me/token", headers=_auth(token))
+    assert r.status_code == 204
+    assert client.get("/orgs/me", headers=_auth(token)).status_code == 401
+
+
+def test_revoke_token_requires_auth(client):
+    r = client.delete("/orgs/me/token")
+    assert r.status_code == 401
+
+
+def test_rotate_token_old_rejected_new_works(client):
+    _, old_token = _create_org(client)
+    r = client.post("/orgs/me/token/rotate", json={}, headers=_auth(old_token))
+    assert r.status_code == 200
+    new_token = r.json()["token"]
+    assert new_token.startswith("cnx_")
+    assert client.get("/orgs/me", headers=_auth(old_token)).status_code == 401
+    assert client.get("/orgs/me", headers=_auth(new_token)).status_code == 200
+
+
+def test_rotate_token_with_ttl(client):
+    _, old_token = _create_org(client)
+    r = client.post("/orgs/me/token/rotate", json={"token_ttl_days": 30}, headers=_auth(old_token))
+    assert r.status_code == 200
+    assert r.json()["token"].startswith("cnx_")
+
+
+def test_rotate_token_ttl_out_of_range_rejected(client):
+    _, token = _create_org(client)
+    r = client.post("/orgs/me/token/rotate", json={"token_ttl_days": 0}, headers=_auth(token))
+    assert r.status_code == 422
+
+
+def test_create_org_with_ttl(client):
+    r = client.post("/orgs", json={"name": "TTLOrg", "token_ttl_days": 365})
+    assert r.status_code == 201
+    assert r.json()["token"].startswith("cnx_")
+
+
+def test_create_org_ttl_out_of_range_rejected(client):
+    r = client.post("/orgs", json={"name": "TTLOrg", "token_ttl_days": 0})
+    assert r.status_code == 422

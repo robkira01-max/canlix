@@ -237,3 +237,60 @@ def test_persistence_across_pool_connections(store, pool):
     scans = store2.list_scans(org.id, proj.id)
     assert scans is not None
     assert len(scans) == 1
+
+
+# ---------------------------------------------------------------------------
+# Token revocation and rotation (PgStore)
+# ---------------------------------------------------------------------------
+
+
+def test_pg_revoke_token_blocks_auth(store):
+    org, token = store.create_org("Victor")
+    assert store.authenticate(token) is not None
+    assert store.revoke_token(org.id, token) is True
+    assert store.authenticate(token) is None
+
+
+def test_pg_revoke_token_wrong_org_returns_false(store):
+    org_a, token_a = store.create_org("Whiskey")
+    org_b, _ = store.create_org("Xray")
+    assert store.revoke_token(org_b.id, token_a) is False
+    assert store.authenticate(token_a) is not None
+
+
+def test_pg_revoke_idempotent(store):
+    org, token = store.create_org("Yankee")
+    assert store.revoke_token(org.id, token) is True
+    assert store.revoke_token(org.id, token) is False
+
+
+def test_pg_rotate_old_invalid_new_valid(store):
+    org, old_token = store.create_org("Zulu")
+    new_token = store.rotate_token(org.id, old_token)
+    assert new_token is not None and new_token != old_token
+    assert store.authenticate(old_token) is None
+    result = store.authenticate(new_token)
+    assert result is not None and result.id == org.id
+
+
+def test_pg_rotate_wrong_org_returns_none(store):
+    org_a, token_a = store.create_org("Alpha2")
+    org_b, _ = store.create_org("Bravo2")
+    assert store.rotate_token(org_b.id, token_a) is None
+    assert store.authenticate(token_a) is not None
+
+
+def test_pg_token_with_ttl(store):
+    from datetime import datetime, timezone
+
+    org, token = store.create_org("Charlie2", token_ttl_days=30)
+    result = store.authenticate(token)
+    assert result is not None
+    # verify expires_at was set in the DB
+    from saas.security import lookup_key
+
+    key = lookup_key(token)
+    with store._pool.connection() as conn:
+        row = conn.execute("SELECT expires_at FROM tokens WHERE lookup_key = %s", [key]).fetchone()
+    assert row is not None and row[0] is not None
+    assert row[0] > datetime.now(timezone.utc)

@@ -101,8 +101,20 @@ DO $$ BEGIN
 END $$;
 """
 
+_DDL_0002 = """
+ALTER TABLE tokens
+    ADD COLUMN IF NOT EXISTS revoked_at  TIMESTAMPTZ NULL,
+    ADD COLUMN IF NOT EXISTS expires_at  TIMESTAMPTZ NULL,
+    ADD COLUMN IF NOT EXISTS label       TEXT NOT NULL DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS tokens_lookup_active_idx
+    ON tokens(lookup_key)
+    WHERE revoked_at IS NULL;
+"""
+
 _MIGRATIONS: list[tuple[str, str]] = [
     ("0001_initial", _DDL_0001),
+    ("0002_token_revocation", _DDL_0002),
 ]
 
 
@@ -121,9 +133,7 @@ def upgrade(url: str = "") -> None:
                 """
             )
         for version, ddl in _MIGRATIONS:
-            applied = conn.execute(
-                "SELECT 1 FROM _migrations WHERE version = %s", [version]
-            ).fetchone()
+            applied = conn.execute("SELECT 1 FROM _migrations WHERE version = %s", [version]).fetchone()
             if not applied:
                 with conn.transaction():
                     conn.execute(ddl)

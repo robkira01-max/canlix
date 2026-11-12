@@ -9,11 +9,18 @@ from __future__ import annotations
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from saas.diff import ScanDiff, diff_scans
 from saas.ingest import NormalizedFinding, compute_score
 from saas.security import hash_token, lookup_key, new_api_token, verify_token
+
+
+def _ttl_to_dt(ttl_days: int | None) -> datetime | None:
+    if ttl_days is None:
+        return None
+    return datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=ttl_days)
+
 
 # Proposed limits, to be confirmed with the owner after pricing interviews.
 PLANS: dict[str, dict[str, int]] = {
@@ -58,32 +65,70 @@ class Scan:
 @dataclass
 class Store:
     _orgs: dict[str, Org] = field(default_factory=dict)
-    _tokens: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    # value: (digest, org_id, expires_at | None)
+    _tokens: dict[str, list[tuple[str, str, datetime | None]]] = field(default_factory=dict)
+    _revoked: set[str] = field(default_factory=set)  # set of digests
     _projects: dict[str, Project] = field(default_factory=dict)
     _scans: dict[str, list[Scan]] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
 
-    def create_org(self, name: str, plan: str = "free") -> tuple[Org, str]:
+    def create_org(self, name: str, plan: str = "free", token_ttl_days: int | None = None) -> tuple[Org, str]:
         if plan not in PLANS:
             raise UnknownPlanError(plan)
         token, key, digest = new_api_token()
         org = Org(uuid.uuid4().hex, name, plan)
+        expires_at = _ttl_to_dt(token_ttl_days)
         with self._lock:
             self._orgs[org.id] = org
-            self._tokens.setdefault(key, []).append((digest, org.id))
+            self._tokens.setdefault(key, []).append((digest, org.id, expires_at))
         return org, token
 
     def authenticate(self, token: str) -> Org | None:
         import hmac as _hmac
 
+        now = datetime.now(timezone.utc)
         with self._lock:
             candidates = list(self._tokens.get(lookup_key(token), []))
-        for digest, org_id in candidates:
+            revoked = self._revoked
+        for digest, org_id, expires_at in candidates:
+            if digest in revoked:
+                continue
+            if expires_at and now > expires_at:
+                continue
             if verify_token(token, digest):
                 return self._orgs.get(org_id)
         # M2: equalize timing for unknown-prefix branch — same work as verify_token()
         _hmac.compare_digest(hash_token(token), hash_token(token))
         return None
+
+    def revoke_token(self, org_id: str, token: str) -> bool:
+        """Revoke a specific token. Returns False if the token is not found/valid or already revoked."""
+        key = lookup_key(token)
+        with self._lock:
+            for digest, t_org_id, _ in self._tokens.get(key, []):
+                if digest in self._revoked:
+                    continue
+                if t_org_id == org_id and verify_token(token, digest):
+                    self._revoked.add(digest)
+                    return True
+        return False
+
+    def rotate_token(self, org_id: str, old_token: str, token_ttl_days: int | None = None) -> str | None:
+        """Atomically revoke old token and issue a new one. Returns new token or None if invalid."""
+        key = lookup_key(old_token)
+        new_token, new_key, new_digest = new_api_token()
+        expires_at = _ttl_to_dt(token_ttl_days)
+        with self._lock:
+            found = False
+            for digest, t_org_id, _ in self._tokens.get(key, []):
+                if t_org_id == org_id and verify_token(old_token, digest):
+                    self._revoked.add(digest)
+                    found = True
+                    break
+            if not found:
+                return None
+            self._tokens.setdefault(new_key, []).append((new_digest, org_id, expires_at))
+        return new_token
 
     def create_project(self, org_id: str, name: str) -> Project:
         with self._lock:

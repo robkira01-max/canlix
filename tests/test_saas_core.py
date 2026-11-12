@@ -159,3 +159,75 @@ def test_history_and_diff_flow_through_store():
     assert s1.diff.baseline and len(s2.diff.new) == 1 and len(s2.diff.persisting) == 1
     assert [x.id for x in s.list_scans(org.id, p.id)] == [s2.id, s1.id]
     assert len(s.list_scans(org.id, p.id, limit=1)) == 1
+
+
+# --- token revocation and rotation ---
+
+
+def test_revoke_token_blocks_further_auth():
+    s = Store()
+    org, token = s.create_org("A")
+    assert s.authenticate(token) == org
+    assert s.revoke_token(org.id, token) is True
+    assert s.authenticate(token) is None
+
+
+def test_revoke_token_wrong_org_returns_false():
+    s = Store()
+    org_a, token_a = s.create_org("A")
+    org_b, _ = s.create_org("B")
+    assert s.revoke_token(org_b.id, token_a) is False
+    assert s.authenticate(token_a) == org_a  # still valid
+
+
+def test_revoke_idempotent():
+    s = Store()
+    org, token = s.create_org("A")
+    assert s.revoke_token(org.id, token) is True
+    assert s.revoke_token(org.id, token) is False  # already revoked
+
+
+def test_rotate_token_old_invalid_new_valid():
+    s = Store()
+    org, old_token = s.create_org("A")
+    new_token = s.rotate_token(org.id, old_token)
+    assert new_token is not None and new_token != old_token
+    assert s.authenticate(old_token) is None
+    assert s.authenticate(new_token) == org
+
+
+def test_rotate_token_wrong_org_returns_none():
+    s = Store()
+    org_a, token_a = s.create_org("A")
+    org_b, _ = s.create_org("B")
+    result = s.rotate_token(org_b.id, token_a)
+    assert result is None
+    assert s.authenticate(token_a) == org_a  # original unchanged
+
+
+def test_token_ttl_expiry():
+    from datetime import datetime, timedelta, timezone
+
+    # expired token should not authenticate
+    s = Store()
+    org, token = s.create_org("A", token_ttl_days=1)
+    assert s.authenticate(token) == org
+    # simulate expiry by patching the token's expires_at to the past
+    from saas.security import lookup_key
+
+    key = lookup_key(token)
+    with s._lock:
+        entries = s._tokens[key]
+        s._tokens[key] = [(d, o, datetime.now(timezone.utc) - timedelta(seconds=1)) for d, o, _ in entries]
+    assert s.authenticate(token) is None
+
+
+def test_ttl_none_means_no_expiry():
+    s = Store()
+    _, token = s.create_org("A", token_ttl_days=None)
+    from saas.security import lookup_key
+
+    key = lookup_key(token)
+    with s._lock:
+        entries = s._tokens[key]
+        assert all(expires_at is None for _, _, expires_at in entries)

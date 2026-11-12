@@ -168,6 +168,7 @@ def _require_org(request: Request, store: Store = Depends(_get_store)) -> Org:
 class CreateOrgBody(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     plan: str = Field(default="free", max_length=20)
+    token_ttl_days: int | None = Field(default=None, ge=1, le=3650)
 
 
 class CreateOrgOut(BaseModel):
@@ -275,7 +276,7 @@ def _detail(scan: Scan) -> ScanDetailOut:
 def create_org(body: CreateOrgBody, request: Request, store: Store = Depends(_get_store)) -> CreateOrgOut:
     _rate_check(f"anon:{_client_ip(request)}", _ANON_LIMIT)
     try:
-        org, token = store.create_org(body.name, body.plan)
+        org, token = store.create_org(body.name, body.plan, body.token_ttl_days)
     except UnknownPlanError:
         raise HTTPException(status_code=422, detail="unknown_plan")
     return CreateOrgOut(org_id=org.id, name=org.name, plan=org.plan, token=token)
@@ -284,6 +285,36 @@ def create_org(body: CreateOrgBody, request: Request, store: Store = Depends(_ge
 @app.get("/orgs/me")
 def get_me(org: Org = Depends(_require_org)) -> OrgOut:
     return OrgOut(org_id=org.id, name=org.name, plan=org.plan, max_projects=PLANS[org.plan]["projects"])
+
+
+class RotateTokenBody(BaseModel):
+    token_ttl_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class TokenOut(BaseModel):
+    token: str = Field(description="New API token shown once — do not log or store in version control")
+
+
+@app.delete("/orgs/me/token", status_code=204)
+def revoke_token(request: Request, org: Org = Depends(_require_org), store: Store = Depends(_get_store)) -> None:
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    store.revoke_token(org.id, token)
+
+
+@app.post("/orgs/me/token/rotate", status_code=200)
+def rotate_token(
+    body: RotateTokenBody,
+    request: Request,
+    org: Org = Depends(_require_org),
+    store: Store = Depends(_get_store),
+) -> TokenOut:
+    auth = request.headers.get("Authorization", "")
+    old_token = auth[7:] if auth.startswith("Bearer ") else ""
+    new_token = store.rotate_token(org.id, old_token, body.token_ttl_days)
+    if new_token is None:
+        raise HTTPException(status_code=401, detail="missing_or_invalid_token")
+    return TokenOut(token=new_token)
 
 
 @app.post("/projects", status_code=201)
