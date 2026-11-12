@@ -181,13 +181,16 @@ def watch(
     fail_on: str = typer.Option("CRITICAL", "--fail-on", help="Exit 1 if a finding meets this severity."),
     name: Optional[str] = typer.Option(None, "--name", help="Server label used in findings."),
     rate_limit: int = typer.Option(30, "--rate-limit", help="Max tool calls per 10 s before RUN-006."),
+    http: Optional[int] = typer.Option(
+        None, "--http", help="Serve findings as SSE on this localhost port (e.g. 7331)."
+    ),
 ) -> None:
     """Run an MCP server behind an observing proxy (stdio). Never modifies traffic; diagnostics go to stderr."""
     from canlix.runtime import RuntimeAnalyzer, run_proxy
 
     label = name or Path(command[0]).name
     analyzer = RuntimeAnalyzer(label, allow_hosts=allow_host, rate_limit=rate_limit)
-    code = run_proxy(command, analyzer, trace_path=trace, kill_on=kill_on)
+    code = run_proxy(command, analyzer, trace_path=trace, kill_on=kill_on, http_port=http)
     if code != 0:
         raise typer.Exit(code)
     _exit_on_severity(analyzer.findings, [], fail_on)

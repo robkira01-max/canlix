@@ -40,11 +40,19 @@ def finding_to_dict(f: Finding) -> dict:
 
 
 class _Session:
-    def __init__(self, analyzer: RuntimeAnalyzer, trace: TextIO | None, err: TextIO, kill_on: str | None) -> None:
+    def __init__(
+        self,
+        analyzer: RuntimeAnalyzer,
+        trace: TextIO | None,
+        err: TextIO,
+        kill_on: str | None,
+        sse=None,  # SseServer | None — optional to avoid import cycle
+    ) -> None:
         self.analyzer = analyzer
         self.trace = trace
         self.err = err
         self.kill_on = kill_on
+        self.sse = sse
         self.killed = False
         self.child: subprocess.Popen | None = None
         self._lock = threading.Lock()
@@ -65,6 +73,8 @@ class _Session:
                     if self.trace is not None:
                         self._write_trace({"ts": round(ts, 3), "finding": finding_to_dict(f)})
                     print(f"[canlix] {f.severity.value} {f.rule_id}: {f.message}", file=self.err, flush=True)
+                    if self.sse is not None:
+                        self.sse.push_finding(finding_to_dict(f))
                     if _meets(f.severity, self.kill_on) and not self.killed and self.child is not None:
                         self.killed = True
                         print(f"[canlix] emergency stop: {f.rule_id} reached --kill-on {self.kill_on}", file=self.err)
@@ -87,6 +97,7 @@ def run_proxy(
     client_in: BinaryIO | None = None,
     client_out: BinaryIO | None = None,
     err: TextIO | None = None,
+    http_port: int | None = None,
 ) -> int:
     """Run command as an MCP server behind the proxy and return the exit code to use."""
     client_in = client_in or sys.stdin.buffer
@@ -94,15 +105,25 @@ def run_proxy(
     err = err or sys.stderr
     trace = trace_path.open("a", encoding="utf-8") if trace_path else None
 
+    sse = None
+    if http_port is not None:
+        from canlix.runtime.sse_server import SseServer
+
+        sse = SseServer(http_port)
+        sse.start()
+        print(f"[canlix] SSE events at http://localhost:{http_port}/events", file=err, flush=True)
+
     try:
         child = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)  # noqa: S603
     except OSError as exc:
         print(f"[canlix] cannot start server: {exc}", file=err)
         if trace:
             trace.close()
+        if sse is not None:
+            sse.stop()
         return 2
 
-    session = _Session(analyzer, trace, err, kill_on)
+    session = _Session(analyzer, trace, err, kill_on, sse=sse)
     session.child = child
     assert child.stdin is not None and child.stdout is not None
 
@@ -137,6 +158,9 @@ def run_proxy(
         trace.close()
 
     n = len(analyzer.findings)
+    if sse is not None:
+        sse.update_stats(tool_calls=analyzer.tool_calls, hosts_seen=len(analyzer.hosts_seen))
+        sse.stop()
     print(
         f"[canlix] session ended: {analyzer.tool_calls} tool call(s), {n} finding(s), "
         f"{len(analyzer.hosts_seen)} host(s) seen",
