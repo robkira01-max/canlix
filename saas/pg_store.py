@@ -15,8 +15,19 @@ from psycopg_pool import ConnectionPool
 
 from saas.diff import ScanDiff, diff_scans
 from saas.ingest import NormalizedFinding, compute_score
+from saas.integrations import INTEGRATION_TYPES, Integration
 from saas.security import hash_token, lookup_key, new_api_token, verify_token
-from saas.store import PLANS, EmailAlreadyExistsError, Org, PlanLimitError, Project, Scan, UnknownPlanError, _ttl_to_dt
+from saas.store import (
+    PLANS,
+    EmailAlreadyExistsError,
+    Org,
+    PlanLimitError,
+    Project,
+    Scan,
+    UnknownIntegrationTypeError,
+    UnknownPlanError,
+    _ttl_to_dt,
+)
 
 
 def _jsonb(value: object) -> object:
@@ -219,17 +230,20 @@ class PgStore:
     # ------------------------------------------------------------------
 
     def add_scan(self, org_id: str, project_id: str, findings: list[NormalizedFinding]) -> Scan | None:
+        from saas.integrations import dispatch_all
+
         with self._pool.connection() as conn:
             with conn.transaction():
                 # Set RLS context (defence-in-depth; app-level check below is primary)
                 conn.execute("SELECT set_config('app.org_id', %s, true)", [org_id])
 
                 proj = conn.execute(
-                    "SELECT id FROM projects WHERE id = %s AND org_id = %s",
+                    "SELECT id, name FROM projects WHERE id = %s AND org_id = %s",
                     [project_id, org_id],
                 ).fetchone()
                 if not proj:
                     return None
+                project_name = proj[1]
 
                 # Fetch previous scan fingerprints for diff
                 prev = conn.execute(
@@ -278,7 +292,10 @@ class PgStore:
                         ],
                     )
 
-        return Scan(scan_id, project_id, now, score, tuple(findings), diff)
+        scan = Scan(scan_id, project_id, now, score, tuple(findings), diff)
+        integrations = self.list_integrations(org_id)
+        dispatch_all(integrations, scan, project_name)
+        return scan
 
     def list_scans(self, org_id: str, project_id: str, limit: int = 50) -> list[Scan] | None:
         if not self.get_project(org_id, project_id):
@@ -384,3 +401,47 @@ class PgStore:
             findings=findings,
             diff=diff,
         )
+
+    # ------------------------------------------------------------------
+    # Integration CRUD
+    # ------------------------------------------------------------------
+
+    def add_integration(self, org_id: str, name: str, int_type: str, config: dict) -> Integration:
+        if int_type not in INTEGRATION_TYPES:
+            raise UnknownIntegrationTypeError(int_type)
+        intg_id = uuid.uuid4().hex
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                """INSERT INTO integrations(id, org_id, type, name, config)
+                   VALUES(%s, %s, %s, %s, %s)
+                   RETURNING created_at""",
+                [intg_id, org_id, int_type, name, _jsonb(config)],
+            ).fetchone()
+        return Integration(id=intg_id, org_id=org_id, type=int_type, name=name, config=config, created_at=row[0])
+
+    def list_integrations(self, org_id: str) -> list[Integration]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, org_id, type, name, config, created_at"
+                " FROM integrations WHERE org_id = %s ORDER BY created_at",
+                [org_id],
+            ).fetchall()
+        return [Integration(id=r[0], org_id=r[1], type=r[2], name=r[3], config=r[4], created_at=r[5]) for r in rows]
+
+    def get_integration(self, org_id: str, integration_id: str) -> Integration | None:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT id, org_id, type, name, config, created_at FROM integrations WHERE id = %s AND org_id = %s",
+                [integration_id, org_id],
+            ).fetchone()
+        if not row:
+            return None
+        return Integration(id=row[0], org_id=row[1], type=row[2], name=row[3], config=row[4], created_at=row[5])
+
+    def delete_integration(self, org_id: str, integration_id: str) -> bool:
+        with self._pool.connection() as conn:
+            result = conn.execute(
+                "DELETE FROM integrations WHERE id = %s AND org_id = %s",
+                [integration_id, org_id],
+            )
+        return result.rowcount > 0

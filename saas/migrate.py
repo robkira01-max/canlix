@@ -118,10 +118,24 @@ ALTER TABLE orgs
     ADD COLUMN IF NOT EXISTS password_hash TEXT NULL;
 """
 
+_DDL_0004 = """
+CREATE TABLE IF NOT EXISTS integrations (
+    id         TEXT PRIMARY KEY,
+    org_id     TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    type       TEXT NOT NULL CHECK (type IN ('slack', 'pagerduty', 'jira')),
+    name       TEXT NOT NULL,
+    config     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS integrations_org_idx ON integrations(org_id);
+"""
+
 _MIGRATIONS: list[tuple[str, str]] = [
     ("0001_initial", _DDL_0001),
     ("0002_token_revocation", _DDL_0002),
     ("0003_email_auth", _DDL_0003),
+    ("0004_integrations", _DDL_0004),
 ]
 
 

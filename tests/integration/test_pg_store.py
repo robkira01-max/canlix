@@ -35,7 +35,7 @@ def pool():
 def _truncate(pool):
     """Wipe every table before each test so they are fully isolated."""
     with pool.connection() as conn:
-        conn.execute("TRUNCATE findings, scans, projects, tokens, orgs RESTART IDENTITY CASCADE")
+        conn.execute("TRUNCATE integrations, findings, scans, projects, tokens, orgs RESTART IDENTITY CASCADE")
 
 
 @pytest.fixture
@@ -294,3 +294,76 @@ def test_pg_token_with_ttl(store):
         row = conn.execute("SELECT expires_at FROM tokens WHERE lookup_key = %s", [key]).fetchone()
     assert row is not None and row[0] is not None
     assert row[0] > datetime.now(timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Integration CRUD (PgStore)
+# ---------------------------------------------------------------------------
+
+
+def test_pg_add_and_list_integration(store):
+    org, _ = store.create_org("Delta2")
+    intg = store.add_integration(org.id, "My Slack", "slack", {"webhook_url": "https://hooks.example.com/x"})
+    assert intg.id
+    assert intg.org_id == org.id
+    assert intg.type == "slack"
+    lst = store.list_integrations(org.id)
+    assert len(lst) == 1 and lst[0].id == intg.id
+
+
+def test_pg_list_integrations_empty(store):
+    org, _ = store.create_org("Echo2")
+    assert store.list_integrations(org.id) == []
+
+
+def test_pg_get_integration(store):
+    org, _ = store.create_org("Foxtrot2")
+    intg = store.add_integration(org.id, "PD", "pagerduty", {"routing_key": "rk"})
+    found = store.get_integration(org.id, intg.id)
+    assert found is not None and found.id == intg.id
+
+
+def test_pg_get_integration_cross_tenant_returns_none(store):
+    org_a, _ = store.create_org("Golf2", plan="team")
+    org_b, _ = store.create_org("Hotel2", plan="team")
+    intg = store.add_integration(org_a.id, "X", "slack", {})
+    assert store.get_integration(org_b.id, intg.id) is None
+
+
+def test_pg_delete_integration(store):
+    org, _ = store.create_org("India2")
+    intg = store.add_integration(org.id, "Del", "jira", {})
+    assert store.delete_integration(org.id, intg.id) is True
+    assert store.list_integrations(org.id) == []
+
+
+def test_pg_delete_integration_cross_tenant_returns_false(store):
+    org_a, _ = store.create_org("Juliet2", plan="team")
+    org_b, _ = store.create_org("Kilo2", plan="team")
+    intg = store.add_integration(org_a.id, "X", "slack", {})
+    assert store.delete_integration(org_b.id, intg.id) is False
+    assert len(store.list_integrations(org_a.id)) == 1
+
+
+def test_pg_delete_integration_idempotent(store):
+    org, _ = store.create_org("Lima2")
+    intg = store.add_integration(org.id, "X", "slack", {})
+    assert store.delete_integration(org.id, intg.id) is True
+    assert store.delete_integration(org.id, intg.id) is False
+
+
+def test_pg_unknown_integration_type_raises(store):
+    from saas.store import UnknownIntegrationTypeError
+
+    org, _ = store.create_org("Mike2")
+    with pytest.raises(UnknownIntegrationTypeError):
+        store.add_integration(org.id, "X", "discord", {})
+
+
+def test_pg_integration_config_round_trip(store):
+    org, _ = store.create_org("November2")
+    cfg = {"base_url": "https://acme.atlassian.net", "project_key": "SEC"}
+    intg = store.add_integration(org.id, "Jira", "jira", cfg)
+    fetched = store.get_integration(org.id, intg.id)
+    assert fetched is not None
+    assert fetched.config == cfg
