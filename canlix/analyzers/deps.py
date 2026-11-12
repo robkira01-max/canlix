@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from mcpprobe.models import Confidence, Severity, SourceFinding
+from canlix.models import Confidence, Severity, SourceFinding
 
 # ---------------------------------------------------------------------------
 # requirements.txt helpers

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mcpprobe.models import MCPServer
-from mcpprobe.parsers.claude import _parse_servers
+from canlix.models import MCPServer
+from canlix.parsers.claude import _parse_servers
 
 
 def parse_json_file(path: Path) -> list[MCPServer]:

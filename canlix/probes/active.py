@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import re
 
-from mcpprobe.models import Confidence, Severity
-from mcpprobe.probes.base import ProbeResult, ProbeSession
-from mcpprobe.probes.transport import MCPClient, MCPConnectionError
+from canlix.models import Confidence, Severity
+from canlix.probes.base import ProbeResult, ProbeSession
+from canlix.probes.transport import MCPClient, MCPConnectionError
 
 _TRAVERSAL_PAYLOAD = "../../../../etc/passwd"
 _PATH_LEAK_RE = re.compile(r"/(?:home|etc|usr|var|opt|root|proc|sys)/[a-zA-Z0-9_/\-\.]+")

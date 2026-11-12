@@ -1,9 +1,9 @@
 """SARIF 2.1.0 reporter — output for GitHub Code Scanning and other SAST tools.
 
 Usage:
-    mcpprobe scan   --output sarif > results.sarif
-    mcpprobe analyze ./src --output sarif > results.sarif
-    mcpprobe probe  https://server/ --output sarif > results.sarif
+    canlix scan   --output sarif > results.sarif
+    canlix analyze ./src --output sarif > results.sarif
+    canlix probe  https://server/ --output sarif > results.sarif
 
 Then upload with:
     gh upload-sarif --sarif results.sarif
@@ -14,13 +14,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mcpprobe.models import Finding, Severity, SourceFinding
+from canlix.models import Finding, Severity, SourceFinding
 
 _SARIF_VERSION = "2.1.0"
 _SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
-_TOOL_NAME = "MCPProbe"
+_TOOL_NAME = "Canlix"
 _TOOL_VERSION = "0.1.0"
-_TOOL_URI = "https://github.com/robkira01-max/mcpprobe"
+_TOOL_URI = "https://github.com/robkira01-max/canlix"
 
 _SEV_LEVEL: dict[Severity, str] = {
     Severity.CRITICAL: "error",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from mcpprobe.models import Confidence, Severity
+from canlix.models import Confidence, Severity
 
 
 @dataclass

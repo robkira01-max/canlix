@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mcpprobe.models import Confidence, Finding, MCPServer, Severity
-from mcpprobe.rules.base import rule
+from canlix.models import Confidence, Finding, MCPServer, Severity
+from canlix.rules.base import rule
 
 _SHELLS = {"sh", "bash", "zsh", "fish", "dash", "cmd", "powershell", "pwsh"}
 _SHELL_FLAGS = {"-c", "/c", "/C"}

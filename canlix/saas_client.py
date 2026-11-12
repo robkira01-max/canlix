@@ -23,8 +23,7 @@ def strip_report(payload: dict) -> dict:
     for key in ("findings", "source_findings"):
         if key in out and isinstance(out[key], list):
             out[key] = [
-                {k: v for k, v in f.items() if k not in _SENSITIVE_KEYS} if isinstance(f, dict) else f
-                for f in out[key]
+                {k: v for k, v in f.items() if k not in _SENSITIVE_KEYS} if isinstance(f, dict) else f for f in out[key]
             ]
     return out
 

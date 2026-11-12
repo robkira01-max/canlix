@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mcpprobe.models import ScanResult, SourceFinding
-from mcpprobe.probes.base import ProbeResult, ProbeSession
+from canlix.models import ScanResult, SourceFinding
+from canlix.probes.base import ProbeResult, ProbeSession
 
 
 def render_json(result: ScanResult) -> str:
     return json.dumps(
         {
-            "mcpprobe_version": "0.1.0",
+            "canlix_version": "0.1.0",
             "score": result.score,
             "servers_scanned": len(result.servers),
             "findings_count": len(result.findings),
@@ -41,7 +41,7 @@ def render_source_json(findings: list[SourceFinding], path: Path, duration_ms: f
     score = max(0, 100 - sum(f.severity.score for f in findings))
     return json.dumps(
         {
-            "mcpprobe_version": "0.1.0",
+            "canlix_version": "0.1.0",
             "analyzed_path": str(path),
             "score": score,
             "findings_count": len(findings),
@@ -55,7 +55,7 @@ def render_source_json(findings: list[SourceFinding], path: Path, duration_ms: f
 def render_probe_json(session: ProbeSession) -> str:
     return json.dumps(
         {
-            "mcpprobe_version": "0.1.0",
+            "canlix_version": "0.1.0",
             "server_name": session.server_name,
             "server_url": session.server_url,
             "protocol_version": session.protocol_version,

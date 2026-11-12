@@ -15,9 +15,8 @@ fastapi_testclient = pytest.importorskip("fastapi.testclient", reason="fastapi r
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from saas.app import app, _get_store, _rate_state  # noqa: E402
+from saas.app import _get_store, _rate_state, app  # noqa: E402
 from saas.store import Store  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Fixture: fresh Store + empty rate-limiter state per test
@@ -41,6 +40,7 @@ def client():
 
 # helpers
 
+
 def _create_org(client, name="Acme", plan="free"):
     r = client.post("/orgs", json={"name": name, "plan": plan})
     assert r.status_code == 201
@@ -59,8 +59,17 @@ def _create_project(client, token, name="proj"):
 
 
 def _small_report():
-    return {"findings": [{"rule_id": "NET-001", "severity": "HIGH", "confidence": "HIGH",
-                          "server": "api", "message": "HTTP transport"}]}
+    return {
+        "findings": [
+            {
+                "rule_id": "NET-001",
+                "severity": "HIGH",
+                "confidence": "HIGH",
+                "server": "api",
+                "message": "HTTP transport",
+            }
+        ]
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +159,11 @@ def test_plan_limit_enforced(client):
 def test_ingest_scan_returns_summary(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
-    r = client.post(f"/projects/{pid}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(token), "Content-Type": "application/json"},
+    )
     assert r.status_code == 201
     d = r.json()
     assert d["score"] < 100
@@ -162,16 +174,22 @@ def test_second_scan_produces_diff(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
 
-    report_a = {"findings": [{"rule_id": "A", "severity": "HIGH", "confidence": "HIGH",
-                               "server": "s", "message": "msg A"}]}
-    report_b = {"findings": [{"rule_id": "A", "severity": "HIGH", "confidence": "HIGH",
-                               "server": "s", "message": "msg A"},
-                              {"rule_id": "B", "severity": "HIGH", "confidence": "HIGH",
-                               "server": "s", "message": "msg B"}]}
+    report_a = {
+        "findings": [{"rule_id": "A", "severity": "HIGH", "confidence": "HIGH", "server": "s", "message": "msg A"}]
+    }
+    report_b = {
+        "findings": [
+            {"rule_id": "A", "severity": "HIGH", "confidence": "HIGH", "server": "s", "message": "msg A"},
+            {"rule_id": "B", "severity": "HIGH", "confidence": "HIGH", "server": "s", "message": "msg B"},
+        ]
+    }
 
     def _post(rep):
-        return client.post(f"/projects/{pid}/scans", content=json.dumps(rep),
-                           headers={**_auth(token), "Content-Type": "application/json"})
+        return client.post(
+            f"/projects/{pid}/scans",
+            content=json.dumps(rep),
+            headers={**_auth(token), "Content-Type": "application/json"},
+        )
 
     r1 = _post(report_a)
     r2 = _post(report_b)
@@ -183,10 +201,10 @@ def test_second_scan_produces_diff(client):
 def test_ingest_validation_errors_strip_input_field(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
-    bad = {"findings": [{"rule_id": "X", "severity": "SUPER", "confidence": "HIGH",
-                          "server": "s", "message": "m"}]}
-    r = client.post(f"/projects/{pid}/scans", content=json.dumps(bad),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    bad = {"findings": [{"rule_id": "X", "severity": "SUPER", "confidence": "HIGH", "server": "s", "message": "m"}]}
+    r = client.post(
+        f"/projects/{pid}/scans", content=json.dumps(bad), headers={**_auth(token), "Content-Type": "application/json"}
+    )
     assert r.status_code == 422
     for err in r.json()["detail"]:
         assert "input" not in err  # H2: input fragment never echoed back
@@ -195,33 +213,40 @@ def test_ingest_validation_errors_strip_input_field(client):
 def test_ingest_bad_json_returns_422(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
-    r = client.post(f"/projects/{pid}/scans", content=b"not-json",
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{pid}/scans", content=b"not-json", headers={**_auth(token), "Content-Type": "application/json"}
+    )
     assert r.status_code == 422
 
 
 def test_ingest_malformed_severity_returns_422(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
-    bad = {"findings": [{"rule_id": "X", "severity": "SUPER", "confidence": "HIGH",
-                          "server": "s", "message": "m"}]}
-    r = client.post(f"/projects/{pid}/scans", content=json.dumps(bad),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    bad = {"findings": [{"rule_id": "X", "severity": "SUPER", "confidence": "HIGH", "server": "s", "message": "m"}]}
+    r = client.post(
+        f"/projects/{pid}/scans", content=json.dumps(bad), headers={**_auth(token), "Content-Type": "application/json"}
+    )
     assert r.status_code == 422
 
 
 def test_ingest_on_unknown_project_returns_404(client):
     _, token = _create_org(client)
     valid_hex = "a" * 32  # syntactically valid ID that doesn't exist
-    r = client.post(f"/projects/{valid_hex}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{valid_hex}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(token), "Content-Type": "application/json"},
+    )
     assert r.status_code == 404
 
 
 def test_ingest_invalid_path_format_returns_422(client):
     _, token = _create_org(client)
-    r = client.post("/projects/nonexistent/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    r = client.post(
+        "/projects/nonexistent/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(token), "Content-Type": "application/json"},
+    )
     assert r.status_code == 422  # M1: path param constraint rejects non-hex IDs
 
 
@@ -229,8 +254,11 @@ def test_cross_tenant_scan_returns_404(client):
     _, t1 = _create_org(client, "A")
     _, t2 = _create_org(client, "B")
     pid = _create_project(client, t1)
-    r = client.post(f"/projects/{pid}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(t2), "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(t2), "Content-Type": "application/json"},
+    )
     assert r.status_code == 404
 
 
@@ -243,8 +271,11 @@ def test_list_scans_newest_first(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
     for _ in range(3):
-        client.post(f"/projects/{pid}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+        client.post(
+            f"/projects/{pid}/scans",
+            content=json.dumps(_small_report()),
+            headers={**_auth(token), "Content-Type": "application/json"},
+        )
     r = client.get(f"/projects/{pid}/scans", headers=_auth(token))
     assert r.status_code == 200 and len(r.json()) == 3
 
@@ -253,8 +284,11 @@ def test_list_scans_limit(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
     for _ in range(5):
-        client.post(f"/projects/{pid}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+        client.post(
+            f"/projects/{pid}/scans",
+            content=json.dumps(_small_report()),
+            headers={**_auth(token), "Content-Type": "application/json"},
+        )
     r = client.get(f"/projects/{pid}/scans?limit=2", headers=_auth(token))
     assert len(r.json()) == 2
 
@@ -262,8 +296,11 @@ def test_list_scans_limit(client):
 def test_get_scan_detail_includes_findings(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
-    r = client.post(f"/projects/{pid}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(token), "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(token), "Content-Type": "application/json"},
+    )
     scan_id = r.json()["scan_id"]
     r2 = client.get(f"/projects/{pid}/scans/{scan_id}", headers=_auth(token))
     assert r2.status_code == 200
@@ -276,8 +313,11 @@ def test_get_scan_cross_tenant_returns_404(client):
     _, t1 = _create_org(client, "A")
     _, t2 = _create_org(client, "B")
     pid = _create_project(client, t1)
-    r = client.post(f"/projects/{pid}/scans", content=json.dumps(_small_report()),
-                    headers={**_auth(t1), "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(t1), "Content-Type": "application/json"},
+    )
     scan_id = r.json()["scan_id"]
     assert client.get(f"/projects/{pid}/scans/{scan_id}", headers=_auth(t2)).status_code == 404
 
@@ -306,7 +346,9 @@ def test_body_too_large_returns_413(client):
     _, token = _create_org(client)
     pid = _create_project(client, token)
     big = b"x" * (5 * 1024 * 1024 + 1)
-    r = client.post(f"/projects/{pid}/scans", content=big,
-                    headers={**_auth(token), "content-length": str(len(big)),
-                              "Content-Type": "application/json"})
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=big,
+        headers={**_auth(token), "content-length": str(len(big)), "Content-Type": "application/json"},
+    )
     assert r.status_code == 413

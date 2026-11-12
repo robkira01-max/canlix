@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from mcpprobe.models import Confidence, Finding, MCPServer, Severity, Transport
-from mcpprobe.rules.base import rule
+from canlix.models import Confidence, Finding, MCPServer, Severity, Transport
+from canlix.rules.base import rule
 
 
 @rule

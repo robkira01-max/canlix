@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from mcpprobe.models import Confidence, Severity, SourceFinding
+from canlix.models import Confidence, Severity, SourceFinding
 
 # ---------------------------------------------------------------------------
 # TS-001a: key-prefix secrets in string literals (CRITICAL)
@@ -1572,6 +1572,37 @@ _GOT_PREFIX_URL_REQ = re.compile(
 _AXIOS_DEFAULTS_BASE_URL_REQ = re.compile(
     r"""(?x)
     \baxios\s*\.\s*defaults\s*\.\s*baseURL\s*=\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-166: new Queue(name, { redis: { host: req.xxx } }) -- bull/bullmq broker SSRF
+# ---------------------------------------------------------------------------
+
+_BULL_QUEUE_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Queue\s*\([^)]*\bhost\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-167: new Redis.Cluster([{ host: req.xxx }]) -- ioredis cluster SSRF
+# ---------------------------------------------------------------------------
+
+_REDIS_CLUSTER_HOST_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+Redis\.Cluster\s*\(\s*\[\s*\{[^}]*\bhost\s*:\s*
+    req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
+    """,
+)
+
+# ---------------------------------------------------------------------------
+# TS-168: new SMB2({ share: req.xxx }) -- SMB share SSRF / NTLM credential exfil
+# ---------------------------------------------------------------------------
+
+_SMB2_SHARE_REQ = re.compile(
+    r"""(?x)
+    \bnew\s+SMB2\s*\(\s*\{[^}]*\bshare\s*:\s*req\.(?:query|params|body)\.[A-Za-z_$][A-Za-z0-9_$.]*
     """,
 )
 
@@ -3250,6 +3281,33 @@ def _scan_line(path: Path, lineno: int, raw: str, line: str) -> list[SourceFindi
             Confidence.HIGH,
             "axios.defaults.baseURL = req.xxx -- user-controlled global base URL poisons all axios requests",
             "Never assign request data to axios.defaults. Configure the base URL once at startup.",
+        )
+    # TS-166: new Queue(name, { redis: { host: req.xxx } }) -- bull/bullmq broker SSRF
+    if _BULL_QUEUE_HOST_REQ.search(raw):
+        _add(
+            "TS-166",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Queue(name, {redis: {host: req.xxx}}) -- user-controlled queue broker enables SSRF",
+            "Hardcode the queue Redis host. Never accept broker hosts from request data.",
+        )
+    # TS-167: new Redis.Cluster([{ host: req.xxx }]) -- ioredis cluster SSRF
+    if _REDIS_CLUSTER_HOST_REQ.search(raw):
+        _add(
+            "TS-167",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new Redis.Cluster([{host: req.xxx}]) -- user-controlled cluster node enables SSRF",
+            "Hardcode Redis cluster nodes. Never accept cache hosts from request data.",
+        )
+    # TS-168: new SMB2({ share: req.xxx }) -- SMB share SSRF / NTLM credential exfil
+    if _SMB2_SHARE_REQ.search(raw):
+        _add(
+            "TS-168",
+            Severity.HIGH,
+            Confidence.HIGH,
+            "new SMB2({share: req.xxx}) -- user-controlled SMB share sends NTLM credentials to attacker",
+            "Hardcode the SMB share path. Never accept file-share targets from request data.",
         )
 
     if _OBJ_DEFINE_PROP_REQ.search(raw):

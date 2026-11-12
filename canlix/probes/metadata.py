@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from mcpprobe.models import Confidence, Severity
-from mcpprobe.probes.base import ProbeResult, ProbeSession
+from canlix.models import Confidence, Severity
+from canlix.probes.base import ProbeResult, ProbeSession
 
 # --- PROBE-001: prompt-injection in tool description ---
 

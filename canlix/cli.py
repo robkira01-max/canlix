@@ -1,4 +1,4 @@
-"""MCPProbe CLI — mcpprobe scan / analyze / probe"""
+"""Canlix CLI — canlix scan / analyze / probe"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import typer
 from rich import print as rprint
 
 app = typer.Typer(
-    name="mcpprobe",
+    name="canlix",
     help="Open-source security scanner for MCP servers and AI agents.",
     add_completion=False,
 )
@@ -41,9 +41,9 @@ def scan(
     no_source: bool = typer.Option(False, "--no-source", help="Disable automatic source code analysis."),
 ) -> None:
     """Scan MCP server configurations (and detected source files) for security issues."""
-    from mcpprobe.engine import scan as run_scan
-    from mcpprobe.parsers import parse_all, parse_json_file
-    from mcpprobe.reporters import render_json, render_scan_sarif, render_terminal
+    from canlix.engine import scan as run_scan
+    from canlix.parsers import parse_all, parse_json_file
+    from canlix.reporters import render_json, render_scan_sarif, render_terminal
 
     if config:
         if not config.exists():
@@ -79,8 +79,8 @@ def analyze(
     ),
 ) -> None:
     """Analyze MCP server source code (Python/TypeScript) for security issues."""
-    from mcpprobe.analyzers import analyze_path
-    from mcpprobe.reporters import render_analyze_sarif, render_source_json, render_source_only
+    from canlix.analyzers import analyze_path
+    from canlix.reporters import render_analyze_sarif, render_source_json, render_source_only
 
     if not path.exists():
         rprint(f"[red]Error:[/red] Path not found: {path}")
@@ -91,7 +91,7 @@ def analyze(
     duration_ms = (time.monotonic() - t0) * 1000
 
     if output == "json":
-        from mcpprobe.reporters.json_report import render_source_json
+        from canlix.reporters.json_report import render_source_json
 
         print(render_source_json(findings, path, duration_ms))
     elif output == "sarif":
@@ -123,17 +123,17 @@ def probe(
     timeout: float = typer.Option(5.0, "--timeout", help="Connection timeout in seconds."),
 ) -> None:
     """Probe a live MCP server for runtime security issues."""
-    from mcpprobe.models import Transport
-    from mcpprobe.probes.runner import probe_server
-    from mcpprobe.probes.transport import HttpMCPClient, StdioMCPClient
-    from mcpprobe.reporters import render_probe_json, render_probe_sarif, render_probe_session
+    from canlix.models import Transport
+    from canlix.probes.runner import probe_server
+    from canlix.probes.transport import HttpMCPClient, StdioMCPClient
+    from canlix.reporters import render_probe_json, render_probe_sarif, render_probe_session
 
     if target.startswith("http://") or target.startswith("https://"):
         client: HttpMCPClient | StdioMCPClient = HttpMCPClient(target, timeout=timeout)
         server_name = target.rsplit("/", 1)[-1] or target
         server_url = target
     else:
-        from mcpprobe.parsers import parse_all, parse_json_file
+        from canlix.parsers import parse_all, parse_json_file
 
         servers = parse_json_file(config) if config else parse_all()
         server = next((s for s in servers if s.name == target), None)
@@ -169,11 +169,138 @@ def probe(
 
 
 @app.command()
-def version() -> None:
-    """Print MCPProbe version."""
-    from mcpprobe import __version__
+def watch(
+    command: list[str] = typer.Argument(..., help="MCP server command to run behind the proxy (after --)."),
+    trace: Optional[Path] = typer.Option(None, "--trace", help="Append a redacted JSONL trace to this file."),
+    allow_host: list[str] = typer.Option(
+        [], "--allow-host", help="Allowed destination host (wildcards ok). Repeat. Others raise RUN-002."
+    ),
+    kill_on: Optional[str] = typer.Option(
+        None, "--kill-on", help="Emergency stop: terminate the server at this severity or above (exit code 3)."
+    ),
+    fail_on: str = typer.Option("CRITICAL", "--fail-on", help="Exit 1 if a finding meets this severity."),
+    name: Optional[str] = typer.Option(None, "--name", help="Server label used in findings."),
+    rate_limit: int = typer.Option(30, "--rate-limit", help="Max tool calls per 10 s before RUN-006."),
+) -> None:
+    """Run an MCP server behind an observing proxy (stdio). Never modifies traffic; diagnostics go to stderr."""
+    from canlix.runtime import RuntimeAnalyzer, run_proxy
 
-    rprint(f"MCPProbe v{__version__}")
+    label = name or Path(command[0]).name
+    analyzer = RuntimeAnalyzer(label, allow_hosts=allow_host, rate_limit=rate_limit)
+    code = run_proxy(command, analyzer, trace_path=trace, kill_on=kill_on)
+    if code != 0:
+        raise typer.Exit(code)
+    _exit_on_severity(analyzer.findings, [], fail_on)
+
+
+@app.command()
+def replay(
+    trace: Path = typer.Argument(..., help="JSONL trace recorded by `canlix watch --trace`."),
+    output: str = typer.Option("terminal", "--output", "-o", help="Output format: terminal | json"),
+    allow_host: list[str] = typer.Option([], "--allow-host", help="Allowed destination host (wildcards ok)."),
+    fail_on: str = typer.Option("CRITICAL", "--fail-on", help="Exit 1 if a finding meets this severity."),
+) -> None:
+    """Re-run the runtime detectors over a recorded trace (for CI or after tuning the allowlist)."""
+    import json
+
+    from canlix.runtime import RuntimeAnalyzer
+    from canlix.runtime.proxy import finding_to_dict
+
+    if not trace.is_file():
+        rprint(f"[red]Trace not found:[/red] {trace}")
+        raise typer.Exit(2)
+
+    analyzer = RuntimeAnalyzer(trace.stem, allow_hosts=allow_host)
+    for raw in trace.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(rec, dict) and "dir" in rec and "msg" in rec:
+            analyzer.observe(rec["dir"], rec["msg"], float(rec.get("ts", 0.0)))
+
+    if output == "json":
+        typer.echo(json.dumps([finding_to_dict(f) for f in analyzer.findings], indent=2))
+    else:
+        for f in analyzer.findings:
+            typer.echo(f"{f.severity.value:8} {f.rule_id}  {f.message}")
+        typer.echo(f"{len(analyzer.findings)} finding(s), {analyzer.tool_calls} tool call(s) replayed")
+
+    _exit_on_severity(analyzer.findings, [], fail_on)
+
+
+@app.command()
+def push(
+    file: Optional[Path] = typer.Argument(None, help="JSON report file; reads stdin if omitted."),
+    url: Optional[str] = typer.Option(None, "--url", envvar="CANLIX_API_URL", help="SaaS base URL."),
+    token: Optional[str] = typer.Option(None, "--token", envvar="CANLIX_API_TOKEN", help="API token (cnx_...)."),
+    project: Optional[str] = typer.Option(None, "--project", envvar="CANLIX_PROJECT", help="Project ID (32-char hex)."),
+    no_strip: bool = typer.Option(False, "--no-strip", help="Send raw report without client-side stripping."),
+) -> None:
+    """Push a scan report (JSON) to the Canlix SaaS and show the diff."""
+    import json as _json
+    import sys
+
+    from canlix.saas_client import push_scan, strip_report
+
+    if not token:
+        rprint("[red]Error:[/red] Set CANLIX_API_TOKEN or pass --token")
+        raise typer.Exit(1)
+    if not project:
+        rprint("[red]Error:[/red] Set CANLIX_PROJECT or pass --project")
+        raise typer.Exit(1)
+
+    base_url = url or "https://api.canlix.dev"
+
+    if file is not None:
+        try:
+            raw = file.read_text(encoding="utf-8")
+        except OSError as exc:
+            rprint(f"[red]Error:[/red] Cannot read {file}: {exc}")
+            raise typer.Exit(1)
+    else:
+        raw = sys.stdin.read()
+
+    try:
+        payload = _json.loads(raw)
+    except _json.JSONDecodeError as exc:
+        rprint(f"[red]Error:[/red] Invalid JSON — {exc}")
+        raise typer.Exit(1)
+
+    if not no_strip:
+        payload = strip_report(payload)
+
+    try:
+        result = push_scan(base_url, token, project, payload)
+    except ValueError as exc:
+        rprint(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+    except Exception as exc:
+        rprint(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    scan_id = result["scan_id"]
+    score = result["score"]
+    diff = result["diff"]
+
+    rprint(f"[green]✓[/green] Scan submitted  [dim]{scan_id}  {result['created_at']}[/dim]")
+    rprint(f"  Score      : [bold]{score}/100[/bold]")
+    if diff["baseline"]:
+        rprint("  Baseline   : [bold]yes[/bold] [dim](first scan — no prior diff)[/dim]")
+    else:
+        new_str = f"[red]{diff['new']}[/red]" if diff["new"] > 0 else str(diff["new"])
+        fix_str = f"[green]{diff['fixed']}[/green]" if diff["fixed"] > 0 else str(diff["fixed"])
+        rprint(f"  New        : {new_str}")
+        rprint(f"  Fixed      : {fix_str}")
+        rprint(f"  Persisting : {diff['persisting']}")
+
+
+@app.command()
+def version() -> None:
+    """Print Canlix version."""
+    from canlix import __version__
+
+    rprint(f"Canlix v{__version__}")
 
 
 if __name__ == "__main__":

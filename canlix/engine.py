@@ -6,9 +6,10 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from mcpprobe.analyzers import analyze_path
-from mcpprobe.models import Confidence, Finding, MCPServer, ScanResult, Severity, SourceFinding
-from mcpprobe.rules import ALL_RULES
+from canlix.analyzers import analyze_path
+from canlix.models import Confidence, Finding, MCPServer, ScanResult, Severity, SourceFinding
+from canlix.rules import ALL_RULES
+from canlix.rules.cross_server import check_cross_server
 
 _SOURCE_EXTS = {".py", ".ts", ".js"}
 
@@ -69,6 +70,7 @@ def scan(servers: list[MCPServer], *, analyze_source: bool = True) -> ScanResult
                 findings.append(finding)
 
     findings.extend(_check_duplicate_names(servers))
+    findings.extend(check_cross_server(servers))
 
     source_findings: list[SourceFinding] = []
     if analyze_source:

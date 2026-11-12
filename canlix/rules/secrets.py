@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from mcpprobe.models import Confidence, Finding, MCPServer, Severity
-from mcpprobe.rules.base import rule
+from canlix.models import Confidence, Finding, MCPServer, Severity
+from canlix.rules.base import rule
 
 # Patterns that look like secrets — conservative to avoid false positives
 _SECRET_PATTERNS = [

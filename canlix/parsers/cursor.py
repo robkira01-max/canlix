@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mcpprobe.models import MCPServer
-from mcpprobe.parsers.claude import _parse_servers
+from canlix.models import MCPServer
+from canlix.parsers.claude import _parse_servers
 
 
 def parse_cursor(extra_paths: list[Path] | None = None) -> list[MCPServer]:

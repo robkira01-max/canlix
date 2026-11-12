@@ -1,7 +1,7 @@
-from mcpprobe.parsers.claude import parse_claude
-from mcpprobe.parsers.cursor import parse_cursor
-from mcpprobe.parsers.generic import parse_json_file
-from mcpprobe.parsers.vscode import parse_vscode
+from canlix.parsers.claude import parse_claude
+from canlix.parsers.cursor import parse_cursor
+from canlix.parsers.generic import parse_json_file
+from canlix.parsers.vscode import parse_vscode
 
 
 def parse_all() -> list:

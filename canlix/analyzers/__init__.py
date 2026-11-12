@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mcpprobe.analyzers.deps import analyze_package_json, analyze_requirements
-from mcpprobe.analyzers.python_ast import analyze_python
-from mcpprobe.analyzers.ts_regex import analyze_typescript
-from mcpprobe.models import SourceFinding
+from canlix.analyzers.deps import analyze_package_json, analyze_requirements
+from canlix.analyzers.python_ast import analyze_python
+from canlix.analyzers.ts_regex import analyze_typescript
+from canlix.models import SourceFinding
 
 _SKIP = {"node_modules", ".venv", "venv", "__pycache__", ".git", "dist", "build", ".tox"}
 _TS_SUFFIXES = {".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx"}

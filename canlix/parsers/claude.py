@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mcpprobe.models import MCPServer, Transport
+from canlix.models import MCPServer, Transport
 
 
 def _transport(raw: str) -> Transport:

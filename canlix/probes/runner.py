@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import time
 
-from mcpprobe.probes.base import ProbeSession
-from mcpprobe.probes.metadata import run_metadata_probes
-from mcpprobe.probes.transport import MCPClient, MCPConnectionError
+from canlix.probes.base import ProbeSession
+from canlix.probes.metadata import run_metadata_probes
+from canlix.probes.transport import MCPClient, MCPConnectionError
 
 
 def probe_server(
@@ -31,7 +31,7 @@ def probe_server(
         session.findings.extend(run_metadata_probes(session))
 
         if active:
-            from mcpprobe.probes.active import run_active_probes
+            from canlix.probes.active import run_active_probes
 
             session.findings.extend(run_active_probes(client, session))
 

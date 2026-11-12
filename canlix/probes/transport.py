@@ -10,7 +10,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 
 PROTOCOL_VERSION = "2024-11-05"
-_CLIENT_INFO = {"name": "mcpprobe", "version": "0.1.0"}
+_CLIENT_INFO = {"name": "canlix", "version": "0.1.0"}
 
 
 class MCPConnectionError(Exception):

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from canlix.cli import app
@@ -34,8 +33,7 @@ def test_strip_removes_evidence_from_findings():
 
 def test_strip_keeps_rule_id_severity_message():
     payload = {
-        "findings": [{"rule_id": "X", "severity": "HIGH", "confidence": "HIGH",
-                       "message": "msg", "evidence": "leaked"}]
+        "findings": [{"rule_id": "X", "severity": "HIGH", "confidence": "HIGH", "message": "msg", "evidence": "leaked"}]
     }
     kept = strip_report(payload)["findings"][0]
     assert kept["rule_id"] == "X" and kept["severity"] == "HIGH" and kept["message"] == "msg"
@@ -65,8 +63,9 @@ _FAKE_SUMMARY = {
     "diff": {"baseline": False, "new": 1, "fixed": 0, "persisting": 0},
 }
 
-_GOOD_REPORT = json.dumps({"findings": [{"rule_id": "X", "severity": "HIGH",
-                                          "confidence": "HIGH", "server": "s", "message": "m"}]})
+_GOOD_REPORT = json.dumps(
+    {"findings": [{"rule_id": "X", "severity": "HIGH", "confidence": "HIGH", "server": "s", "message": "m"}]}
+)
 
 
 def test_push_no_token_exits_nonzero(tmp_path):
@@ -125,9 +124,19 @@ def test_push_server_error_exits_nonzero(tmp_path):
 
 def test_push_strips_sensitive_fields_before_send(tmp_path):
     report_with_secrets = json.dumps(
-        {"source_findings": [{"rule_id": "X", "severity": "CRITICAL", "confidence": "HIGH",
-                               "file": "s.py", "line": 1, "message": "m",
-                               "code_snippet": "subprocess.run(cmd, shell=True)"}]}
+        {
+            "source_findings": [
+                {
+                    "rule_id": "X",
+                    "severity": "CRITICAL",
+                    "confidence": "HIGH",
+                    "file": "s.py",
+                    "line": 1,
+                    "message": "m",
+                    "code_snippet": "subprocess.run(cmd, shell=True)",
+                }
+            ]
+        }
     )
     f = tmp_path / "r.json"
     f.write_text(report_with_secrets)
@@ -146,8 +155,18 @@ def test_push_strips_sensitive_fields_before_send(tmp_path):
 
 def test_push_no_strip_flag_skips_stripping(tmp_path):
     report_with_secrets = json.dumps(
-        {"findings": [{"rule_id": "X", "severity": "HIGH", "confidence": "HIGH",
-                        "server": "s", "message": "m", "evidence": "sensitive"}]}
+        {
+            "findings": [
+                {
+                    "rule_id": "X",
+                    "severity": "HIGH",
+                    "confidence": "HIGH",
+                    "server": "s",
+                    "message": "m",
+                    "evidence": "sensitive",
+                }
+            ]
+        }
     )
     f = tmp_path / "r.json"
     f.write_text(report_with_secrets)

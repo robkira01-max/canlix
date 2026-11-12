@@ -7,8 +7,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from mcpprobe.models import ScanResult, Severity, SourceFinding
-from mcpprobe.probes.base import ProbeSession
+from canlix.models import ScanResult, Severity, SourceFinding
+from canlix.probes.base import ProbeSession
 
 console = Console()
 
@@ -26,7 +26,7 @@ def render_terminal(result: ScanResult) -> None:
     console.print()
     console.print(
         Panel(
-            f"[bold]MCPProbe[/bold]  ·  {len(result.servers)} server(s) scanned  ·  "
+            f"[bold]Canlix[/bold]  ·  {len(result.servers)} server(s) scanned  ·  "
             f"{total} finding(s)  ·  "
             f"[{_score_color(result.score)}]Score {result.score}/100[/{_score_color(result.score)}]  ·  "
             f"{result.scan_duration_ms:.0f} ms",
@@ -105,7 +105,7 @@ def render_probe_session(session: ProbeSession) -> None:
     if session.error:
         console.print(
             Panel(
-                f"[bold]MCPProbe probe[/bold]  ·  [bold]{session.server_name}[/bold]  ·  "
+                f"[bold]Canlix probe[/bold]  ·  [bold]{session.server_name}[/bold]  ·  "
                 f"[bold red]Connection failed:[/bold red] {session.error}",
                 border_style="red",
             )
@@ -120,7 +120,7 @@ def render_probe_session(session: ProbeSession) -> None:
     proto = f"  ·  MCP {session.protocol_version}" if session.protocol_version else ""
     console.print(
         Panel(
-            f"[bold]MCPProbe probe[/bold]{proto}  ·  [bold]{session.server_name}[/bold]  ·  "
+            f"[bold]Canlix probe[/bold]{proto}  ·  [bold]{session.server_name}[/bold]  ·  "
             f"{tool_count} tool(s)  ·  {resource_count} resource(s)  ·  "
             f"{finding_count} finding(s)  ·  "
             f"[{color}]Score {score}/100[/{color}]  ·  "
@@ -178,7 +178,7 @@ def render_source_only(findings: list[SourceFinding], path: str, duration_ms: fl
     score = max(0, 100 - sum(f.severity.score for f in findings))
     console.print(
         Panel(
-            f"[bold]MCPProbe analyze[/bold]  ·  {path}  ·  "
+            f"[bold]Canlix analyze[/bold]  ·  {path}  ·  "
             f"{len(findings)} finding(s)  ·  "
             f"[{_score_color(score)}]Score {score}/100[/{_score_color(score)}]  ·  "
             f"{duration_ms:.0f} ms",

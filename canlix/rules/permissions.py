@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from mcpprobe.models import Confidence, Finding, MCPServer, Severity
-from mcpprobe.rules.base import rule
+from canlix.models import Confidence, Finding, MCPServer, Severity
+from canlix.rules.base import rule
 
 _DANGEROUS_TOOLS = re.compile(r"(?i)(filesystem|shell|exec|run|eval|delete|drop|admin|root|sudo|system)")
 # Matches top-level broad paths only — not scoped subdirectories like /home/user/project

@@ -6,7 +6,7 @@ import ast
 import re
 from pathlib import Path
 
-from mcpprobe.models import Confidence, Severity, SourceFinding
+from canlix.models import Confidence, Severity, SourceFinding
 
 _KEY_PREFIXES = re.compile(
     r"^(sk-[A-Za-z0-9]{32,}"
@@ -437,6 +437,12 @@ _DOCKER_CLIENT_FUNCS = frozenset({"docker.DockerClient", "DockerClient", "docker
 _K8S_CONFIG_FUNCS = frozenset({"kubernetes.client.Configuration", "Configuration"})
 # SRC-165: winrm.Session(param) — Windows credential exfil via user-controlled WinRM target
 _WINRM_SESSION_FUNCS = frozenset({"winrm.Session"})
+# SRC-166: kombu.Connection(hostname=param) — AMQP SSRF / broker credential exfil
+_KOMBU_CONNECTION_FUNCS = frozenset({"kombu.Connection"})
+# SRC-167: smbclient.register_session(server=param) — SMB credential exfil
+_SMBCLIENT_SESSION_FUNCS = frozenset({"smbclient.register_session", "register_session"})
+# SRC-168: pyodbc.connect(param) — connection-string injection (arbitrary ODBC driver load)
+_PYODBC_CONNECT_FUNCS = frozenset({"pyodbc.connect"})
 # SRC-029: password hashed with fast algorithm (sha256/sha512 instead of bcrypt/argon2)
 _FAST_HASH_FUNCS = frozenset(
     {
@@ -3212,6 +3218,67 @@ class _Visitor(ast.NodeVisitor):
                     f"winrm.Session({node.args[0].id}) — user-controlled WinRM target sends"
                     " Windows credentials to an attacker-chosen host",
                     "Hardcode the WinRM endpoint. Never accept remote-management hosts from user input.",
+                )
+
+        # SRC-166: kombu.Connection(hostname=param) — AMQP SSRF / broker credential exfil
+        if fname in _KOMBU_CONNECTION_FUNCS and self._param_names:
+            hn_kw = next((kw for kw in node.keywords if kw.arg == "hostname"), None)
+            if hn_kw and isinstance(hn_kw.value, ast.Name) and hn_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-166",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"kombu.Connection(hostname={hn_kw.value.id}) — user-controlled broker host"
+                    " enables SSRF and sends broker credentials to an attacker server",
+                    "Hardcode the message broker URL. Never accept broker hosts from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-166",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"kombu.Connection({node.args[0].id}) — user-controlled broker URL"
+                    " enables SSRF and sends broker credentials to an attacker server",
+                    "Hardcode the message broker URL. Never accept broker hosts from user input.",
+                )
+
+        # SRC-167: smbclient.register_session(server=param) — SMB credential exfil
+        if fname in _SMBCLIENT_SESSION_FUNCS and self._param_names:
+            sv_kw = next((kw for kw in node.keywords if kw.arg == "server"), None)
+            if sv_kw and isinstance(sv_kw.value, ast.Name) and sv_kw.value.id in self._param_names:
+                self._add(
+                    "SRC-167",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"smbclient.register_session(server={sv_kw.value.id}) — user-controlled SMB"
+                    " server receives NTLM credentials (relay / hash capture)",
+                    "Hardcode the SMB server. Never accept file-share hosts from user input.",
+                )
+            elif node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-167",
+                    Severity.HIGH,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"smbclient.register_session({node.args[0].id}) — user-controlled SMB"
+                    " server receives NTLM credentials (relay / hash capture)",
+                    "Hardcode the SMB server. Never accept file-share hosts from user input.",
+                )
+
+        # SRC-168: pyodbc.connect(param) — connection-string injection (arbitrary driver load)
+        if fname in _PYODBC_CONNECT_FUNCS and self._param_names:
+            if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in self._param_names:
+                self._add(
+                    "SRC-168",
+                    Severity.CRITICAL,
+                    Confidence.HIGH,
+                    node.lineno,
+                    f"pyodbc.connect({node.args[0].id}) — user-controlled connection string can set"
+                    " DRIVER= to load an arbitrary native library (code execution)",
+                    "Build the ODBC connection string from fixed parts; only interpolate validated values.",
                 )
 
         self.generic_visit(node)
