@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from mcpprobe.models import Confidence, Finding, Severity, SourceFinding
-from mcpprobe.probes.base import ProbeResult, ProbeSession
-from mcpprobe.reporters.sarif import (
+from canlix.models import Confidence, Finding, Severity, SourceFinding
+from canlix.probes.base import ProbeResult, ProbeSession
+from canlix.reporters.sarif import (
     _sev_level,
     render_analyze_sarif,
     render_probe_sarif,
@@ -106,7 +106,7 @@ def test_sarif_has_runs():
 def test_sarif_tool_name():
     doc = _parse(render_analyze_sarif([]))
     driver = doc["runs"][0]["tool"]["driver"]
-    assert driver["name"] == "MCPProbe"
+    assert driver["name"] == "Canlix"
     assert driver["version"] == "0.1.0"
 
 
@@ -154,7 +154,7 @@ def test_source_finding_level_medium():
 
 
 def test_config_finding_has_logical_location():
-    from mcpprobe.models import ScanResult
+    from canlix.models import ScanResult
 
     result = ScanResult(findings=[_cfg_finding()], source_findings=[])
     doc = _parse(render_scan_sarif(result))
@@ -207,7 +207,7 @@ def test_multiple_rules_all_present():
 
 
 def test_scan_sarif_combines_config_and_source():
-    from mcpprobe.models import ScanResult
+    from canlix.models import ScanResult
 
     result = ScanResult(
         findings=[_cfg_finding("SEC-001")],

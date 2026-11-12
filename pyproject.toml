@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcpprobe"
+name = "canlix"
 version = "0.1.0"
 description = "Open-source security scanner for MCP servers and AI agents"
 readme = "README.md"
@@ -42,16 +42,17 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/robkira01-max/mcpprobe"
-Source = "https://github.com/robkira01-max/mcpprobe"
-"Bug Tracker" = "https://github.com/robkira01-max/mcpprobe/issues"
-Changelog = "https://github.com/robkira01-max/mcpprobe/releases"
+Homepage = "https://github.com/robkira01-max/canlix"
+Source = "https://github.com/robkira01-max/canlix"
+"Bug Tracker" = "https://github.com/robkira01-max/canlix/issues"
+Changelog = "https://github.com/robkira01-max/canlix/releases"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "ruff"]
+dev = ["pytest>=8", "pytest-cov", "ruff", "pydantic>=2"]
+saas = ["pydantic>=2", "fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]
-mcpprobe = "mcpprobe.cli:app"
+canlix = "canlix.cli:app"
 
 [tool.ruff]
 line-length = 120

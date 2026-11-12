@@ -5,9 +5,9 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from mcpprobe.analyzers import analyze_path
-from mcpprobe.analyzers.python_ast import analyze_python
-from mcpprobe.models import Severity
+from canlix.analyzers import analyze_path
+from canlix.analyzers.python_ast import analyze_python
+from canlix.models import Severity
 
 FIXTURES = Path(__file__).parent / "fixtures" / "source"
 
@@ -393,7 +393,7 @@ def test_SRC010_passes_secrets_token_hex(tmp_path):
 
 
 def test_SRC010_fixture_fires_on_vulnerable_server(tmp_path):
-    from mcpprobe.analyzers.python_ast import analyze_python as _ap
+    from canlix.analyzers.python_ast import analyze_python as _ap
 
     findings = _ap(FIXTURES / "vulnerable_server.py")
     assert any(f.rule_id == "SRC-010" for f in findings)

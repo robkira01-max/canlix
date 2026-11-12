@@ -1,26 +1,26 @@
-"""Unit tests for MCPProbe rules — one test per rule, clean + vulnerable fixture."""
+"""Unit tests for Canlix rules — one test per rule, clean + vulnerable fixture."""
 
 from pathlib import Path
 
-from mcpprobe.engine import scan
-from mcpprobe.models import MCPServer, Severity, Transport
-from mcpprobe.parsers.generic import parse_json_file
-from mcpprobe.rules.config import CFG_001_no_command_no_url, CFG_004_command_with_url
-from mcpprobe.rules.execution import (
+from canlix.engine import scan
+from canlix.models import MCPServer, Severity, Transport
+from canlix.parsers.generic import parse_json_file
+from canlix.rules.config import CFG_001_no_command_no_url, CFG_004_command_with_url
+from canlix.rules.execution import (
     EXEC_001_relative_command,
     EXEC_002_direct_shell,
     EXEC_003_shell_flag_in_args,
     EXEC_004_unpinned_npx,
     EXEC_005_unpinned_uvx,
 )
-from mcpprobe.rules.network import (
+from canlix.rules.network import (
     NET_001_http_url,
     NET_002_public_url,
     NET_004_sensitive_path_in_args,
     NET_005_tls_verification_disabled,
 )
-from mcpprobe.rules.permissions import PERM_001_broad_filesystem_access, PERM_003_home_dir_db
-from mcpprobe.rules.secrets import (
+from canlix.rules.permissions import PERM_001_broad_filesystem_access, PERM_003_home_dir_db
+from canlix.rules.secrets import (
     SEC_001_api_key_in_env,
     SEC_002_secret_in_args,
     SEC_003_secret_key_name_in_env,

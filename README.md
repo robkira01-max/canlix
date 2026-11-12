@@ -1,14 +1,14 @@
-# MCPProbe
+# Canlix
 
 **Open-source security scanner for MCP servers and AI agents.**
 
 Scan your Claude Code, Cursor, or VS Code MCP configurations in seconds — no account, no cloud, no data upload.
 
 ```
-$ mcpprobe scan
+$ canlix scan
 
 ╭──────────────────────────────────────────────────────────────────────────────╮
-│ MCPProbe  ·  3 server(s) scanned  ·  4 finding(s)  ·  Score 72/100  ·  3 ms │
+│ Canlix  ·  3 server(s) scanned  ·  4 finding(s)  ·  Score 72/100  ·  3 ms │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 HIGH (1)
@@ -28,13 +28,13 @@ LOW (1)
 
 ---
 
-## Why MCPProbe
+## Why Canlix
 
 [MCP](https://modelcontextprotocol.io) is the standard that connects AI agents to your tools, files, and databases. Every MCP server you install runs code on your machine — and most developers have several installed.
 
-**MCPProbe gives you visibility before something goes wrong.**
+**Canlix gives you visibility before something goes wrong.**
 
-| | MCPProbe | Snyk Agent Scan |
+| | Canlix | Snyk Agent Scan |
 |---|---|---|
 | Config scanning (stdio / HTTP / SSE) | ✅ | stdio only |
 | Source code analysis — **51 Python + 51 JS/TS rules** | ✅ | ❌ |
@@ -49,7 +49,7 @@ LOW (1)
 ## Install
 
 ```bash
-pip install mcpprobe
+pip install canlix
 ```
 
 Requires Python 3.10+. No external dependencies beyond `typer` and `rich`.
@@ -62,16 +62,16 @@ Requires Python 3.10+. No external dependencies beyond `typer` and `rich`.
 
 ```bash
 # Auto-detect Claude Code, Cursor and VS Code configs
-mcpprobe scan
+canlix scan
 
 # Scan a specific config file
-mcpprobe scan --config path/to/mcp-config.json
+canlix scan --config path/to/mcp-config.json
 
 # JSON output for CI/CD — exits 1 if HIGH or above
-mcpprobe scan --output json --fail-on HIGH
+canlix scan --output json --fail-on HIGH
 
 # Skip source code analysis
-mcpprobe scan --no-source
+canlix scan --no-source
 ```
 
 Auto-detects configs from:
@@ -85,17 +85,17 @@ Auto-detects configs from:
 
 ```bash
 # Scan a single file
-mcpprobe analyze server.py
-mcpprobe analyze server.ts
+canlix analyze server.py
+canlix analyze server.ts
 
 # Scan a whole project directory
-mcpprobe analyze ./my-mcp-server/
+canlix analyze ./my-mcp-server/
 
 # JSON output
-mcpprobe analyze server.py --output json
+canlix analyze server.py --output json
 
 # SARIF for GitHub Code Scanning
-mcpprobe analyze ./src --output sarif > results.sarif
+canlix analyze ./src --output sarif > results.sarif
 ```
 
 Detects 51 Python AST patterns and 51 TypeScript/JavaScript regex patterns — covering injection, secrets, weak crypto, path traversal, deserialization, and more. Zero external dependencies, no Node.js required.
@@ -106,19 +106,33 @@ Detects 51 Python AST patterns and 51 TypeScript/JavaScript regex patterns — c
 
 ```bash
 # Probe an HTTP MCP server
-mcpprobe probe https://my-server.example.com/mcp
+canlix probe https://my-server.example.com/mcp
 
 # Probe a server from your config by name
-mcpprobe probe my-server-name
+canlix probe my-server-name
 
 # Enable active tool-call probes (use only on servers you own)
-mcpprobe probe https://my-server.example.com/mcp --active
+canlix probe https://my-server.example.com/mcp --active
 
 # JSON output
-mcpprobe probe https://my-server.example.com/mcp --output json
+canlix probe https://my-server.example.com/mcp --output json
 ```
 
 Connects to a live MCP server, enumerates its tools and resources, and runs passive + optional active security probes. Detects prompt-injection in tool descriptions, dangerous execution tools, and unrestricted filesystem parameters — without sending tool calls by default.
+
+---
+
+### `watch` / `replay` — runtime analysis (stdio)
+
+```bash
+# Put the proxy in front of a server in your MCP config: command = canlix, args = watch ... -- <real command>
+canlix watch --trace run.jsonl --allow-host "*.example.com" --kill-on HIGH -- npx -y my-mcp-server
+
+# Re-run the detectors later (CI, tuned allowlist)
+canlix replay run.jsonl --allow-host "*.example.com" --fail-on HIGH
+```
+
+`watch` relays JSON-RPC lines unchanged and never writes to stdout (the protocol channel); findings go to stderr and the trace. Traces are **always redacted** — secrets become `<redacted:kind>` markers, and replay still recognises them. `--kill-on` is an emergency stop (exit code `3`). Stdio transport only for now.
 
 ---
 
@@ -127,40 +141,38 @@ Connects to a live MCP server, enumerates its tools and resources, and runs pass
 ```yaml
 - name: Scan MCP servers
   run: |
-    pip install mcpprobe
-    mcpprobe scan --output json --fail-on HIGH
+    pip install canlix
+    canlix scan --output json --fail-on HIGH
 
 - name: Analyze MCP server source
-  run: mcpprobe analyze ./src --output json --fail-on CRITICAL
+  run: canlix analyze ./src --output json --fail-on CRITICAL
 ```
 
-`mcpprobe` exits `0` on clean, `1` if a finding meets or exceeds `--fail-on`, `2` on config errors.
+`canlix` exits `0` on clean, `1` if a finding meets or exceeds `--fail-on`, `2` on config errors.
 
 ### GitHub Code Scanning (SARIF upload)
 
+Use the bundled action. It uploads SARIF even when findings exist, then fails the job on the severity gate (a plain `canlix ... > file.sarif` step exits `1` on findings and would skip the upload):
+
 ```yaml
-- name: MCPProbe — scan and analyze
-  run: |
-    pip install mcpprobe
-    mcpprobe scan   --output sarif > scan.sarif
-    mcpprobe analyze ./src --output sarif > analyze.sarif
+permissions:
+  contents: read
+  security-events: write
 
-- name: Upload SARIF results
-  uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: scan.sarif
-
-- name: Upload source analysis SARIF
-  uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: analyze.sarif
+steps:
+  - uses: actions/checkout@v4
+  - uses: robkira01-max/canlix@main
+    with:
+      path: ./src
+      fail-on: HIGH
+      config: .mcp.json   # optional
 ```
 
 ---
 
 ## Complete rule reference
 
-### Config rules (21) — `mcpprobe scan`
+### Config rules (21) — `canlix scan`
 
 #### Secrets
 | Rule | Sev. | Description |
@@ -206,7 +218,7 @@ Connects to a live MCP server, enumerates its tools and resources, and runs pass
 
 ---
 
-### Python source rules (51) — `mcpprobe analyze` on `.py` files
+### Python source rules (51) — `canlix analyze` on `.py` files
 
 AST-based analysis — no false positives from comments or strings.
 
@@ -295,7 +307,7 @@ AST-based analysis — no false positives from comments or strings.
 
 ---
 
-### TypeScript / JavaScript source rules (51) — `mcpprobe analyze` on `.ts`, `.js`, `.mjs`, `.cjs`
+### TypeScript / JavaScript source rules (51) — `canlix analyze` on `.ts`, `.js`, `.mjs`, `.cjs`
 
 Regex-based line scanning — no Node.js required.
 
@@ -380,7 +392,7 @@ Regex-based line scanning — no Node.js required.
 
 ---
 
-### Dependency manifest rules (3) — `mcpprobe analyze`
+### Dependency manifest rules (3) — `canlix analyze`
 
 Scanned automatically alongside source files.
 
@@ -397,7 +409,7 @@ Scanned automatically alongside source files.
 
 ---
 
-### Probe rules (7) — `mcpprobe probe`
+### Probe rules (7) — `canlix probe`
 
 #### Passive (always run)
 | Rule | Sev. | Description |
@@ -413,6 +425,31 @@ Scanned automatically alongside source files.
 |---|---|---|
 | PROBE-010 | CRITICAL/HIGH | Path traversal succeeds (`../../../../etc/passwd`) |
 | PROBE-011 | MEDIUM | Error message leaks an internal filesystem path |
+
+---
+
+### Cross-server rules (4) — `canlix scan`
+
+Evaluated per config file (one file = one agent toolset). Capabilities are inferred from server names and arguments, so these carry `LOW`/`MEDIUM` confidence: confirm them against the tools each server really exposes.
+
+| Rule | Sev. | Description |
+|---|---|---|
+| XSV-001 | HIGH/MEDIUM | Private data + outbound channel (+ untrusted content = HIGH) reachable by one agent |
+| XSV-002 | HIGH | Server that ingests untrusted content next to a server that can run commands |
+| XSV-003 | MEDIUM | Same literal credential shared by several servers (value never printed) |
+| XSV-004 | MEDIUM | Near-identical server names — possible tool shadowing |
+
+### Runtime rules (7) — `canlix watch` / `canlix replay`
+
+| Rule | Sev. | Description |
+|---|---|---|
+| RUN-001 | HIGH/MEDIUM | Secret in tool arguments (HIGH) or in a tool result (MEDIUM) |
+| RUN-002 | HIGH | Destination host outside `--allow-host` (only when an allowlist is set) |
+| RUN-003 | HIGH/MEDIUM | Cloud-metadata endpoint (HIGH) or private address (MEDIUM) — SSRF attempt |
+| RUN-004 | HIGH | Prompt-injection pattern in a tool description or result |
+| RUN-005 | HIGH/MEDIUM | Tool definitions changed mid-session (rug pull) or `list_changed` announced |
+| RUN-006 | MEDIUM | Tool-call rate above `--rate-limit` per 10 s |
+| RUN-007 | HIGH | Sensitive path in arguments (`.ssh`, `.aws/credentials`, `/etc/shadow`, `.env`…) |
 
 ---
 
@@ -435,18 +472,18 @@ Floor is 0. Exit code is controlled by `--fail-on`, not the score.
 ## Contributing
 
 ```bash
-git clone https://github.com/robkira01-max/mcpprobe
-cd mcpprobe
+git clone https://github.com/robkira01-max/canlix
+cd canlix
 pip install -e ".[dev]"
 pytest tests/ -v
 ruff check .
 ```
 
-**New config rule** → add to `mcpprobe/rules/<category>.py`, return `Finding | None`, add a test in `tests/test_rules.py`.
+**New config rule** → add to `canlix/rules/<category>.py`, return `Finding | None`, add a test in `tests/test_rules.py`.
 
-**New source rule** → extend `_Visitor` in `mcpprobe/analyzers/python_ast.py` (Python) or `_scan_line` in `mcpprobe/analyzers/ts_regex.py` (TypeScript), add a test in `tests/test_analyzers.py` or `tests/test_ts_analyzer.py`.
+**New source rule** → extend `_Visitor` in `canlix/analyzers/python_ast.py` (Python) or `_scan_line` in `canlix/analyzers/ts_regex.py` (TypeScript), add a test in `tests/test_analyzers.py` or `tests/test_ts_analyzer.py`.
 
-**New probe rule** → add to `mcpprobe/probes/metadata.py` (passive) or `mcpprobe/probes/active.py` (active), add a test in `tests/test_probes.py`.
+**New probe rule** → add to `canlix/probes/metadata.py` (passive) or `canlix/probes/active.py` (active), add a test in `tests/test_probes.py`.
 
 ---
 
@@ -458,4 +495,4 @@ MIT © 2026 robkira01-max
 
 ## Disclaimer
 
-MCPProbe identifies potential security issues in MCP configurations, source files, and live servers. A passing scan does not guarantee security — review all findings in context. Run active probes (`--active`) only on servers you own or have explicit written permission to test.
+Canlix identifies potential security issues in MCP configurations, source files, and live servers. A passing scan does not guarantee security — review all findings in context. Run active probes (`--active`) only on servers you own or have explicit written permission to test.

@@ -1,0 +1,70 @@
+name: Canlix MCP Security Scan
+description: Scan MCP configurations and server source code, upload SARIF to GitHub Code Scanning, then gate on severity.
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  path:
+    description: Source directory to analyze.
+    default: "."
+  fail-on:
+    description: Fail the job if any finding meets or exceeds this severity (CRITICAL, HIGH, MEDIUM, LOW).
+    default: HIGH
+  config:
+    description: Optional path to an MCP JSON config file to scan.
+    default: ""
+  upload-sarif:
+    description: Upload SARIF results to GitHub Code Scanning (needs security-events write permission).
+    default: "true"
+  version:
+    description: Canlix version specifier passed to pip (for example "==0.1.0"). Empty installs the latest.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Canlix
+      shell: bash
+      run: pip install "canlix${{ inputs.version }}"
+
+    - name: Run scans
+      id: scan
+      shell: bash
+      env:
+        CANLIX_PATH: ${{ inputs.path }}
+        CANLIX_FAIL_ON: ${{ inputs.fail-on }}
+        CANLIX_CONFIG: ${{ inputs.config }}
+      run: |
+        rc=0
+        mkdir -p canlix-results
+        canlix analyze "$CANLIX_PATH" --output sarif --fail-on "$CANLIX_FAIL_ON" > canlix-results/analyze.sarif || rc=$?
+        if [ -n "$CANLIX_CONFIG" ]; then
+          canlix scan --config "$CANLIX_CONFIG" --output sarif --fail-on "$CANLIX_FAIL_ON" > canlix-results/scan.sarif || rc=$?
+        fi
+        echo "exit-code=$rc" >> "$GITHUB_OUTPUT"
+
+    - name: Upload source analysis SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: canlix-results/analyze.sarif
+        category: canlix-analyze
+
+    - name: Upload config scan SARIF
+      if: inputs.upload-sarif == 'true' && inputs.config != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: canlix-results/scan.sarif
+        category: canlix-scan
+
+    - name: Enforce severity gate
+      if: steps.scan.outputs.exit-code != '0'
+      shell: bash
+      run: |
+        echo "::error::Canlix found issues at or above ${{ inputs.fail-on }} (exit code ${{ steps.scan.outputs.exit-code }})."
+        exit "${{ steps.scan.outputs.exit-code }}"

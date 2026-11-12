@@ -5,9 +5,9 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from mcpprobe.analyzers import analyze_path
-from mcpprobe.analyzers.ts_regex import analyze_typescript
-from mcpprobe.models import Severity
+from canlix.analyzers import analyze_path
+from canlix.analyzers.ts_regex import analyze_typescript
+from canlix.models import Severity
 
 FIXTURES = Path(__file__).parent / "fixtures" / "source"
 

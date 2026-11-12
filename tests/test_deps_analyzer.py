@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mcpprobe.analyzers import analyze_path
-from mcpprobe.analyzers.deps import analyze_package_json, analyze_requirements
-from mcpprobe.models import Severity
+from canlix.analyzers import analyze_path
+from canlix.analyzers.deps import analyze_package_json, analyze_requirements
+from canlix.models import Severity
 
 FIXTURES = Path(__file__).parent / "fixtures" / "deps"
 

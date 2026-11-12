@@ -1045,3 +1045,23 @@ def get_k8s_config(host: str):
 def get_winrm_session(target: str):
     # SRC-165: winrm.Session with user-controlled target — Windows credential exfiltration
     return winrm.Session(target)
+
+
+import kombu  # noqa: E402
+import pyodbc  # noqa: E402
+import smbclient  # noqa: E402
+
+
+def get_kombu_connection(hostname: str):
+    # SRC-166: kombu.Connection with user-controlled hostname — AMQP SSRF
+    return kombu.Connection(hostname=hostname)
+
+
+def open_smb_session(server: str):
+    # SRC-167: smbclient.register_session with user-controlled server — NTLM credential exfiltration
+    return smbclient.register_session(server=server)
+
+
+def get_odbc_connection(conn_str: str):
+    # SRC-168: pyodbc.connect with user-controlled connection string — arbitrary driver load
+    return pyodbc.connect(conn_str)

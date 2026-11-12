@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 
-from mcpprobe.models import Confidence, Severity
-from mcpprobe.probes.base import ProbeResult, ProbeSession
-from mcpprobe.probes.metadata import run_metadata_probes
-from mcpprobe.probes.runner import probe_server
-from mcpprobe.probes.transport import MCPClient, MCPConnectionError
-from mcpprobe.reporters.json_report import render_probe_json
+from canlix.models import Confidence, Severity
+from canlix.probes.base import ProbeResult, ProbeSession
+from canlix.probes.metadata import run_metadata_probes
+from canlix.probes.runner import probe_server
+from canlix.probes.transport import MCPClient, MCPConnectionError
+from canlix.reporters.json_report import render_probe_json
 
 # ---------------------------------------------------------------------------
 # Mock transport
