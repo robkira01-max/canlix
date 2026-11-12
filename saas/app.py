@@ -473,6 +473,13 @@ def _load_portal() -> str:
     return _PORTAL_HTML
 
 
+@app.get("/")
+def root():
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/portal", status_code=302)
+
+
 @app.get("/portal")
 def portal():
     from fastapi.responses import HTMLResponse
