@@ -1,6 +1,6 @@
 # ADR 0001 — Architecture du SaaS Canlix (M7)
 
-**Statut :** PROPOSÉ — noyau implémenté et testé (`saas/`), couche HTTP et base de données à faire.
+**Statut :** ACCEPTÉ — couche HTTP (`saas/app.py`) + `PgStore` (`saas/pg_store.py`) livrés. Migrations dans `saas/migrate.py`. 1156 tests unitaires passants ; tests d'intégration dans `tests/integration/` (nécessitent `CANLIX_DATABASE_URL`).
 **Date :** 2026-11-12
 **Relecture requise avant toute mise en production :** `security-reviewer` (authentification, isolation des tenants, ingestion).
 
@@ -40,16 +40,23 @@ Format `cnx_` + 256 bits aléatoires, affichés une seule fois. Stockage : préf
 
 | Menace | Mesure | État |
 |---|---|---|
-| Lecture inter-tenant | `org_id` du jeton, 404 uniforme, RLS | Applicatif testé ; RLS à faire |
+| Lecture inter-tenant | `org_id` du jeton, 404 uniforme, RLS | Applicatif testé ; RLS DDL en place (activate quand CANLIX_DATABASE_URL configuré) |
 | Rapport piégé (taille, schéma) | Schéma strict, plafond de 5 000 constats, longueurs bornées | Fait ; limite de corps à imposer au proxy |
 | Vol de jeton | Hachage, affichage unique | Révocation/rotation à faire |
 | Secrets dans un rapport | Suppression des champs libres + masquage serveur | Fait |
 | Énumération de jetons | Pas de distinction entre jeton inconnu et invalide | Fait ; limitation de débit à faire |
 
-## Ce qui n'est PAS fait
+## Ce qui est fait
 
-- Couche HTTP FastAPI et ses tests (dépendances à installer dans le venv).
-- Persistance PostgreSQL, migrations, RLS.
+- Couche HTTP FastAPI (`saas/app.py`) avec 40 tests passants.
+- `PgStore` (`saas/pg_store.py`) — même contrat que `Store` (8 méthodes), timing guard M2 conservé, RLS défensif.
+- Migrations idempotentes (`saas/migrate.py`), schéma 5 tables + indexes + RLS.
+- Docker Compose (`docker-compose.yml`) pour le développement local.
+- 15 tests d'intégration (`tests/integration/test_pg_store.py`), skipés sans `CANLIX_DATABASE_URL`.
+- `canlix push` (envoi CLI depuis la section M7 précédente).
+
+## Ce qui n'est PAS encore fait
+
 - Limitation de débit, révocation et rotation de jetons, rétention des historiques.
 - Connexion des utilisateurs (OAuth/e-mail), équipes, alertes et intégrations (M8).
 - Commande `canlix push` (envoi depuis le CLI, avec suppression des extraits par défaut).

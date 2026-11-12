@@ -49,7 +49,7 @@ Changelog = "https://github.com/robkira01-max/canlix/releases"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov", "ruff", "pydantic>=2"]
-saas = ["pydantic>=2", "fastapi>=0.110", "uvicorn>=0.29"]
+saas = ["pydantic>=2", "fastapi>=0.110", "uvicorn>=0.29", "psycopg[binary,pool]>=3.1"]
 
 [project.scripts]
 canlix = "canlix.cli:app"

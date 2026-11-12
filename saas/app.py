@@ -34,6 +34,7 @@ import json
 import os
 import threading
 import time
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Request
@@ -44,23 +45,49 @@ from saas.store import PLANS, Org, PlanLimitError, Scan, Store, UnknownPlanError
 
 _MAX_BODY_BYTES = 5 * 1024 * 1024  # 5 MB; reverse proxy should also enforce this
 
+# ---------------------------------------------------------------------------
+# Store — in-memory default; PostgreSQL when CANLIX_DATABASE_URL is set
+# ---------------------------------------------------------------------------
+
+_default_store = Store()
+_pg_store = None  # set at startup by _lifespan when CANLIX_DATABASE_URL is configured
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    global _pg_store
+    db_url = os.getenv("CANLIX_DATABASE_URL")
+    pool = None
+    if db_url:
+        from psycopg_pool import ConnectionPool
+
+        from saas.pg_store import PgStore
+
+        pool = ConnectionPool(db_url, min_size=1, max_size=10, open=True)
+        _pg_store = PgStore(pool)
+    yield
+    if pool is not None:
+        pool.close()
+    _pg_store = None
+
+
 app = FastAPI(
     title="Canlix SaaS",
     version="0.1.0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=_lifespan,
 )
+
 
 # ---------------------------------------------------------------------------
 # Store dependency — override in tests via app.dependency_overrides
 # ---------------------------------------------------------------------------
 
-_default_store = Store()
 
-
-def _get_store() -> Store:
-    return _default_store
+def _get_store():  # returns Store or PgStore (same interface)
+    return _pg_store if _pg_store is not None else _default_store
 
 
 # ---------------------------------------------------------------------------
