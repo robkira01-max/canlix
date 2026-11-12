@@ -469,6 +469,27 @@ def test_portal_returns_html(client):
     assert b"Canlix" in r.content
 
 
+def test_portal_has_integrations_card(client):
+    r = client.get("/portal")
+    body = r.text
+    assert "Integrations" in body
+    assert "addIntegration" in body
+    assert "loadIntegrations" in body
+    assert "deleteIntegration" in body
+
+
+def test_portal_has_integration_type_options(client):
+    body = client.get("/portal").text
+    assert "slack" in body
+    assert "pagerduty" in body
+    assert "jira" in body
+
+
+def test_portal_has_report_link_in_scan_js(client):
+    body = client.get("/portal").text
+    assert "/report" in body
+
+
 # ---------------------------------------------------------------------------
 # Integrations CRUD (HTTP)
 # ---------------------------------------------------------------------------

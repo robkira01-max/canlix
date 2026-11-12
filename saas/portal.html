@@ -100,6 +100,19 @@
   .scan-row .scan-diff { color: var(--muted); font-size: .75rem; }
   #scan-history-empty { color: var(--muted); font-size: .875rem; }
   #back-to-projects { display: none; margin-bottom: 1rem; }
+
+  /* ---- Integrations ---- */
+  .intg-row { display: flex; align-items: center; gap: .75rem; padding: .5rem 0;
+    border-bottom: 1px solid var(--border); font-size: .85rem; }
+  .intg-row:last-child { border-bottom: none; }
+  .intg-type { font-size: .7rem; background: var(--accent2); color: #fff;
+    padding: .15rem .45rem; border-radius: 3px; text-transform: uppercase;
+    letter-spacing: .04em; white-space: nowrap; }
+  .intg-name { flex: 1; }
+  .intg-add-form { margin-top: 1rem; display: flex; flex-direction: column; gap: .6rem; }
+  .intg-add-form input, .intg-add-form select { width: 100%; }
+  .intg-config-fields { display: flex; flex-direction: column; gap: .6rem; }
+  #intg-msg { margin-top: .5rem; }
 </style>
 </head>
 <body>
@@ -176,6 +189,26 @@
   <div class="card">
     <div class="card-title">Recent scans <span id="scan-history-title" style="color:var(--muted);font-size:.7rem"></span></div>
     <div id="scan-history"><p id="scan-history-empty" style="color:var(--muted);font-size:.875rem">No scans recorded yet.</p></div>
+  </div>
+
+  <!-- Integrations -->
+  <div class="card">
+    <div class="card-title">Integrations <span style="color:var(--muted);font-size:.7rem">(Slack · PagerDuty · Jira — alert on new CRITICAL/HIGH)</span></div>
+    <div id="intg-list"><p style="color:var(--muted);font-size:.875rem">No integrations configured.</p></div>
+    <details style="margin-top:1rem">
+      <summary style="cursor:pointer;font-size:.85rem;color:var(--accent2)">+ Add integration</summary>
+      <div class="intg-add-form">
+        <input id="intg-name" type="text" placeholder="Label (e.g. #security-alerts)">
+        <select id="intg-type" onchange="renderIntgFields()">
+          <option value="slack">Slack</option>
+          <option value="pagerduty">PagerDuty</option>
+          <option value="jira">Jira</option>
+        </select>
+        <div class="intg-config-fields" id="intg-config-fields"></div>
+        <button class="btn-primary" style="align-self:flex-start" onclick="addIntegration()">Save integration</button>
+        <div id="intg-msg" class="msg" style="display:none"></div>
+      </div>
+    </details>
   </div>
 
 </div>
@@ -273,7 +306,9 @@ async function showDashboard() {
   document.getElementById('btn-logout').style.display = '';
   _tokenVisible = false;
   document.getElementById('token-display').textContent = 'cnx_' + '•'.repeat(40);
+  renderIntgFields();
   await loadProjects();
+  await loadIntegrations();
 }
 
 // ---------- token ----------
@@ -395,13 +430,90 @@ function renderScans(rows) {
     const d = new Date(s.created_at);
     const diff = s.diff;
     const diffStr = diff.baseline ? '(baseline)' : `+${diff.new} -${diff.fixed} =${diff.persisting}`;
+    const rptLink = s.project_id
+      ? `<a href="/projects/${esc(s.project_id)}/scans/${esc(s.scan_id)}/report" target="_blank" style="font-size:.72rem;color:var(--accent2)">Report</a>`
+      : '';
     return `<div class="scan-row">
       <span class="scan-date">${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
       <span class="scan-proj">${esc(s.pname || '')}</span>
       ${scorePill(s.score)}
       <span class="scan-diff">${s.total_findings} findings &nbsp;${diffStr}</span>
+      ${rptLink}
     </div>`;
   }).join('');
+}
+
+// ---------- integrations ----------
+const _INTG_FIELDS = {
+  slack:      [{ id: 'cfg-webhook_url', label: 'Webhook URL', placeholder: 'https://hooks.slack.com/services/…' }],
+  pagerduty:  [{ id: 'cfg-routing_key', label: 'Routing Key', placeholder: '32-char Events API v2 key' }],
+  jira:       [
+    { id: 'cfg-base_url',     label: 'Base URL',     placeholder: 'https://yourorg.atlassian.net' },
+    { id: 'cfg-email',        label: 'Email',         placeholder: 'you@yourorg.com' },
+    { id: 'cfg-api_token',    label: 'API Token',     placeholder: 'Atlassian API token', type: 'password' },
+    { id: 'cfg-project_key', label: 'Project Key',   placeholder: 'SEC' },
+  ],
+};
+
+function renderIntgFields() {
+  const type = document.getElementById('intg-type').value;
+  const container = document.getElementById('intg-config-fields');
+  container.innerHTML = (_INTG_FIELDS[type] || []).map(f =>
+    `<input id="${esc(f.id)}" type="${f.type || 'text'}" placeholder="${esc(f.label)}: ${esc(f.placeholder)}">`
+  ).join('');
+}
+
+async function loadIntegrations() {
+  try {
+    const list = await api('GET', '/orgs/me/integrations');
+    renderIntegrations(list);
+  } catch (e) { console.error(e); }
+}
+
+function renderIntegrations(list) {
+  const el = document.getElementById('intg-list');
+  if (!list.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:.875rem">No integrations configured.</p>';
+    return;
+  }
+  el.innerHTML = list.map(i =>
+    `<div class="intg-row">
+      <span class="intg-type">${esc(i.type)}</span>
+      <span class="intg-name">${esc(i.name)}</span>
+      <button class="btn-danger" style="font-size:.72rem;padding:.3rem .6rem"
+        onclick="deleteIntegration('${esc(i.integration_id)}')">Remove</button>
+    </div>`
+  ).join('');
+}
+
+async function addIntegration() {
+  const name = document.getElementById('intg-name').value.trim();
+  const type = document.getElementById('intg-type').value;
+  if (!name) { showMsg('intg-msg', 'error', 'Please enter a label.'); return; }
+  const fields = _INTG_FIELDS[type] || [];
+  const config = {};
+  for (const f of fields) {
+    const key = f.id.replace('cfg-', '');
+    const val = (document.getElementById(f.id) || {}).value || '';
+    if (val) config[key] = val;
+  }
+  try {
+    await api('POST', '/orgs/me/integrations', { name, type, config });
+    document.getElementById('intg-name').value = '';
+    renderIntgFields();
+    showMsg('intg-msg', 'success', 'Integration saved.');
+    await loadIntegrations();
+  } catch (e) {
+    showMsg('intg-msg', 'error', 'Failed: ' + e.message);
+  }
+}
+
+async function deleteIntegration(id) {
+  if (!confirm('Remove this integration?')) return;
+  try {
+    await api('DELETE', '/orgs/me/integrations/' + id);
+    await loadIntegrations();
+  } catch (e) { alert('Failed: ' + e.message); }
 }
 
 function esc(s) {
