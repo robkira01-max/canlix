@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from saas.diff import ScanDiff, diff_scans
 from saas.ingest import NormalizedFinding, compute_score
+from saas.integrations import INTEGRATION_TYPES, Integration
 from saas.security import hash_token, lookup_key, new_api_token, verify_token
 
 
@@ -39,6 +40,10 @@ class UnknownPlanError(ValueError):
 
 
 class EmailAlreadyExistsError(ValueError):
+    pass
+
+
+class UnknownIntegrationTypeError(ValueError):
     pass
 
 
@@ -76,6 +81,8 @@ class Store:
     _scans: dict[str, list[Scan]] = field(default_factory=dict)
     # email → (password_hash, org_id)
     _emails: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # org_id → list[Integration]
+    _integrations: dict[str, list[Integration]] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
 
     def create_org(self, name: str, plan: str = "free", token_ttl_days: int | None = None) -> tuple[Org, str]:
@@ -194,8 +201,11 @@ class Store:
             return p if p and p.org_id == org_id else None
 
     def add_scan(self, org_id: str, project_id: str, findings: list[NormalizedFinding]) -> Scan | None:
+        from saas.integrations import dispatch_all
+
         with self._lock:
-            if not self.get_project(org_id, project_id):
+            project = self.get_project(org_id, project_id)
+            if not project:
                 return None
             history = self._scans[project_id]
             diff = diff_scans(history[-1].findings if history else None, findings)
@@ -203,7 +213,10 @@ class Store:
                 uuid.uuid4().hex, project_id, datetime.now(timezone.utc), compute_score(findings), tuple(findings), diff
             )
             history.append(scan)
-            return scan
+            integrations = list(self._integrations.get(org_id, []))
+
+        dispatch_all(integrations, scan, project.name)
+        return scan
 
     def list_scans(self, org_id: str, project_id: str, limit: int = 50) -> list[Scan] | None:
         with self._lock:
@@ -216,3 +229,37 @@ class Store:
             if not self.get_project(org_id, project_id):
                 return None
             return next((s for s in self._scans.get(project_id, []) if s.id == scan_id), None)
+
+    # --- Integration CRUD ---
+
+    def add_integration(
+        self,
+        org_id: str,
+        name: str,
+        int_type: str,
+        config: dict,
+    ) -> Integration:
+        if int_type not in INTEGRATION_TYPES:
+            raise UnknownIntegrationTypeError(int_type)
+        intg = Integration(id=uuid.uuid4().hex, org_id=org_id, type=int_type, name=name, config=config)
+        with self._lock:
+            self._integrations.setdefault(org_id, []).append(intg)
+        return intg
+
+    def list_integrations(self, org_id: str) -> list[Integration]:
+        with self._lock:
+            return list(self._integrations.get(org_id, []))
+
+    def get_integration(self, org_id: str, integration_id: str) -> Integration | None:
+        with self._lock:
+            return next(
+                (i for i in self._integrations.get(org_id, []) if i.id == integration_id),
+                None,
+            )
+
+    def delete_integration(self, org_id: str, integration_id: str) -> bool:
+        with self._lock:
+            lst = self._integrations.get(org_id, [])
+            before = len(lst)
+            self._integrations[org_id] = [i for i in lst if i.id != integration_id]
+            return len(self._integrations[org_id]) < before

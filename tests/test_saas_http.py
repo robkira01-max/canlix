@@ -467,3 +467,134 @@ def test_portal_returns_html(client):
     assert r.status_code == 200
     assert "text/html" in r.headers.get("content-type", "")
     assert b"Canlix" in r.content
+
+
+# ---------------------------------------------------------------------------
+# Integrations CRUD (HTTP)
+# ---------------------------------------------------------------------------
+
+
+def test_add_integration_slack_returns_201(client):
+    _, token = _create_org(client)
+    r = client.post(
+        "/orgs/me/integrations",
+        json={"name": "My Slack", "type": "slack", "config": {"webhook_url": "https://hooks.slack.com/x"}},
+        headers=_auth(token),
+    )
+    assert r.status_code == 201
+    d = r.json()
+    assert d["type"] == "slack"
+    assert d["name"] == "My Slack"
+    assert "integration_id" in d
+    assert "config" not in d  # write-once secret, never echoed
+
+
+def test_add_integration_unknown_type_returns_422(client):
+    _, token = _create_org(client)
+    r = client.post(
+        "/orgs/me/integrations",
+        json={"name": "X", "type": "discord", "config": {}},
+        headers=_auth(token),
+    )
+    assert r.status_code == 422
+    assert "unknown_integration_type" in r.json()["detail"]
+
+
+def test_list_integrations_empty(client):
+    _, token = _create_org(client)
+    r = client.get("/orgs/me/integrations", headers=_auth(token))
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_list_integrations_after_add(client):
+    _, token = _create_org(client)
+    client.post(
+        "/orgs/me/integrations",
+        json={"name": "PD", "type": "pagerduty", "config": {"routing_key": "rk"}},
+        headers=_auth(token),
+    )
+    r = client.get("/orgs/me/integrations", headers=_auth(token))
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+    assert r.json()[0]["type"] == "pagerduty"
+
+
+def test_delete_integration(client):
+    _, token = _create_org(client)
+    r = client.post(
+        "/orgs/me/integrations",
+        json={"name": "Del", "type": "jira", "config": {}},
+        headers=_auth(token),
+    )
+    int_id = r.json()["integration_id"]
+    del_r = client.delete(f"/orgs/me/integrations/{int_id}", headers=_auth(token))
+    assert del_r.status_code == 204
+    r2 = client.get("/orgs/me/integrations", headers=_auth(token))
+    assert r2.json() == []
+
+
+def test_delete_integration_not_found_returns_404(client):
+    _, token = _create_org(client)
+    r = client.delete(f"/orgs/me/integrations/{'a' * 32}", headers=_auth(token))
+    assert r.status_code == 404
+
+
+def test_integrations_cross_tenant_isolation(client):
+    _, t1 = _create_org(client, "A")
+    _, t2 = _create_org(client, "B")
+    r = client.post(
+        "/orgs/me/integrations",
+        json={"name": "X", "type": "slack", "config": {}},
+        headers=_auth(t1),
+    )
+    int_id = r.json()["integration_id"]
+    # Tenant B cannot delete tenant A's integration
+    del_r = client.delete(f"/orgs/me/integrations/{int_id}", headers=_auth(t2))
+    assert del_r.status_code == 404
+    # Tenant A's integration is still there
+    lst = client.get("/orgs/me/integrations", headers=_auth(t1))
+    assert len(lst.json()) == 1
+
+
+# ---------------------------------------------------------------------------
+# HTML scan report
+# ---------------------------------------------------------------------------
+
+
+def test_scan_report_returns_html(client):
+    _, token = _create_org(client)
+    pid = _create_project(client, token)
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(token), "Content-Type": "application/json"},
+    )
+    scan_id = r.json()["scan_id"]
+    report = client.get(f"/projects/{pid}/scans/{scan_id}/report", headers=_auth(token))
+    assert report.status_code == 200
+    assert "text/html" in report.headers.get("content-type", "")
+    body = report.text
+    assert "<!DOCTYPE html>" in body
+    assert "Canlix" in body
+    assert "HIGH" in body  # finding severity present
+
+
+def test_scan_report_cross_tenant_returns_404(client):
+    _, t1 = _create_org(client, "A")
+    _, t2 = _create_org(client, "B")
+    pid = _create_project(client, t1)
+    r = client.post(
+        f"/projects/{pid}/scans",
+        content=json.dumps(_small_report()),
+        headers={**_auth(t1), "Content-Type": "application/json"},
+    )
+    scan_id = r.json()["scan_id"]
+    assert client.get(f"/projects/{pid}/scans/{scan_id}/report", headers=_auth(t2)).status_code == 404
+
+
+def test_scan_report_unknown_scan_returns_404(client):
+    _, token = _create_org(client)
+    pid = _create_project(client, token)
+    r = client.get(f"/projects/{pid}/scans/{'b' * 32}/report", headers=_auth(token))
+    assert r.status_code == 404

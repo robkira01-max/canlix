@@ -41,7 +41,17 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Request
 from pydantic import BaseModel, Field, ValidationError
 
 from saas.ingest import normalize_report
-from saas.store import PLANS, EmailAlreadyExistsError, Org, PlanLimitError, Scan, Store, UnknownPlanError
+from saas.integrations import INTEGRATION_TYPES
+from saas.store import (
+    PLANS,
+    EmailAlreadyExistsError,
+    Org,
+    PlanLimitError,
+    Scan,
+    Store,
+    UnknownIntegrationTypeError,
+    UnknownPlanError,
+)
 
 _MAX_BODY_BYTES = 5 * 1024 * 1024  # 5 MB; reverse proxy should also enforce this
 
@@ -468,3 +478,94 @@ def portal():
     from fastapi.responses import HTMLResponse
 
     return HTMLResponse(_load_portal())
+
+
+# ---------------------------------------------------------------------------
+# Integrations — Slack, PagerDuty, Jira
+# ---------------------------------------------------------------------------
+
+
+class CreateIntegrationBody(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    type: str = Field(min_length=1, max_length=20)
+    # config keys vary by type; validated by integrations module at dispatch time
+    config: dict = Field(default_factory=dict)
+
+
+class IntegrationOut(BaseModel):
+    integration_id: str
+    name: str
+    type: str
+    created_at: str
+    # config is intentionally omitted — treat webhook URLs / tokens as write-once secrets
+
+
+@app.post("/orgs/me/integrations", status_code=201)
+def add_integration(
+    body: CreateIntegrationBody,
+    org: Org = Depends(_require_org),
+    store: Store = Depends(_get_store),
+) -> IntegrationOut:
+    try:
+        intg = store.add_integration(org.id, body.name, body.type, body.config)
+    except UnknownIntegrationTypeError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown_integration_type — valid types: {sorted(INTEGRATION_TYPES)}",
+        )
+    return IntegrationOut(
+        integration_id=intg.id,
+        name=intg.name,
+        type=intg.type,
+        created_at=intg.created_at.isoformat(),
+    )
+
+
+@app.get("/orgs/me/integrations")
+def list_integrations(
+    org: Org = Depends(_require_org),
+    store: Store = Depends(_get_store),
+) -> list[IntegrationOut]:
+    return [
+        IntegrationOut(
+            integration_id=i.id,
+            name=i.name,
+            type=i.type,
+            created_at=i.created_at.isoformat(),
+        )
+        for i in store.list_integrations(org.id)
+    ]
+
+
+@app.delete("/orgs/me/integrations/{integration_id}", status_code=204)
+def delete_integration(
+    integration_id: _HexId,
+    org: Org = Depends(_require_org),
+    store: Store = Depends(_get_store),
+) -> None:
+    if not store.delete_integration(org.id, integration_id):
+        raise HTTPException(status_code=404)
+
+
+# ---------------------------------------------------------------------------
+# HTML scan report
+# ---------------------------------------------------------------------------
+
+
+@app.get("/projects/{project_id}/scans/{scan_id}/report")
+def scan_report(
+    project_id: _HexId,
+    scan_id: _HexId,
+    org: Org = Depends(_require_org),
+    store: Store = Depends(_get_store),
+):
+    from fastapi.responses import HTMLResponse
+
+    from saas.report import generate_scan_report
+
+    scan = store.get_scan(org.id, project_id, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404)
+    project = store.get_project(org.id, project_id)
+    html_content = generate_scan_report(org.name, project.name, scan)
+    return HTMLResponse(html_content)
